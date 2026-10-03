@@ -103,7 +103,7 @@ export class SpeechRenderer {
       const pulse = 0.6 + 0.4 * Math.sin(now * 6 + c.id);
       const x = c.x;
       const y = c.y - 12 - 2 * s;
-      const r = 3.5 * s * (0.9 + pulse * 0.2);
+      const r = 4.5 * s * (0.9 + pulse * 0.2);
       g.fillStyle(0x1b1420, 0.85);
       g.fillCircle(x, y, r + 1.6 * s);
       g.fillStyle(0xffffff, 1);
@@ -153,7 +153,7 @@ export class SpeechRenderer {
       // pop in, float, fade out
       const pop = b.t < 0.12 ? 0.6 + (b.t / 0.12) * 0.5 : b.t < 0.2 ? 1.1 - ((b.t - 0.12) / 0.08) * 0.1 : 1;
       const a = b.t > b.life - 0.35 ? (b.life - b.t) / 0.35 : 1;
-      const px = b.mine ? 8.5 : 7.5; // css px
+      const px = b.mine ? 11 : 9.5; // css px
       const sc = (px / 26) * s * pop;
       const shake = b.kind === 'berserk' || b.kind === 'panic' ? Math.sin(now * 40 + b.id) * 0.6 * s : 0;
       const tx = b.x + shake;

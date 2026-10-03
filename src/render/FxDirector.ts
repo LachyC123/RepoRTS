@@ -93,6 +93,21 @@ export class FxDirector {
       } else if (k === 'ballista') this.fx.burst(3, { frame: 'fx/spark', x: ev.x, y: ev.y - 8, life: 0.2, add: true }, 40, 0);
     });
     e.on('projectileLanded', (ev) => this.onLand(ev));
+    // a jumpy soldier fires at a bush
+    e.on('potshot', (ev) => {
+      if (!this.near(ev.x, ev.y, 0)) return;
+      const k = ev.kind;
+      this.sfx(k === 'arrow' ? 'arrow_shoot' : k === 'bolt' ? 'bolt_shoot' : 'catapult_launch', ev.x, ev.y, 0.3);
+      this.fx.burst(4, { frame: 'fx/puff4', x: ev.tx, y: ev.ty, life: 0.6, s0: 0.4, s1: 1, tint: DUST, alpha: 0.7, drag: 3 }, 20, 6);
+      this.fx.burst(3, { frame: 'fx/leaf', x: ev.tx, y: ev.ty, z: 6, life: 1, g: 60 }, 30, 20);
+    });
+    // back on their feet: a little green lift
+    e.on('unitRevived', (ev) => {
+      if (!this.near(ev.x, ev.y, 0)) return;
+      this.ring(ev.x, ev.y, 16, 0x9af07a, 0.45, 0.6);
+      this.fx.burst(8, { frame: 'fx/star', x: ev.x, y: ev.y - 6, z: 2, life: 0.9, g: -40, add: true, tint: 0xa8f088, s0: 0.6, s1: 0.2 }, 16, 30);
+      this.sfx('select', ev.x, ev.y, 0.4);
+    });
     e.on('charge', (ev) => {
       if (!this.near(ev.x, ev.y)) return;
       this.fx.burst(8, { frame: 'fx/puff4', x: ev.x, y: ev.y, life: 0.8, s0: 0.5, s1: 1.4, tint: DUST, alpha: 0.75, drag: 2.5 }, 40, 10);

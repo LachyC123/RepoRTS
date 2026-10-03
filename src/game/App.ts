@@ -50,7 +50,7 @@ export class App {
     const p = new URLSearchParams(location.search);
     if (p.has('quick') || p.has('spectate')) {
       this.reveal = p.has('reveal');
-      this.startMatch({ ...this.choices, tutorial: p.has('tutorial'), seed: p.has('seed') ? Number(p.get('seed')) : undefined, spectate: p.has('spectate') }, !p.has('intro'));
+      this.startMatch({ ...this.choices, tutorial: p.has('tutorial'), seed: p.has('seed') ? Number(p.get('seed')) : undefined, spectate: p.has('spectate'), era: p.get('era') === 'modern' ? 'modern' : p.get('era') === 'medieval' ? 'medieval' : this.choices.era, sandbox: p.has('sandbox') || this.choices.sandbox }, !p.has('intro'));
     } else this.showMenu();
   }
 
