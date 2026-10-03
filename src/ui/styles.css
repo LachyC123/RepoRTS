@@ -1,0 +1,52 @@
+:root {
+  --ink: #1b1420;
+  --parch: #e8dcc0;
+  --parch-dark: #c8b48e;
+  --gold: #f1d97a;
+  --red: #c23a32;
+  --ui-scale: 1;
+  --font-ui: 'Pixelify Sans', 'Silkscreen', monospace;
+  --font-title: 'Jacquarda Bastarda 9', 'Pixelify Sans', serif;
+  --font-small: 'Silkscreen', 'Pixelify Sans', monospace;
+}
+* {
+  box-sizing: border-box;
+}
+html,
+body {
+  margin: 0;
+  padding: 0;
+  width: 100%;
+  height: 100%;
+  overflow: hidden;
+  background: #1a1420;
+  color: var(--parch);
+  font-family: var(--font-ui);
+  -webkit-user-select: none;
+  user-select: none;
+  -webkit-touch-callout: none;
+  -webkit-tap-highlight-color: transparent;
+  touch-action: none;
+  overscroll-behavior: none;
+}
+#app {
+  position: fixed;
+  inset: 0;
+}
+#game {
+  position: absolute;
+  inset: 0;
+}
+#game canvas {
+  display: block;
+  image-rendering: pixelated;
+  touch-action: none;
+}
+#ui {
+  position: absolute;
+  inset: 0;
+  pointer-events: none;
+}
+#ui > * {
+  pointer-events: auto;
+}

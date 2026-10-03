@@ -1,0 +1,178 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>Audio Test Bench</title>
+  <style>
+    :root { --bg: #1d1a16; --panel: #2a251f; --ink: #eadfc8; --muted: #a89a80; --accent: #c9a24a; --btn: #3a332a; --btn-h: #4a4134; }
+    * { box-sizing: border-box; }
+    body { margin: 0; padding: 16px; background: var(--bg); color: var(--ink); font: 14px/1.4 system-ui, sans-serif; }
+    h1 { font-size: 20px; margin: 0 0 4px; color: var(--accent); }
+    h2 { font-size: 15px; margin: 18px 0 8px; color: var(--accent); }
+    p.note { color: var(--muted); margin: 0 0 12px; }
+    .grid { display: flex; flex-wrap: wrap; gap: 6px; }
+    button { background: var(--btn); color: var(--ink); border: 1px solid #554a3b; border-radius: 6px; padding: 6px 10px; font: inherit; cursor: pointer; }
+    button:hover { background: var(--btn-h); }
+    button.on { border-color: var(--accent); color: var(--accent); }
+    .panel { background: var(--panel); border-radius: 8px; padding: 12px; margin-bottom: 12px; }
+    label { display: inline-flex; align-items: center; gap: 6px; margin: 4px 14px 4px 0; }
+    input[type=range] { width: 120px; }
+    #status { font-family: ui-monospace, monospace; color: var(--muted); white-space: pre-wrap; }
+  </style>
+</head>
+<body>
+  <h1>Procedural Audio Test Bench</h1>
+  <p class="note">Every sound and all music are synthesized with WebAudio at runtime. Click anything to start the audio context.</p>
+
+  <div class="panel">
+    <h2>Volumes</h2>
+    <label>Master <input id="vMaster" type="range" min="0" max="1" step="0.01" value="0.8" /></label>
+    <label>Music <input id="vMusic" type="range" min="0" max="1" step="0.01" value="0.6" /></label>
+    <label>SFX <input id="vSfx" type="range" min="0" max="1" step="0.01" value="0.9" /></label>
+    <button id="suspend">Suspend</button>
+    <button id="resume">Resume</button>
+    <div id="status">audio: not started</div>
+  </div>
+
+  <div class="panel">
+    <h2>Music</h2>
+    <div class="grid" id="music"></div>
+  </div>
+
+  <div class="panel">
+    <h2>Ambience</h2>
+    <div id="amb"></div>
+  </div>
+
+  <div class="panel">
+    <h2>Positional and stress</h2>
+    <div class="grid">
+      <button data-pos="-600">Clash far left</button>
+      <button data-pos="-300">Clash left</button>
+      <button data-pos="0">Clash centre</button>
+      <button data-pos="300">Clash right</button>
+      <button data-pos="1200">Clash off-screen right</button>
+      <button data-pos="5000">Clash way off (culled)</button>
+      <button id="stress">100-unit battle burst</button>
+    </div>
+  </div>
+
+  <div class="panel">
+    <h2>Sound effects</h2>
+    <div class="grid" id="sfx"></div>
+  </div>
+
+  <script type="module">
+    import { audio, music, SFX_NAMES } from './index.ts';
+    import { SFX } from './sfx.ts';
+    import { createNoiseBuffers } from './synth.ts';
+
+    const $ = (id) => document.getElementById(id);
+    const start = () => audio.init();
+    window.addEventListener('pointerdown', start);
+
+    let lastTime = performance.now();
+    function frame(now) {
+      const dt = (now - lastTime) / 1000;
+      lastTime = now;
+      audio.update(dt);
+      music.update(dt);
+      $('status').textContent = `audio: ${audio.ctx ? audio.ctx.state : 'not started'} | voices: ${audio.activeVoices} | music: ${music.getState()}`;
+      requestAnimationFrame(frame);
+    }
+    requestAnimationFrame(frame);
+
+    audio.setListener(0, 0, 1280, 720, 1);
+
+    const vols = () => audio.setVolumes(+$('vMaster').value, +$('vMusic').value, +$('vSfx').value);
+    for (const id of ['vMaster', 'vMusic', 'vSfx']) $(id).addEventListener('input', vols);
+    $('suspend').onclick = () => audio.suspend();
+    $('resume').onclick = () => audio.resume();
+
+    // SFX buttons
+    for (const name of SFX_NAMES) {
+      const b = document.createElement('button');
+      b.textContent = name;
+      b.dataset.sfx = name;
+      b.onclick = () => { start(); audio.play(name); };
+      $('sfx').appendChild(b);
+    }
+
+    // Music buttons
+    const musicBtns = [];
+    for (const st of ['menu', 'peace', 'tension', 'war', 'victory', 'defeat', 'silent']) {
+      const b = document.createElement('button');
+      b.textContent = st;
+      b.dataset.music = st;
+      b.onclick = () => {
+        start();
+        music.setState(st);
+        musicBtns.forEach((x) => x.classList.toggle('on', x === b));
+      };
+      musicBtns.push(b);
+      $('music').appendChild(b);
+    }
+
+    // Ambience sliders
+    const ambLevels = {};
+    for (const k of ['wind', 'birds', 'river', 'town', 'battle', 'rain']) {
+      const l = document.createElement('label');
+      l.innerHTML = `${k} <input type="range" min="0" max="1" step="0.01" value="0" data-amb="${k}" />`;
+      l.querySelector('input').addEventListener('input', (e) => {
+        start();
+        ambLevels[k] = +e.target.value;
+        audio.setAmbience({ [k]: ambLevels[k] });
+      });
+      $('amb').appendChild(l);
+    }
+
+    // Positional
+    document.querySelectorAll('[data-pos]').forEach((b) => {
+      b.addEventListener('click', () => { start(); audio.play('sword_clash', { x: +b.dataset.pos, y: 0 }); });
+    });
+    $('stress').onclick = () => {
+      start();
+      const names = ['sword_clash', 'sword_hit', 'shield_block', 'arrow_shoot', 'arrow_hit', 'unit_death'];
+      for (let i = 0; i < 300; i++) {
+        setTimeout(() => {
+          audio.play(names[i % names.length], { x: (Math.random() - 0.5) * 2400, y: (Math.random() - 0.5) * 1400 });
+        }, Math.random() * 1500);
+      }
+    };
+
+    // Test hook: offline-render every SFX and report peak / RMS (used by automated checks).
+    window.__audioAnalyze = async () => {
+      const sr = 44100;
+      const results = {};
+      for (const name of SFX_NAMES) {
+        const oc = new OfflineAudioContext(1, sr * 4, sr);
+        const n = createNoiseBuffers(oc);
+        const kit = { ctx: oc, white: n.white, pink: n.pink, brown: n.brown, reverb: null };
+        const g = oc.createGain();
+        g.gain.value = SFX[name].gain ?? 1;
+        g.connect(oc.destination);
+        const end = SFX[name].fn(kit, g, 0.01, 1);
+        const buf = await oc.startRendering();
+        const d = buf.getChannelData(0);
+        let peak = 0, sum = 0, cnt = 0;
+        const stop = Math.min(d.length, Math.floor(end * sr) + 1);
+        for (let i = 0; i < stop; i++) { const v = Math.abs(d[i]); if (v > peak) peak = v; sum += v * v; cnt++; }
+        results[name] = { peak: +peak.toFixed(3), rms: +Math.sqrt(sum / Math.max(1, cnt)).toFixed(4), dur: +end.toFixed(2) };
+      }
+      return results;
+    };
+    // Test hook: live RMS meter on the master bus.
+    window.__meter = () => {
+      if (!audio.ctx || !audio.masterBus) return null;
+      if (!window.__an) { window.__an = audio.ctx.createAnalyser(); window.__an.fftSize = 2048; audio.masterBus.connect(window.__an); }
+      const a = new Float32Array(2048);
+      window.__an.getFloatTimeDomainData(a);
+      let s = 0, p = 0; for (const v of a) { s += v * v; p = Math.max(p, Math.abs(v)); }
+      return { rms: Math.sqrt(s / a.length), peak: p };
+    };
+    window.__audio = audio;
+    window.__music = music;
+  </script>
+</body>
+</html>
