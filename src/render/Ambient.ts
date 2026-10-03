@@ -7,6 +7,7 @@ import type { World } from '../sim/World';
 import { art } from './art/ArtRegistry';
 import { VILLAGER_KINDS } from './art/animalArt';
 import type { SortObj, YSortLayer } from './YSortLayer';
+import type { Particles } from './Particles';
 
 type Kind = 'villager' | 'guard' | 'sheep' | 'cow' | 'chicken' | 'dog' | 'deer' | 'cart' | 'boat' | 'duck';
 
@@ -59,6 +60,10 @@ export class Ambient {
   private flockT = 3;
   quality = 1;
   wind = 1;
+  /** particle system for splashes (set by the scene) */
+  fx: Particles | null = null;
+  private fishT = 2;
+  private chatT = -9;
 
   constructor(
     private scene: Phaser.Scene,
@@ -192,6 +197,7 @@ export class Ambient {
     this.updateBirds(dt, view, detail);
     this.updateFlies(dt, view, detail);
     this.updateGlints(dt, view, detail);
+    this.updateFish(dt, view, detail);
   }
 
   private tickAgent(a: Agent, dt: number, time: number) {
@@ -250,6 +256,17 @@ export class Ambient {
       }
       // pick next destination
       a.wait = a.kind === 'villager' ? 1 + Math.random() * 5 : a.kind === 'guard' ? 2 + Math.random() * 3 : 2 + Math.random() * 8;
+      // neighbours stopping side by side pass the time of day
+      if (a.kind === 'villager' && this.fx && time - this.chatT > 0.9) {
+        const friend = this.agents.find((o) => o !== a && o.kind === 'villager' && o.wait > 0.5 && Math.abs(o.x - a.x) < 16 && Math.abs(o.y - a.y) < 10);
+        if (friend) {
+          this.chatT = time;
+          a.wait = Math.max(a.wait, 3);
+          a.facing = friend.x > a.x ? 1 : -1;
+          a.img.setFlipX(a.facing < 0);
+          this.fx.emit({ frame: 'fx/bub_chat', x: a.x, y: a.y - 19, vz: 3, life: 1.6, s0: 0.55, s1: 0.8 });
+        }
+      }
       if (s) {
         let nx: number;
         let ny: number;
@@ -537,6 +554,36 @@ export class Ambient {
       this.flies[n++] = f;
     }
     this.flies.length = n;
+  }
+
+  /** now and then a fish leaps from open water: splash ring out, arc, splash ring in */
+  private updateFish(dt: number, view: { x0: number; y0: number; x1: number; y1: number }, detail: boolean) {
+    const fx = this.fx;
+    if (!fx || !detail) return;
+    this.fishT -= dt;
+    if (this.fishT > 0) return;
+    this.fishT = 1.2 + Math.random() * 2.5;
+    const m = this.world.map;
+    for (let k = 0; k < 6; k++) {
+      const x = view.x0 + Math.random() * (view.x1 - view.x0);
+      const y = view.y0 + Math.random() * (view.y1 - view.y0);
+      const tx = Math.floor(x / TILE);
+      const ty = Math.floor(y / TILE);
+      if (tx < 1 || ty < 1 || tx >= m.w - 1 || ty >= m.h - 1) continue;
+      // deep enough: open water on all sides
+      const deep = [0, 1, -1, m.w, -m.w].every((o) => m.terrain[ty * m.w + tx + o] === T.WATER);
+      if (!deep) continue;
+      const dir = Math.random() < 0.5 ? -1 : 1;
+      const ring = (rx: number, a: number) => fx.emit({ frame: 'fx/ring', x: rx, y, life: 0.7, s0: 0.05, s1: 0.45, sy: 0.45, tint: 0xd8ecf8, alpha: a, add: true, fadeAll: true });
+      ring(x, 0.7);
+      fx.burst(3, { frame: 'fx/drop', x, y, z: 1, life: 0.4, g: 160, tint: 0xe0f0ff, ground: 'die' }, 14, 30);
+      fx.emit({ frame: 'amb/fish', x, y, z: 0, vx: dir * 22, vz: 48, g: 150, life: 0.62, rot: dir * -0.5, spin: dir * 2.2, flipX: dir < 0, ground: 'die' });
+      this.scene.time.delayedCall(620, () => {
+        ring(x + dir * 14, 0.6);
+        fx.burst(2, { frame: 'fx/drop', x: x + dir * 14, y, z: 1, life: 0.35, g: 160, tint: 0xe0f0ff, ground: 'die' }, 12, 26);
+      });
+      break;
+    }
   }
 
   private updateGlints(dt: number, view: { x0: number; y0: number; x1: number; y1: number }, detail: boolean) {

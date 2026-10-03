@@ -246,7 +246,7 @@ export function paintChunk(map: GameMap, f: TerrainFields, cx: number, cy: numbe
   const H = map.h;
   const ox = cx * S;
   const oy = cy * S;
-  const B = 2; // border for neighbour checks
+  const B = 12; // border for neighbour checks (cliff faces look up to 11 px down)
   const MW = S + B * 2;
   const mat = new Uint8Array(MW * MW);
   const tileOf = new Int32Array(MW * MW);
@@ -415,14 +415,52 @@ export function paintChunk(map: GameMap, f: TerrainFields, cx: number, cy: numbe
           break;
         }
         case T.ROCK: {
-          let v = 0.42 + (nz - 0.5) * 0.7 + (nzf - 0.5) * 0.25 + light * 1.5 + (hc - 0.9) * 0.35;
-          if (mD !== T.ROCK) v -= 0.3;
-          else if (mat[mi + MW * 2] !== T.ROCK) v -= 0.15;
-          if (mU !== T.ROCK) v += 0.2;
+          // Rock reads as raised, terraced ground. A pixel is part of a south-facing face when lower
+          // ground (or a lower terrace of the height field) lies within a face height below it;
+          // otherwise it belongs to a lit plateau top.
+          const cliffH = 5 + ((nz2 * 7) | 0);
+          let below = 0;
+          for (let k = 1; k <= cliffH; k++)
+            if (mat[mi + MW * k] !== T.ROCK) {
+              below = k;
+              break;
+            }
+          let faceH = cliffH;
+          if (!below) {
+            const lvl = Math.floor(hc * 7 + (nz2 - 0.5) * 0.8);
+            for (let k = 1; k <= 4; k++) {
+              const hb = sampleField(f.hgt, f.ww, f.wh, fx, (wy + k) / 4);
+              if (Math.floor(hb * 7 + (nz2 - 0.5) * 0.8) < lvl) {
+                below = k;
+                faceH = 4;
+                break;
+              }
+            }
+          }
+          if (below) {
+            // face: vertical grain, strata ledges, dark foot, bright lip at the brow
+            const grain = hash2(wx, 0, 31) - 0.5;
+            const ledge = ((wy + ((hash2(wx >> 3, 1, 33) * 4) | 0)) & 3) === 0;
+            let v = 0.2 + grain * 0.24 + (nz - 0.5) * 0.2 + light * 0.4 + (below / faceH) * 0.16;
+            if (ledge) v -= 0.1;
+            if (below <= 2) v -= 0.08 * (3 - below);
+            if (mR !== T.ROCK) v -= 0.1; // east side in shade
+            c = q(R.rock, v, wx, wy, 0.5);
+            if (below === faceH) c = R.rock[6];
+            break;
+          }
+          let v = 0.58 + (nz - 0.5) * 0.45 + (nzf - 0.5) * 0.2 + light * 0.9 + (hc - 0.9) * 0.25;
+          // lit rim along the northern and western brows
+          if (mU !== T.ROCK || mat[mi - MW * 2] !== T.ROCK) v += 0.25;
+          else if (mL !== T.ROCK) v += 0.12;
+          if (mR !== T.ROCK) v -= 0.1;
           // crack lines
-          if (Math.abs(nzf - 0.5) < 0.015) v -= 0.25;
-          c = q(R.rock, v, wx, wy, 0.7);
-          if (hc > 1.08 && nz > 0.45 && mD === T.ROCK) c = q(R.snow, 0.4 + light * 2 + (nz - 0.5), wx, wy);
+          if (Math.abs(nzf - 0.5) < 0.01) v -= 0.22;
+          c = q(R.rock, v, wx, wy, 0.6);
+          // a few loose stones (lit top, dark underside)
+          if (fine < 0.004) c = R.rock[6];
+          else if (hash2(wx, wy - 1, 7) < 0.004) c = R.rock[2];
+          if (hc > 1.08 && nz > 0.45) c = q(R.snow, 0.4 + light * 2 + (nz - 0.5), wx, wy);
           break;
         }
         case T.FARMLAND: {
@@ -495,7 +533,17 @@ export function paintChunk(map: GameMap, f: TerrainFields, cx: number, cy: numbe
       if (m !== M_WATER && m !== T.SHALLOW && m !== M_BRIDGE && nearWater) {
         c = pack((c & 255) * 0.7, ((c >>> 8) & 255) * 0.72, ((c >>> 16) & 255) * 0.8);
       }
-      if (m !== T.ROCK && mU === T.ROCK) {
+      if (m !== T.ROCK && m !== M_WATER) {
+        // cast shadow and scree at the foot of a cliff
+        const up1 = mU === T.ROCK;
+        const up2 = mat[mi - MW * 2] === T.ROCK;
+        const up3 = mat[mi - MW * 3] === T.ROCK;
+        if (up1 || up2 || up3) {
+          const k = up1 ? 0.58 : up2 ? 0.7 : 0.82;
+          c = pack((c & 255) * k, ((c >>> 8) & 255) * k, ((c >>> 16) & 255) * (k + 0.1));
+          if (hash2(wx, wy, 41) < (up1 ? 0.3 : up2 ? 0.16 : 0.06)) c = R.rock[3 + ((hash2(wx, wy, 43) * 3) | 0)];
+        }
+      } else if (m !== T.ROCK && mU === T.ROCK) {
         c = pack((c & 255) * 0.62, ((c >>> 8) & 255) * 0.62, ((c >>> 16) & 255) * 0.72);
       }
       out[y * S + x] = c;

@@ -41,6 +41,8 @@ export class TerritoryRenderer {
   /** per-region canvas-pixel bounding boxes [x0, y0, x1, y1] */
   private bbox: number[][] = [];
   private img32: ImageData;
+  /** deep-water tiles (no territory drawn) */
+  private water: Uint8Array;
   private px32: Uint32Array;
 
   constructor(
@@ -70,6 +72,8 @@ export class TerritoryRenderer {
     layer.add(this.pulseGfx);
     for (let r = 0; r < m.regions.length; r++) this.regionTiles.push([]);
     for (let i = 0; i < m.w * m.h; i++) this.regionTiles[m.region[i]].push(i);
+    this.water = new Uint8Array(m.w * m.h);
+    for (let i = 0; i < m.w * m.h; i++) this.water[i] = m.terrain[i] === T.WATER ? 1 : 0;
     this.buildSubRegions();
     this.redrawAll();
     world.events.on('regionCaptured', (e) => {
@@ -104,7 +108,7 @@ export class TerritoryRenderer {
     const cols = w.settlements.map((s) => (s.owner === NEUTRAL ? null : rgb(w.factions[s.owner].color.main)));
     for (let i = 0; i < m.w * m.h; i++) {
       const c = cols[m.region[i]];
-      if (!c) continue;
+      if (!c || this.water[i]) continue;
       img.data[i * 4] = c[0];
       img.data[i * 4 + 1] = c[1];
       img.data[i * 4 + 2] = c[2];
@@ -235,6 +239,7 @@ export class TerritoryRenderer {
     // the line stays one canvas pixel thin even though membership is coarser
     const S = PX / SUB;
     const CH = this.canvas.height;
+    const mw = this.world.map.w;
     const regionAt = (x: number, y: number) => sub[Math.floor(y / S) * W + Math.floor(x / S)];
     const differs = (x: number, y: number) => {
       if (x < 0 || y < 0 || x >= CW || y >= CH) return false;
@@ -248,6 +253,11 @@ export class TerritoryRenderer {
       for (let x = b[0]; x < b[2]; x++) {
         if (regionAt(x, y) !== rid) continue;
         let c = 0;
+        // open water stays clear: borders that follow a river end at its banks
+        if (this.water[Math.floor(y / PX) * mw + Math.floor(x / PX)]) {
+          px[y * CW + x] = 0;
+          continue;
+        }
         if (col) {
           // distance to the nearest foreign pixel picks line → dark rim → glow → plain wash
           if (differs(x + 1, y) || differs(x - 1, y) || differs(x, y + 1) || differs(x, y - 1)) c = line;

@@ -12,6 +12,7 @@ export const PROP_KINDS = [
   'bush', 'flowers', 'tall_grass', 'fern', 'mushrooms', 'reeds', 'rock_small', 'boulder', 'log', 'broken_cart', 'shield', 'spear', 'helmet',
   'banner_torn', 'barrel', 'crates', 'bones', 'grave', 'plague_cross', 'dead_tree', 'standing_stone', 'altar_stone', 'ruin_wall',
   'ruined_tower', 'ruined_hut', 'burned_house', 'charred', 'tent', 'campfire', 'bridge_ruin', 'windmill_base', 'ore_gold', 'ore_stone',
+  'signpost', 'milestone', 'shrine',
 ];
 
 let staticBuilt = false;

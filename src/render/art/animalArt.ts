@@ -220,13 +220,36 @@ export function buildAmbientArt() {
     ['monk', { body: 'peasant', helmet: 'hood', armor: 'robe', weapon: 'none', shield: 'none', cloth: '#5a4030' }],
     ['maid', { body: 'peasant', helmet: 'none', armor: 'robe', weapon: 'none', shield: 'none', cloth: '#3a5a7a' }],
     ['guard', { body: 'soldier', helmet: 'kettle', armor: 'gambeson', weapon: 'spear', shield: 'none', cloth: '#6a5a44' }],
+    ['gatherer', { body: 'peasant', helmet: 'hood', armor: 'robe', weapon: 'none', shield: 'none', cloth: '#6a7a3a', carry: 'basket' }],
+    ['water', { body: 'peasant', helmet: 'none', armor: 'robe', weapon: 'none', shield: 'none', cloth: '#7a5a8a', carry: 'bucket' }],
+    ['woodsman', { body: 'peasant', helmet: 'cap', armor: 'tunic', weapon: 'none', shield: 'none', cloth: '#5a6a4a', beard: true, carry: 'firewood' }],
+    ['peddler', { body: 'peasant', helmet: 'feather', armor: 'tunic', weapon: 'none', shield: 'none', cloth: '#8a6a2a', sack: true }],
+    ['girl', { body: 'peasant', helmet: 'none', armor: 'robe', weapon: 'none', shield: 'none', cloth: '#b86a5a', carry: 'flowers' }],
+    ['boy', { body: 'peasant', helmet: 'cap', armor: 'tunic', weapon: 'none', shield: 'none', cloth: '#5a7aa0' }],
   ];
+  const children = new Set(['girl', 'boy']);
   for (const [name, look] of looks) {
     const def: UnitDef = { ...UNITS.militia, id: 'civ_' + name, look };
     const sheet = buildUnitSheet(def, { ...NEUTRAL_COLOR, main: '#8a7a5a', light: '#a89a7a', dark: '#5a4a3a' }, name.length);
-    // idle 0,1 / walk 2..5
-    for (let f = 0; f < 6; f++) add(`amb/villager_${name}/${f}`, sheetFrame(sheet, f), sheet.ax, sheet.ay);
+    // idle 0,1 / walk 2..5 (children are the same figure at three-quarter size)
+    for (let f = 0; f < 6; f++) {
+      const pc = sheetFrame(sheet, f);
+      add(`amb/villager_${name}/${f}`, children.has(name) ? shrink(pc, 0.72, sheet.ax, sheet.ay) : pc, sheet.ax, sheet.ay);
+    }
   }
 }
 
-export const VILLAGER_KINDS = ['man', 'woman', 'elder', 'maid', 'man', 'woman'];
+export const VILLAGER_KINDS = ['man', 'woman', 'gatherer', 'elder', 'water', 'boy', 'maid', 'woodsman', 'woman', 'girl', 'peddler', 'man'];
+
+/** nearest-neighbour scale toward the feet anchor (children) */
+function shrink(src: PixelCanvas, k: number, ax: number, ay: number): PixelCanvas {
+  const out = new PixelCanvas(src.w, src.h);
+  for (let y = 0; y < src.h; y++)
+    for (let x = 0; x < src.w; x++) {
+      const sx = Math.round(ax + (x - ax) / k);
+      const sy = Math.round(ay + (y - ay) / k);
+      if (sx < 0 || sy < 0 || sx >= src.w || sy >= src.h) continue;
+      out.data[y * src.w + x] = src.data[sy * src.w + sx];
+    }
+  return out;
+}

@@ -287,6 +287,7 @@ export class BuildingRenderer {
       if (b.def.id === 'blacksmith' && Math.random() < step * 3 * q) {
         fx.emit({ frame: 'fx/dot', x: b.x + 6 + (Math.random() - 0.5) * 4, y: b.y + 6, vz: 20 + Math.random() * 20, vx: (Math.random() - 0.5) * 20, g: 60, life: 0.6, tint: 0xffb040, add: true });
       }
+      this.workLife(b, step * q, top);
     }
     // cottage chimneys
     const m = w.map;
@@ -299,6 +300,70 @@ export class BuildingRenderer {
         const y = Math.floor(i / m.w) * TILE - 2;
         fx.emit({ frame: 'fx/puff2', x, y, vz: 7, vx: 3, life: 2.2, s0: 0.5, s1: 1.7, tint: 0xd8d4dc, alpha: 0.4, drag: 0.2 });
       }
+    }
+  }
+
+  /** small signs of work and life, different for every kind of building */
+  private workLife(b: Building, rate: number, top: number) {
+    const fx = this.fx;
+    const r = () => Math.random();
+    const bottom = (b.ty + b.size) * TILE;
+    switch (b.def.id) {
+      case 'blacksmith':
+      case 'siege_workshop': {
+        // the hammer comes down on the anvil: a fan of sparks and a white-hot flash
+        if (r() < rate * 0.8) {
+          const ax = b.x + (b.def.id === 'blacksmith' ? 6 : -4);
+          const ay = bottom - 6;
+          fx.emit({ frame: 'fx/star', x: ax, y: ay - 3, life: 0.12, s0: 0.9, s1: 0.4, add: true });
+          fx.burst(6, { frame: 'fx/dot', x: ax, y: ay - 3, z: 1, life: 0.45, g: 160, tint: 0xffc050, add: true, ground: 'die' }, 40, 30, 2.4, -Math.PI / 2);
+        }
+        if (b.def.id === 'siege_workshop' && r() < rate * 0.6)
+          fx.burst(2, { frame: 'fx/woodchip', x: b.x + (r() - 0.5) * 16, y: bottom - 4, z: 4, life: 0.5, g: 200, ground: 'stop' }, 25, 30);
+        break;
+      }
+      case 'lumber_camp':
+        // sawdust drifting from the saw-horse, the odd chip of wood
+        if (r() < rate * 1.2) fx.emit({ frame: 'fx/dot', x: b.x - 4 + (r() - 0.5) * 6, y: bottom - 5, z: 3, vx: 6 + r() * 6, vz: 4, g: 10, life: 1.2, tint: 0xe8d0a0, alpha: 0.85, drag: 1 });
+        if (r() < rate * 0.4) fx.burst(1, { frame: 'fx/woodchip', x: b.x - 4, y: bottom - 5, z: 4, life: 0.5, g: 200, ground: 'stop' }, 25, 30);
+        break;
+      case 'mine':
+        // dust breathing out of the shaft
+        if (r() < rate * 0.7) fx.emit({ frame: 'fx/puff3', x: b.x + (r() - 0.5) * 6, y: bottom - 6, vx: (r() - 0.5) * 8, vz: 5, life: 1.4, s0: 0.5, s1: 1.4, tint: 0xa89c8c, alpha: 0.45, drag: 0.8 });
+        break;
+      case 'farm':
+      case 'stable':
+        // loose straw caught by the wind
+        if (r() < rate * 0.5) fx.emit({ frame: 'fx/straw', x: b.x + (r() - 0.5) * b.size * 12, y: bottom - 3, z: 2, vx: 10 + r() * 10, vz: 8, g: 12, life: 1.8, spin: 3, drag: 0.6 });
+        break;
+      case 'market':
+        // coins changing hands
+        if (r() < rate * 0.8) fx.emit({ frame: 'fx/coin', x: b.x + (r() - 0.5) * b.size * 12, y: bottom - 6 - r() * 8, z: 2, vz: 26, g: 120, life: 0.45, spin: 8, ground: 'die' });
+        break;
+      case 'chapel':
+        // candle-lit motes rising from the door
+        if (r() < rate * 0.9) fx.emit({ frame: 'fx/dot', x: b.doorX + (r() - 0.5) * 6, y: b.doorY - 4, vz: 6 + r() * 4, vx: (r() - 0.5) * 3, life: 2, tint: 0xffe8a0, add: true, alpha: 0.8 });
+        break;
+      case 'archery_range':
+        // practice volleys thudding into the butts
+        if (r() < rate * 0.35) {
+          const sx = b.x - b.size * 4;
+          const sy = bottom - 4;
+          const tx = b.x + (r() - 0.3) * b.size * 8;
+          const ty = top + 6;
+          const life = 0.35;
+          fx.emit({ frame: 'fx/arrow', x: sx, y: sy, z: 6, vx: (tx - sx) / life, vy: (ty - sy) / life, life, rot: Math.atan2(ty - sy, tx - sx) });
+        }
+        break;
+      case 'capital_castle':
+      case 'keep':
+        // braziers either side of the gate
+        for (const o of [-9, 9]) if (r() < rate * 2.5) fx.emit({ frame: 'fx/flame0', frames: ['fx/flame0', 'fx/flame1', 'fx/flame2', 'fx/flame3'], fps: 12, x: b.doorX + o, y: b.doorY - 5, vz: 4, life: 0.45, s0: 0.45, s1: 0.25 });
+        break;
+      case 'merc_camp':
+        if (r() < rate * 2) fx.emit({ frame: 'fx/flame0', frames: ['fx/flame0', 'fx/flame1', 'fx/flame2', 'fx/flame3'], fps: 11, x: b.x + 4, y: bottom - 8, vz: 5, life: 0.5, s0: 0.6, s1: 0.3 });
+        if (r() < rate * 0.6) fx.emit({ frame: 'fx/puff2', x: b.x + 4, y: bottom - 12, vz: 9, vx: 3, life: 2.2, s0: 0.5, s1: 1.8, tint: 0x8a8490, alpha: 0.45, drag: 0.2 });
+        break;
     }
   }
 

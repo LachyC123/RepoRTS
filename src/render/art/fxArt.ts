@@ -101,7 +101,7 @@ export function buildFxArt() {
     add('fx/helm', pc);
   }
   // ---- speech bubbles: fight (crossed swords), flee (white flag), cheer (note), alert (!)
-  for (const kind of ['fight', 'flee', 'cheer', 'alert'] as const) {
+  for (const kind of ['fight', 'flee', 'cheer', 'alert', 'chat'] as const) {
     const pc = new PixelCanvas(11, 12);
     pc.rect(1, 0, 9, 9, '#fff8e8');
     pc.hline(0, 10, 1, '#fff8e8');
@@ -128,6 +128,8 @@ export function buildFxArt() {
       pc.px(8, 2, ink);
       pc.rect(4, 6, 2, 2, ink);
       pc.px(6, 6, ink);
+    } else if (kind === 'chat') {
+      for (const x of [2, 5, 8]) pc.px(x, 4, ink);
     } else {
       pc.vline(5, 1, 5, '#c82828');
       pc.vline(4, 2, 4, '#e83838');

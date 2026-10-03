@@ -196,8 +196,9 @@ export class CameraController {
     // clamp to world with margin
     const halfW = this.viewW / 2 / this.zoom;
     const halfH = this.viewH / 2 / this.zoom;
-    const marginX = Math.min(halfW, 48);
-    const marginY = Math.min(halfH, 64);
+    // a little slack so the edge can clear the HUD; the edge itself fades to dark
+    const marginX = Math.min(halfW, 12);
+    const marginY = Math.min(halfH, 18);
     if (halfW * 2 > this.worldW + marginX * 2) this.x = this.worldW / 2;
     else this.x = clamp(this.x, halfW - marginX, this.worldW - halfW + marginX);
     if (halfH * 2 > this.worldH + marginY * 2) this.y = this.worldH / 2;

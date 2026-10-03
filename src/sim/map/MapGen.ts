@@ -676,6 +676,46 @@ export function generateMap(def: MapDef, seed: number): GameMap {
       if (isBorder) r.border.push(i);
     }
   }
+  // ---------------------------------------------------------------- roadside furniture
+  // signposts at junctions, milestones along long stretches, the odd wayside shrine (decorative only)
+  {
+    const ring: [number, number][] = [];
+    for (let k = -2; k <= 2; k++) ring.push([k, -2]);
+    for (let k = -1; k <= 2; k++) ring.push([2, k]);
+    for (let k = 1; k >= -2; k--) ring.push([k, 2]);
+    for (let k = 1; k >= -1; k--) ring.push([-2, k]);
+    const placed: [number, number][] = [];
+    const clear = (x: number, y: number, r: number) => placed.every(([px, py]) => Math.abs(px - x) + Math.abs(py - y) >= r);
+    const beside = (x: number, y: number, kind: string, salt: number) => {
+      const dirs: [number, number][] = [[1, 1], [-1, 1], [1, -1], [-1, -1], [1, 0], [-1, 0], [0, 1], [0, -1]];
+      const start = Math.floor(hash2(x, y, salt) * dirs.length);
+      for (let k = 0; k < dirs.length; k++) {
+        const [dx, dy] = dirs[(start + k) % dirs.length];
+        const tx = x + dx;
+        const ty = y + dy;
+        if (tx < 1 || ty < 1 || tx >= W - 1 || ty >= H - 1 || roadMask[ty * W + tx] || !freeTile(tx, ty)) continue;
+        decor.push({ kind, x: tx * TILE + 8, y: ty * TILE + 12, v: Math.floor(hash2(tx, ty, salt + 1) * 4), blocks: false });
+        placed.push([x, y]);
+        return true;
+      }
+      return false;
+    };
+    for (let y = 3; y < H - 3; y++)
+      for (let x = 3; x < W - 3; x++) {
+        if (!roadMask[y * W + x] || terrain[y * W + x] === T.BRIDGE) continue;
+        let arms = 0;
+        let prev = roadMask[(y + ring[ring.length - 1][1]) * W + x + ring[ring.length - 1][0]];
+        for (const [dx, dy] of ring) {
+          const cur = roadMask[(y + dy) * W + x + dx];
+          if (cur && !prev) arms++;
+          prev = cur;
+        }
+        if (arms >= 3 && clear(x, y, 10)) beside(x, y, 'signpost', 701);
+        else if (hash2(x, y, 703) < 0.02 && clear(x, y, 14)) beside(x, y, 'milestone', 705);
+        else if (hash2(x, y, 707) < 0.005 && clear(x, y, 20)) beside(x, y, 'shrine', 709);
+      }
+  }
+
   regions.forEach((r) => {
     r.mx = sumX[r.id] / r.tiles;
     r.my = sumY[r.id] / r.tiles;

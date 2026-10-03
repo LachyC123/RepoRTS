@@ -328,6 +328,36 @@ function drawFigure(p: PixelCanvas, look: UnitLook, pal: Palette, pose: Pose, cx
   p.line(shoulderX + 1, shoulderY, handX, handY, armCol);
   p.px(handX, handY, look.armor === 'plate' ? M[5] : skin[3]);
   if (!pose.noWeapon) drawWeapon(p, look.weapon, handX, handY, pose, pal);
+  // ---- civilian loads
+  switch (look.carry) {
+    case 'basket':
+      p.rect(handX - 1, handY + 1, 4, 3, '#b08a4a');
+      p.hline(handX - 1, handX + 2, handY + 1, '#d0a860');
+      p.px(handX, handY + 2, '#8a6a34');
+      p.px(handX + 2, handY + 3, '#8a6a34');
+      p.px(handX, handY, '#c83a3a'); // apples
+      p.px(handX + 1, handY, '#e0c040');
+      break;
+    case 'bucket':
+      p.px(handX, handY + 1, '#5a5a62');
+      p.rect(handX - 1, handY + 2, 3, 3, '#7a6a5a');
+      p.hline(handX - 1, handX + 1, handY + 2, '#9ab8d8');
+      p.px(handX + 1, handY + 4, '#5a4a3a');
+      break;
+    case 'firewood':
+      // bundle across the shoulders
+      for (let k = 0; k < 3; k++) {
+        p.hline(tx - 2, tx + tw + 1, torsoTop - 1 + k, k === 1 ? RAMP.wood[2] : RAMP.wood[3]);
+        p.px(tx + tw + 1, torsoTop - 1 + k, RAMP.wood[5]);
+      }
+      break;
+    case 'flowers':
+      p.px(handX, handY - 1, RAMP.grass[3]);
+      p.px(handX + 1, handY - 2, '#e07890');
+      p.px(handX - 1, handY - 2, '#f0d860');
+      p.px(handX, handY - 3, '#f4f0e8');
+      break;
+  }
 }
 
 function drawWeapon(p: PixelCanvas, w: UnitLook['weapon'], hx: number, hy: number, pose: Pose, pal: Palette) {

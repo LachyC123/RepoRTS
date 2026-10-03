@@ -30,6 +30,8 @@ export interface UnitLook {
   beard?: boolean;
   /** carries a trade pack on the back */
   sack?: boolean;
+  /** civilian load in hand or on the shoulder */
+  carry?: 'basket' | 'bucket' | 'firewood' | 'flowers';
   /** skin/cloth tint hints */
   cloth?: string;
 }

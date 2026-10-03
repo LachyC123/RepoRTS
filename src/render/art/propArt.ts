@@ -351,6 +351,60 @@ export function drawProp(kind: string, v: number): PropSprite | null {
     }
     case 'dead_tree':
       return drawTree(4, v, 0);
+    case 'signpost': {
+      // weathered post with two pointing boards (v flips which way they point)
+      const pc = new PixelCanvas(16, 20);
+      pc.vline(7, 4, 17, W[2]);
+      pc.vline(8, 4, 17, W[1]);
+      pc.px(7, 3, W[4]);
+      const board = (y: number, dir: number, col: string) => {
+        const x0 = dir > 0 ? 8 : 1;
+        pc.rect(x0, y, 7, 3, col);
+        pc.hline(x0, x0 + 6, y, W[5]);
+        pc.px(dir > 0 ? x0 + 7 : x0 - 1, y + 1, col);
+        pc.hline(x0 + 1, x0 + 5, y + 1, W[1]);
+      };
+      board(5, v % 2 ? 1 : -1, W[4]);
+      board(10, v % 2 ? -1 : 1, W[3]);
+      pc.px(6, 17, RAMP.grass[4]);
+      pc.px(9, 17, RAMP.grass[3]);
+      pc.outline(OUTLINE, 0.6);
+      pc.shadow(8, 17, 3.5, 1.2, 0.3);
+      return { pc, ax: 8, ay: 17 };
+    }
+    case 'milestone': {
+      const pc = new PixelCanvas(8, 10);
+      for (let y = 2; y < 8; y++) {
+        const hw = y < 3 ? 2 : 3;
+        for (let x = -hw; x < hw; x++) pc.px(4 + x, y, S[x < 0 ? 5 : x === hw - 1 ? 2 : 4]);
+      }
+      pc.hline(2, 5, 4, S[1]); // carved mark
+      pc.px(1, 7, RAMP.grass[4]);
+      pc.outline(OUTLINE, 0.6);
+      pc.shadow(4, 8, 3, 1, 0.3);
+      return { pc, ax: 4, ay: 8 };
+    }
+    case 'shrine': {
+      // wayside shrine: little roofed box on a post, a candle glowing inside
+      const pc = new PixelCanvas(12, 20);
+      pc.vline(5, 9, 17, W[2]);
+      pc.vline(6, 9, 17, W[1]);
+      pc.rect(3, 5, 6, 5, W[3]);
+      pc.rect(4, 6, 4, 3, '#2a1e18');
+      pc.px(5, 7, '#ffe090');
+      pc.px(6, 7, '#f0b040');
+      pc.px(5, 8, '#c8a060');
+      for (let k = 0; k < 3; k++) pc.hline(2 + k, 9 - k, 4 - k, k === 2 ? W[5] : '#8a4a2a');
+      pc.px(5, 0, '#c8a060');
+      pc.px(5, 1, '#c8a060');
+      pc.px(4, 1, '#c8a060');
+      pc.px(6, 1, '#c8a060');
+      pc.px(3, 17, '#e07890');
+      pc.px(8, 17, '#f0d860');
+      pc.outline(OUTLINE, 0.6);
+      pc.shadow(6, 17, 3.5, 1.2, 0.3);
+      return { pc, ax: 6, ay: 17 };
+    }
     case 'standing_stone': {
       const pc = new PixelCanvas(10, 18);
       for (let y = 2; y < 15; y++) {

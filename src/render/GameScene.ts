@@ -90,6 +90,23 @@ export class GameScene extends Phaser.Scene {
     this.stratGfx = this.make.graphics({}, false);
     this.overLayer.add([this.barGfx, this.stratGfx]);
     this.screenGfx = this.add.graphics().setDepth(10);
+    // the valley fades into the dark at the map edge instead of stopping at a hard line
+    {
+      const wpx = world.map.w * TILE;
+      const hpx = world.map.h * TILE;
+      const e = 56;
+      const bg = 0x1a1420;
+      const g = this.make.graphics({}, false);
+      g.fillGradientStyle(bg, bg, bg, bg, 0.95, 0.95, 0, 0);
+      g.fillRect(0, 0, wpx, e);
+      g.fillGradientStyle(bg, bg, bg, bg, 0, 0, 0.95, 0.95);
+      g.fillRect(0, hpx - e, wpx, e);
+      g.fillGradientStyle(bg, bg, bg, bg, 0.95, 0, 0.95, 0);
+      g.fillRect(0, 0, e, hpx);
+      g.fillGradientStyle(bg, bg, bg, bg, 0, 0.95, 0, 0.95);
+      g.fillRect(wpx - e, 0, e, hpx);
+      this.fogLayer.add(g);
+    }
 
     const map = world.map;
     this.terrain = new TerrainRenderer(this, map, this.groundLayer);
@@ -104,6 +121,7 @@ export class GameScene extends Phaser.Scene {
     this.buildingsR = new BuildingRenderer(this, world, this.ysort, this.particles);
     this.fog = new FogRenderer(this, world, pf, this.fogLayer);
     this.ambient = new Ambient(this, world, this.ysort, this.fxLayer);
+    this.ambient.fx = this.particles;
 
     const cam = this.cameras.main;
     cam.setRoundPixels(false);
@@ -323,7 +341,8 @@ export class GameScene extends Phaser.Scene {
       for (const u of world.units) {
         if (u.x < v.x0 || u.x > v.x1 || u.y < v.y0 || u.y > v.y1) continue;
         const selected = sel.units.has(u.id);
-        if (!selected && u.hp >= u.maxHp) continue;
+        // scratched veterans don't carry a bar forever: only fresh or serious wounds show
+        if (!selected && (u.hp >= u.maxHp || (world.time - u.lastHitT > 6 && u.hp > u.maxHp * 0.6))) continue;
         if (u.def.special === 'worker' && !selected) continue;
         if (!this.units.visible(u)) continue;
         const x = u.px + (u.x - u.px) * alpha;
@@ -484,6 +503,23 @@ export class GameScene extends Phaser.Scene {
   private drawScreenOverlay() {
     const g = this.screenGfx;
     g.clear();
+    // soft vignette: draws the eye to the middle of the view
+    {
+      const W = this.scale.width;
+      const H = this.scale.height;
+      const ex = W * 0.14;
+      const ey = H * 0.16;
+      const c = 0x140e18;
+      const a = 0.28;
+      g.fillGradientStyle(c, c, c, c, a, a, 0, 0);
+      g.fillRect(0, 0, W, ey);
+      g.fillGradientStyle(c, c, c, c, 0, 0, a, a);
+      g.fillRect(0, H - ey, W, ey);
+      g.fillGradientStyle(c, c, c, c, a, 0, a, 0);
+      g.fillRect(0, 0, ex, H);
+      g.fillGradientStyle(c, c, c, c, 0, a, 0, a);
+      g.fillRect(W - ex, 0, ex, H);
+    }
     const b = this.input2.box;
     if (b) {
       const d = this.client.dpr;
