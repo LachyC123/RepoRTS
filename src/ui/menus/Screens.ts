@@ -37,14 +37,16 @@ export function setupScreen(root: HTMLElement, initial: PlayerChoices, h: { star
   const c: PlayerChoices = { ...initial };
   const s = el('div', 'screen dim', root);
   const d = el('div', 'dialog panel', s);
-  el('h1', '', d, 'Raise Your Banner');
-  el('h2', '', d, 'KINGDOM');
+  const h1 = el('h1', '', d, 'Raise Your Banner');
+  el('h2', '', d, 'ERA');
+  const eraRow = el('div', 'row era-row', d);
+  const realmH = el('h2', '', d, 'KINGDOM');
   const nameRow = el('div', 'row', d);
   const nameIn = el('input', 'text-in', nameRow) as HTMLInputElement;
-  nameIn.value = c.kingdomName.replace(/^Kingdom of /, '');
+  nameIn.value = c.kingdomName.replace(/^(Kingdom|Republic) of /, '');
   nameIn.maxLength = 22;
   nameIn.placeholder = 'Kingdom name';
-  el('h2', '', d, 'COMMANDER');
+  const cmdH = el('h2', '', d, 'COMMANDER');
   const cmdRow = el('div', 'row', d);
   const cmdIn = el('input', 'text-in', cmdRow) as HTMLInputElement;
   cmdIn.value = c.commanderName;
@@ -82,6 +84,30 @@ export function setupScreen(root: HTMLElement, initial: PlayerChoices, h: { star
   };
   renderCrests();
   renderColors();
+  const ERAS: { id: 'medieval' | 'modern'; icon: string; name: string; desc: string }[] = [
+    { id: 'medieval', icon: '⚔', name: 'Medieval', desc: 'Swords, bows, knights and castles' },
+    { id: 'modern', icon: '🪖', name: 'Modern', desc: 'Rifles, tanks, mortars and bunkers' },
+  ];
+  const renderEra = () => {
+    clear(eraRow);
+    const era = c.era ?? 'medieval';
+    for (const e of ERAS) {
+      const ch = el('div', `choice era-card ${era === e.id ? 'on' : ''}`, eraRow);
+      el('span', 'era-icon', ch, e.icon);
+      el('b', '', ch, e.name);
+      el('span', 'era-desc', ch, e.desc);
+      onPress(ch, () => {
+        c.era = e.id;
+        renderEra();
+      }, { sound: click });
+    }
+    const modern = era === 'modern';
+    h1.textContent = modern ? 'Raise Your Flag' : 'Raise Your Banner';
+    realmH.textContent = modern ? 'NATION' : 'KINGDOM';
+    cmdH.textContent = modern ? 'GENERAL' : 'COMMANDER';
+    nameIn.placeholder = modern ? 'Nation name' : 'Kingdom name';
+  };
+  renderEra();
   el('h2', '', d, 'DIFFICULTY');
   const diffRow = el('div', 'row', d);
   const diffDesc: Record<Difficulty, string> = {
@@ -111,16 +137,28 @@ export function setupScreen(root: HTMLElement, initial: PlayerChoices, h: { star
   el('div', 'choice off', mapRow, 'Saltmere Isles — coming soon');
   el('h2', '', d, 'OPTIONS');
   const optRow = el('div', 'row', d);
-  const tut = el('div', `choice ${c.tutorial ? 'on' : ''}`, optRow, 'Guided first match');
-  onPress(tut, () => {
-    c.tutorial = !c.tutorial;
-    tut.classList.toggle('on', !!c.tutorial);
-  }, { sound: click });
+  const optDesc = el('div', 'opt-desc', d);
+  const opt = (label: string, key: 'tutorial' | 'living' | 'autoArmies' | 'sandbox', desc: string) => {
+    const ch = el('div', `choice ${c[key] ? 'on' : ''}`, optRow, label);
+    ch.title = desc;
+    onPress(ch, () => {
+      c[key] = !c[key];
+      ch.classList.toggle('on', !!c[key]);
+      optDesc.textContent = desc;
+    }, { sound: click });
+    ch.addEventListener('pointerenter', () => (optDesc.textContent = desc));
+  };
+  opt('Guided first match', 'tutorial', 'A gentle walkthrough of the basics; rivals hold off a while.');
+  opt('Living soldiers', 'living', 'Every soldier has a name and a personality. The wounded can be saved by their friends. Some panic, some go berserk, some nap.');
+  opt('Self-running armies', 'autoArmies', 'Your soldiers defend, expand and fight on their own. Give an order and they follow it, then go back to thinking for themselves.');
+  opt('Sandbox', 'sandbox', 'No victory conditions. The war goes on as long as you like.');
+  optDesc.textContent = 'Hover or tap an option to read about it.';
   const foot = el('div', 'foot', d);
   btn(foot, 'BACK', h.back);
   btn(foot, 'BEGIN', () => {
     const nm = nameIn.value.trim() || 'Aldmere';
-    c.kingdomName = /^kingdom of /i.test(nm) ? nm : `Kingdom of ${nm}`;
+    const prefix = c.era === 'modern' ? 'Republic of' : 'Kingdom of';
+    c.kingdomName = /^(kingdom|republic) of /i.test(nm) ? nm : `${prefix} ${nm}`;
     c.commanderName = cmdIn.value.trim() || 'Edmund';
     h.start(c);
   }, 'primary');
@@ -375,6 +413,26 @@ export function endScreen(
       else ctx.lineTo(x, yOf(v));
     });
     ctx.stroke();
+  }
+  // the soldiers worth remembering: the living legends and the fallen
+  const lv = world.living;
+  if (lv) {
+    const alive = world.units.filter((u) => u.alive && u.faction === player && u.persona && (u.persona.kills > 0 || u.persona.rescues > 0));
+    alive.sort((a, b) => b.persona!.kills + b.persona!.rescues * 2 - (a.persona!.kills + a.persona!.rescues * 2));
+    const fallen = [...(lv.fallen.get(player as never) ?? [])].sort((a, b) => b.kills + b.rescues * 2 - (a.kills + a.rescues * 2));
+    if (alive.length || fallen.length) {
+      const roll = el('div', 'roll', d);
+      if (alive.length) {
+        const col = el('div', 'roll-col', roll);
+        el('div', 'gt', col, 'STILL STANDING');
+        for (const u of alive.slice(0, 4)) el('div', 'roll-row', col, `<b>${lv.name(u, true)}</b> <span>${u.persona!.kills} kills${u.persona!.rescues ? ` · saved ${u.persona!.rescues}` : ''}</span>`);
+      }
+      if (fallen.length) {
+        const col = el('div', 'roll-col', roll);
+        el('div', 'gt', col, `IN MEMORY · ${fallen.length} FELL`);
+        for (const x of fallen.slice(0, 4)) el('div', 'roll-row', col, `<b>${x.name}</b> <span>${x.kills} kills${x.rescues ? ` · saved ${x.rescues}` : ''}</span>`);
+      }
+    }
   }
   const foot = el('div', 'foot', d);
   btn(foot, 'REMATCH', h.rematch, 'primary');

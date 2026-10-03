@@ -12,6 +12,9 @@ import type { Notice } from '../../sim/events';
 import type { Settlement } from '../../sim/territory/Settlement';
 import type { Unit } from '../../sim/units/Unit';
 import { crestUrl } from '../uiArt';
+import { isModern, resName, word } from '../../data/era';
+import { AUTO_POLICY } from '../../sim/ai/AIController';
+import { TRAITS } from '../../sim/units/Persona';
 import { buildingPreviewUrl, costHtml, icon, installFrames, portraitUrl } from './assets';
 import { clear, el, fmt, onPress, ROMAN } from './dom';
 import { Minimap } from './Minimap';
@@ -167,10 +170,10 @@ export class HUD {
       const img = el('img', '', k) as HTMLImageElement;
       img.src = crestUrl(f.setup.crest, f.color);
       const txt = el('div', 'ktext', k);
-      el('div', 'kname', txt, f.name.replace(/^Kingdom of /, ''));
+      el('div', 'kname', txt, f.name.replace(/^(Kingdom|Republic) of /, ''));
       this.terrEl = el('div', 'kterr', txt);
       onPress(k, () => c.jumpCapital(), { sound: () => audio.play('ui_click') });
-      k.title = 'Your kingdom — tap to view the capital';
+      k.title = `Your ${word('kingdom')} — tap to view the capital`;
       const resWrap = el('div', 'hud-res', top);
       const bar = el('div', 'resbar panel pe', resWrap);
       for (const r of RES_KEYS) {
@@ -180,7 +183,7 @@ export class HUD {
         const val = el('span', 'val', it);
         const inc = el('span', 'inc', it);
         this.resEls[r] = { val, inc, last: 0 };
-        this.tip(it, () => ({ title: r[0].toUpperCase() + r.slice(1), desc: RES_DESC[r], extra: `Income ${Math.round(c.world.player?.income[r] ?? 0)}/min` }));
+        this.tip(it, () => ({ title: resName(r), desc: (isModern() ? RES_DESC_MODERN : RES_DESC)[r], extra: `Income ${Math.round(c.world.player?.income[r] ?? 0)}/min` }));
       }
       const pop = el('div', 'res-item', bar);
       (el('img', 'icon', pop) as HTMLImageElement).src = icon('pop');
@@ -284,7 +287,7 @@ export class HUD {
     const k = el('div', 'hud-kingdom panel pe', top);
     const txt = el('div', 'ktext', k);
     el('div', 'kname', txt, 'Spectating');
-    el('div', 'kterr', txt, 'Four AI kingdoms');
+    el('div', 'kterr', txt, `Four AI ${word('kingdoms')}`);
     const wrap = el('div', 'hud-res', top);
     const bar = el('div', 'resbar panel pe standings', wrap);
     for (const f of w.factions) {
@@ -317,7 +320,7 @@ export class HUD {
     const w = c.world;
     if (c.playerFaction < 0) return;
     const box = el('div', 'hud-realms panel dark pe', this.root);
-    el('div', 'rh', box, 'KINGDOMS');
+    el('div', 'rh', box, word('KINGDOMS'));
     const order = w.factions.filter((f) => f && f.id !== NEUTRAL).sort((a, b) => (a.id === c.playerFaction ? -1 : b.id === c.playerFaction ? 1 : a.id - b.id));
     for (const f of order) {
       const row = el('div', 'realm', box);
@@ -341,7 +344,7 @@ export class HUD {
     el('span', 'rn', un, 'Unclaimed');
     el('span', 'rs', un, 'no colour');
     onPress(un, () => c.toast('Untinted land is unclaimed: stand troops on its square to claim it'));
-    this.tip(un, () => ({ title: 'Unclaimed land', desc: 'Untinted regions belong to no kingdom. Stand troops on a region’s square to claim it; some are guarded by bandits or rebels.' }));
+    this.tip(un, () => ({ title: 'Unclaimed land', desc: `Untinted regions belong to no ${word('kingdom')}. Stand troops on a region’s square to claim it; some are guarded by ${isModern() ? 'raiders or militias' : 'bandits or rebels'}.` }));
   }
 
   private refreshRealms() {
@@ -397,7 +400,7 @@ export class HUD {
     const d = w.victory.domination;
     if (d) {
       const f = w.factions[d.faction];
-      parts.push(`<div style="color:${f.color.light}">DOMINATION · ${f.name.replace(/^Kingdom of /, '')}</div><div style="font-size:1.4em">${formatTime(90 - d.t)}</div>`);
+      parts.push(`<div style="color:${f.color.light}">DOMINATION · ${f.name.replace(/^(Kingdom|Republic) of /, '')}</div><div style="font-size:1.4em">${formatTime(90 - d.t)}</div>`);
     }
     const p = w.player;
     if (p && p.critical > 0) parts.push(`<div style="color:#ff9a8a">CAPITAL LOST — new capital in</div><div style="font-size:1.4em">${formatTime(p.critical)}</div>`);
@@ -573,7 +576,7 @@ export class HUD {
     }
     this.selEl.classList.add('show');
     let sig = '';
-    if (s.kind === 'units') sig = 'u:' + s.units.map((u) => `${u.id}:${Math.round((u.hp / u.maxHp) * 20)}`).join(',');
+    if (s.kind === 'units') sig = 'u:' + s.units.map((u) => `${u.id}:${Math.round((u.hp / u.maxHp) * 20)}:${u.auto ? 1 : 0}:${u.persona ? u.persona.state + u.persona.rank + u.persona.kills : ''}${u.routing > 0 ? 'r' : ''}`).join(',');
     else if (s.kind === 'building') sig = `b:${s.b.id}:${s.b.faction}:${Math.round(s.b.hp)}:${Math.round(s.b.progress * 50)}:${s.b.queue.map((q) => q.type + Math.round((q.t / q.total) * 20)).join(',')}:${s.b.research?.id ?? ''}${Math.round((s.b.research?.t ?? 0) / 2)}:${w.settlements[s.b.settlementId].tier}:${Math.round(w.settlements[s.b.settlementId].upgrading?.t ?? 0)}`;
     else sig = `r:${s.s.id}:${s.s.owner}:${s.s.tier}:${Math.round(s.s.capProgress * 20)}:${Math.round(s.s.upgrading?.t ?? 0)}`;
     if (sig === this.selSig) return;
@@ -598,9 +601,17 @@ export class HUD {
       img.src = portraitUrl(u.def.id, this.colorOf(u.faction));
       const t = el('div', '', head);
       const f = this.client.world.factions[u.faction];
-      const name = u.def.special === 'commander' ? `${f.setup.commanderName} ${f.setup.commanderTitle}` : u.def.name;
+      const w = this.client.world;
+      const per = u.persona;
+      const name = u.def.special === 'commander' ? `${f.setup.commanderName} ${f.setup.commanderTitle}` : per && w.living ? w.living.name(u, true) : u.def.name;
       el('div', 'sel-title', t, name);
-      el('div', 'sel-sub', t, `${u.def.role}${u.faction !== this.client.playerFaction ? ' · ' + f.name : ''}`);
+      el('div', 'sel-sub', t, `${per ? u.def.name : u.def.role}${u.faction !== this.client.playerFaction ? ' · ' + f.name : ''}`);
+      if (per) {
+        const tr = TRAITS[per.trait];
+        const mind = el('div', 'sel-mind', t);
+        mind.innerHTML = `<span class="trait">${tr.label}</span> ${this.stateText(u)}`;
+        this.tip(mind, () => ({ title: tr.label, desc: tr.desc, extra: `${per.kills} kill${per.kills === 1 ? '' : 's'}${per.rescues ? ` · saved ${per.rescues}` : ''}${per.wounds ? ` · wounded ${per.wounds}×` : ''}` }));
+      }
       const hp = el('div', 'hpbar', t);
       (el('i', '', hp) as HTMLElement).style.width = `${(u.hp / u.maxHp) * 100}%`;
       const atk = u.def.attack + u.atkBonus;
@@ -614,7 +625,8 @@ export class HUD {
     const power = units.reduce((a, u) => a + u.def.power, 0);
     el('div', 'sel-title', t, `${units.length} soldiers`);
     const hp = units.reduce((a, u) => a + u.hp, 0) / units.reduce((a, u) => a + u.maxHp, 0);
-    el('div', 'sel-sub', t, `Strength ${Math.round(power)} · ${Math.round(hp * 100)}% health · ${this.client.formation} formation`);
+    const free = this.client.autopilot ? units.filter((u) => u.faction === this.client.playerFaction && u.auto && u.def.special !== 'worker' && u.def.special !== 'commander').length : 0;
+    el('div', 'sel-sub', t, `Strength ${Math.round(power)} · ${Math.round(hp * 100)}% health · ${this.client.formation} formation${free ? ` · ${free === units.length ? 'all' : free} acting on their own` : ''}`);
     const chips = el('div', 'chips', p);
     const byType = new Map<string, Unit[]>();
     for (const u of units) {
@@ -704,7 +716,7 @@ export class HUD {
     const w = this.client.world;
     const pf = this.client.playerFaction as FactionId;
     if (pf < 0 || s.owner === pf) return '';
-    if (s.owner === NEUTRAL) return 'No kingdom holds it. Stand troops on its square to claim it.';
+    if (s.owner === NEUTRAL) return `No ${word('kingdom')} holds it. Stand troops on its square to claim it.`;
     const f = w.factions[s.owner];
     switch (w.diplomacy.stance(pf, s.owner as FactionId)) {
       case 'war':
@@ -767,6 +779,12 @@ export class HUD {
       acts.push({ id: 'boxsel', label: 'SELECT', glyph: '⬚', active: this.mode === 'select', press: () => c.setMode(this.mode === 'select' ? 'default' : 'select'), tip: { title: 'Box select', desc: 'Then drag over your troops. (Or press and hold, then drag.)' } });
       acts.push({ id: 'idle', label: 'IDLE', glyph: '☾', key: '.', press: () => c.selectIdle(), tip: { title: 'Find idle troops', desc: '.' } });
       acts.push({ id: 'capital', label: 'CAPITAL', glyph: '♛', key: 'H', press: () => c.jumpCapital(), tip: { title: 'View capital', desc: 'Home' } });
+      const ap = c.autopilot;
+      if (ap) {
+        const pol = AUTO_POLICY[ap.policy];
+        acts.push({ id: 'auto', label: pol.label, glyph: pol.glyph, key: 'T', active: ap.policy !== 'off', press: () => c.cmdAutoPolicy(), tip: { title: `Free soldiers: ${pol.label.toLowerCase()}`, desc: pol.desc, extra: 'Tap to change: Expand · Conquer · Defend · Manual. Soldiers you command directly follow your orders, then go back to thinking for themselves after a while. (T)' } });
+      }
+      if (w.living) acts.push({ id: 'journal', label: 'JOURNAL', glyph: '✎', key: 'J', press: () => this.openJournal(), tip: { title: 'War journal', desc: 'What your soldiers have been up to, and those who fell. (J)' } });
       return acts;
     }
     if (sel.kind === 'units') {
@@ -792,6 +810,16 @@ export class HUD {
         tip: { title: 'Create army banner', desc: 'Groups the selection under a banner for one-tap selection. (Ctrl+1..9)' },
       });
       acts.push({ id: 'stop', label: 'STOP', glyph: '✋', key: 'S', press: () => c.cmdStop(), tip: { title: 'Stop', desc: 'S' } });
+      if (c.autopilot) {
+        const soldiers = own.filter((u) => u.def.special !== 'worker' && u.def.special !== 'commander');
+        const commanded = soldiers.filter((u) => !u.auto).length;
+        if (soldiers.length)
+          acts.push(
+            commanded
+              ? { id: 'free', label: 'SET FREE', glyph: '☘', key: 'T', press: () => c.cmdRelease(), tip: { title: 'Let them decide', desc: 'These soldiers stop waiting for orders and go back to defending, claiming land and fighting on their own.' } }
+              : { id: 'cmd', label: 'COMMAND', glyph: '✋', key: 'T', press: () => this.takeCommand(soldiers), tip: { title: 'Take command', desc: 'These soldiers stop acting on their own and wait for your orders. (Any order you give does this too.)' } },
+          );
+      }
       acts.push({ id: 'desel', label: 'CLEAR', glyph: '✕', key: 'Esc', press: () => c.selection.clear(), tip: { title: 'Deselect', desc: 'Esc' } });
       return acts;
     }
@@ -953,6 +981,70 @@ export class HUD {
       if (a.key && !matchMedia('(pointer: coarse)').matches) el('span', 'key', b, a.key);
       onPress(b, () => a.press(), { long: a.long ?? (a.tip ? () => this.showTipFor(b, a.tip!) : undefined), sound: () => audio.play('ui_click') });
       if (a.tip) this.tip(b, () => a.tip!);
+    }
+  }
+
+  /** what a named soldier is doing, in a few words */
+  private stateText(u: Unit): string {
+    const p = u.persona!;
+    const mine = u.faction === this.client.playerFaction;
+    if (u.routing > 0) return '· <i class="bad">running for it!</i>';
+    switch (p.state) {
+      case 'berserk':
+        return '· <i class="bad">BERSERK!</i>';
+      case 'nap':
+        return '· <i>napping on duty</i>';
+      case 'wander':
+        return '· <i>wandered off</i>';
+      case 'rescue':
+        return '· <i class="good">dragging a friend to safety</i>';
+      case 'tired':
+        return '· <i>catching their breath</i>';
+      default:
+        break;
+    }
+    if (!mine || !this.client.autopilot || u.def.special === 'worker') return '';
+    return u.auto ? '· <i class="good">acting on their own</i>' : u.order.kind === 'hold' ? '· <i>holding as ordered</i>' : '· <i>following your orders</i>';
+  }
+
+  private takeCommand(units: Unit[]) {
+    const ids = units.map((u) => u.id);
+    this.client.world.takeCommand(ids);
+    this.client.world.orderStop(ids);
+    audio.play('order_move');
+    this.toast(ids.length > 1 ? `${ids.length} soldiers await your orders` : 'Awaiting your orders');
+  }
+
+  /** the war journal: what your soldiers did, and a roll of the fallen */
+  openJournal() {
+    const c = this.client;
+    const w = c.world;
+    const lv = w.living;
+    if (!lv) return;
+    const pf = c.playerFaction;
+    const sh = this.sheet('War Journal');
+    sh.classList.add('journal');
+    const list = el('div', 'jlist', sh);
+    const mine = lv.journal.filter((e) => pf < 0 || e.faction === pf).slice(-60).reverse();
+    if (!mine.length) el('div', 'jempty', list, 'Nothing worth writing down yet.');
+    const ICON: Record<string, string> = { down: '✚', death: '✝', rescue: '♥', panic: '!', berserk: '‼', promote: '★', quirk: '~', hero: '♛' };
+    for (const e of mine) {
+      const row = el('div', `jrow k-${e.kind}`, list);
+      el('span', 'jt', row, formatTime(e.t));
+      el('span', 'ji', row, ICON[e.kind] ?? '·');
+      el('span', 'jx', row, e.text);
+      onPress(row, () => {
+        c.scene?.camCtl.flyTo(e.x, e.y);
+        this.closeSheet();
+      }, { sound: () => audio.play('ui_click') });
+    }
+    const fallen = lv.fallen.get(pf as FactionId) ?? [];
+    if (fallen.length) {
+      el('h4', '', sh, `Fallen (${fallen.length})`);
+      const roll = el('div', 'jroll', sh);
+      const top = [...fallen].sort((a, b) => b.kills + b.rescues * 2 - (a.kills + a.rescues * 2)).slice(0, 24);
+      for (const f of top) el('div', 'jfallen', roll, `<b>${f.name}</b> <span>${f.trait} · ${f.kills} kill${f.kills === 1 ? '' : 's'}${f.rescues ? ` · saved ${f.rescues}` : ''} · ${formatTime(f.t)}</span>`);
+      if (fallen.length > top.length) el('div', 'jempty', roll, `…and ${fallen.length - top.length} more.`);
     }
   }
 
@@ -1178,6 +1270,17 @@ export class HUD {
       case 'q':
         c.selectAllMilitary();
         break;
+      case 't': {
+        const own = sel.unitList().filter((u) => u.faction === c.playerFaction && u.def.special !== 'worker' && u.def.special !== 'commander');
+        if (!own.length) c.cmdAutoPolicy();
+        else if (own.some((u) => !u.auto)) c.cmdRelease();
+        else this.takeCommand(own);
+        break;
+      }
+      case 'j':
+        if (this.sheetEl?.classList.contains('journal')) this.closeSheet();
+        else this.openJournal();
+        break;
       case '.':
         c.selectIdle();
         break;
@@ -1282,6 +1385,13 @@ const RES_DESC: Record<string, string> = {
   wood: 'Buildings, archers and siege engines. From lumber camps in forests.',
   food: 'Feeds recruits and growing towns. From farms and villages.',
   stone: 'Castles, walls, towers and advanced upgrades. From quarries and mines.',
+};
+
+const RES_DESC_MODERN: Record<string, string> = {
+  gold: 'Funds pay for soldiers, research, vehicles and growing towns. From taxes, mines and markets.',
+  wood: 'Materials for buildings, gunners and artillery. From sawmills in forests.',
+  food: 'Rations feed recruits and growing towns. From farms and villages.',
+  stone: 'Steel for headquarters, walls, gun posts and vehicles. From quarries and mines.',
 };
 
 const UPGRADE_DESC: Record<string, string> = {

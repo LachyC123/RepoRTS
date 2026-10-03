@@ -1,3 +1,4 @@
+import { isModern, resName } from '../../data/era';
 import { BUILDINGS } from '../../data/buildings';
 import { NEUTRAL, TILE, type FactionId } from '../../data/constants';
 import { MERCENARY_UNITS } from '../../data/units';
@@ -31,7 +32,7 @@ export class WorldEvents {
       if (b && e.to !== NEUTRAL) {
         this.bounties.delete(e.regionId);
         w.factions[e.to].res.gold += b;
-        if (e.to === w.setup.player) w.notify({ kind: 'event', text: `TREASURE FOUND: +${b} GOLD`, sub: w.settlements[e.regionId].name, factions: [e.to], x: e.x, y: e.y, priority: 2 });
+        if (e.to === w.setup.player) w.notify({ kind: 'event', text: `${isModern() ? 'SUPPLY CACHE FOUND' : 'TREASURE FOUND'}: +${b} ${resName('gold').toUpperCase()}`, sub: w.settlements[e.regionId].name, factions: [e.to], x: e.x, y: e.y, priority: 2 });
       }
     });
   }
@@ -43,7 +44,7 @@ export class WorldEvents {
       if (w.time > c.expires) {
         const b = w.buildingById.get(c.buildingId);
         if (b) w.settlementSys.destroy(b, -1, true);
-        w.notify({ kind: 'event', text: 'THE MERCENARY COMPANY MOVES ON', factions: [], priority: 0, world: true, quiet: true });
+        w.notify({ kind: 'event', text: isModern() ? 'THE CONTRACTORS PULL OUT' : 'THE MERCENARY COMPANY MOVES ON', factions: [], priority: 0, world: true, quiet: true });
       }
     }
     this.camps = this.camps.filter((c) => w.time <= c.expires);
@@ -74,7 +75,7 @@ export class WorldEvents {
           w.events.emit('worldEvent', { kind: 'gold_vein', x: (spot[0] + 1) * TILE, y: (spot[1] + 1) * TILE, regionId: s.id });
           w.events.emit('mapChanged', { tx: spot[0], ty: spot[1], w: 2, h: 2 });
           this.log(k, `GOLD VEIN DISCOVERED AT ${s.name.toUpperCase()}`);
-          w.notify({ kind: 'event', text: `⛏ GOLD VEIN DISCOVERED AT ${s.name.toUpperCase()}`, sub: 'Build a mine beside it for double output', factions: [s.owner], x: (spot[0] + 1) * TILE, y: (spot[1] + 1) * TILE, priority: 1, world: true });
+          w.notify({ kind: 'event', text: `⛏ ${isModern() ? 'OIL STRIKE' : 'GOLD VEIN DISCOVERED'} AT ${s.name.toUpperCase()}`, sub: 'Build a mine beside it for double output', factions: [s.owner], x: (spot[0] + 1) * TILE, y: (spot[1] + 1) * TILE, priority: 1, world: true });
           return;
         }
         return;
@@ -100,9 +101,9 @@ export class WorldEvents {
           u.squad = -1;
         }
         w.events.emit('worldEvent', { kind: 'bandit_raid', x: s.px, y: s.py, regionId: s.id });
-        this.log(k, `BANDITS RAID ${s.name.toUpperCase()}`);
+        this.log(k, `${isModern() ? 'RAIDERS HIT' : 'BANDITS RAID'} ${s.name.toUpperCase()}`);
         const p = w.setup.player;
-        w.notify({ kind: 'attack', text: `⚔ BANDIT RAID ON ${s.name.toUpperCase()}`, factions: [s.owner], x: s.px, y: s.py, priority: s.owner === p ? 2 : 0, alarm: s.owner === p, world: s.owner !== p });
+        w.notify({ kind: 'attack', text: `⚔ ${isModern() ? 'RAIDER ATTACK' : 'BANDIT RAID'} ON ${s.name.toUpperCase()}`, factions: [s.owner], x: s.px, y: s.py, priority: s.owner === p ? 2 : 0, alarm: s.owner === p, world: s.owner !== p });
         return;
       }
       case 'harvest': {
@@ -111,7 +112,7 @@ export class WorldEvents {
         if (!f) return;
         w.mods.harvest[f.id] = w.time + 120;
         this.log(k, `BOUNTIFUL HARVEST IN ${f.name.toUpperCase()}`);
-        w.notify({ kind: 'event', text: `🌾 BOUNTIFUL HARVEST IN ${f.name.toUpperCase()}`, sub: '+50% food for 2 minutes', factions: [f.id], priority: f.isPlayer ? 1 : 0, world: true });
+        w.notify({ kind: 'event', text: `🌾 BOUNTIFUL HARVEST IN ${f.name.toUpperCase()}`, sub: `+50% ${resName('food').toLowerCase()} for 2 minutes`, factions: [f.id], priority: f.isPlayer ? 1 : 0, world: true });
         w.events.emit('worldEvent', { kind: 'harvest', x: 0, y: 0 });
         return;
       }
@@ -121,7 +122,7 @@ export class WorldEvents {
         if (!f) return;
         w.mods.fair[f.id] = w.time + 120;
         this.log(k, `MARKET FAIR IN ${f.name.toUpperCase()}`);
-        w.notify({ kind: 'event', text: `🎪 MARKET FAIR IN ${f.name.toUpperCase()}`, sub: 'Trade income boosted for 2 minutes', factions: [f.id], priority: f.isPlayer ? 1 : 0, world: true });
+        w.notify({ kind: 'event', text: `🎪 ${isModern() ? 'TRADE BOOM' : 'MARKET FAIR'} IN ${f.name.toUpperCase()}`, sub: 'Trade income boosted for 2 minutes', factions: [f.id], priority: f.isPlayer ? 1 : 0, world: true });
         w.events.emit('worldEvent', { kind: 'fair', x: 0, y: 0 });
         return;
       }
@@ -144,8 +145,8 @@ export class WorldEvents {
           for (const u of offer) stock[u.id] = u.id === 'foreign_knight' ? 3 : 5;
           this.camps.push({ buildingId: b.id, expires: w.time + 200, stock });
           w.events.emit('buildingPlaced', { id: b.id, x: b.x, y: b.y, type: 'merc_camp', faction: NEUTRAL });
-          this.log(k, `MERCENARY COMPANY CAMPS NEAR ${s.name.toUpperCase()}`);
-          w.notify({ kind: 'event', text: `⚔ MERCENARY COMPANY NEAR ${s.name.toUpperCase()}`, sub: 'Bring troops to the camp to hire swords for gold', factions: [], x: b.x, y: b.y, priority: 1, world: true });
+          this.log(k, `${isModern() ? 'CONTRACTORS SET UP' : 'MERCENARY COMPANY CAMPS'} NEAR ${s.name.toUpperCase()}`);
+          w.notify({ kind: 'event', text: `⚔ ${isModern() ? 'CONTRACTOR CAMP' : 'MERCENARY COMPANY'} NEAR ${s.name.toUpperCase()}`, sub: `Bring troops to the camp to hire ${isModern() ? 'contractors for funds' : 'swords for gold'}`, factions: [], x: b.x, y: b.y, priority: 1, world: true });
           return;
         }
         return;
@@ -158,7 +159,7 @@ export class WorldEvents {
         const gold = 250 + Math.floor(w.time / 3);
         this.bounties.set(s.id, gold);
         this.log(k, `TREASURE RUMOURED AT ${s.name.toUpperCase()}`);
-        w.notify({ kind: 'event', text: `🏰 ABANDONED STRONGHOLD: ${s.name.toUpperCase()}`, sub: `Rumours of ${gold} gold for whoever captures it`, factions: [], x: s.px, y: s.py, priority: 1, world: true });
+        w.notify({ kind: 'event', text: `🏰 ${isModern() ? 'ABANDONED BASE' : 'ABANDONED STRONGHOLD'}: ${s.name.toUpperCase()}`, sub: `Rumours of ${gold} ${resName('gold').toLowerCase()} for whoever captures it`, factions: [], x: s.px, y: s.py, priority: 1, world: true });
         w.events.emit('worldEvent', { kind: 'fort', x: s.px, y: s.py, regionId: s.id });
         return;
       }
@@ -213,7 +214,7 @@ export class WorldEvents {
     const def = w.unitDef(type);
     const f = w.factions[faction];
     if (f.pop + def.pop > f.popCap) return { ok: false, reason: 'Population limit' };
-    if (!w.settlementSys.canAfford(faction, def.cost)) return { ok: false, reason: 'Not enough gold' };
+    if (!w.settlementSys.canAfford(faction, def.cost)) return { ok: false, reason: `Not enough ${resName('gold').toLowerCase()}` };
     w.settlementSys.pay(faction, def.cost);
     camp.stock[type]--;
     const b = w.buildingById.get(buildingId)!;

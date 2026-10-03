@@ -995,3 +995,98 @@
   color: #c8b890;
   font-size: 0.92em;
 }
+
+/* living soldiers */
+.sel-mind {
+  font-size: 0.78em;
+  color: #d8c8a0;
+  margin: 1px 0 2px;
+}
+.sel-mind .trait {
+  display: inline-block;
+  padding: 0 5px;
+  border-radius: 3px;
+  background: rgba(240, 220, 160, 0.16);
+  color: #fff0b8;
+}
+.sel-mind i {
+  font-style: normal;
+  color: #c8c0d8;
+}
+.sel-mind i.good {
+  color: #a8e890;
+}
+.sel-mind i.bad {
+  color: #ff8a7a;
+}
+.sheet.journal .jlist {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  max-height: 46vh;
+  overflow-y: auto;
+}
+.jrow {
+  display: grid;
+  grid-template-columns: 3.2em 1.2em 1fr;
+  gap: 6px;
+  align-items: baseline;
+  padding: 3px 6px;
+  border-radius: 3px;
+  cursor: pointer;
+  font-size: 0.86em;
+  color: #e8dcc0;
+}
+.jrow:hover {
+  background: rgba(255, 240, 200, 0.08);
+}
+.jrow .jt {
+  color: #9a8c78;
+  font-size: 0.85em;
+}
+.jrow .ji {
+  text-align: center;
+  font-weight: bold;
+}
+.jrow.k-death .ji {
+  color: #c8a8a8;
+}
+.jrow.k-down .ji {
+  color: #ff6a6a;
+}
+.jrow.k-rescue .ji {
+  color: #8ae870;
+}
+.jrow.k-promote .ji,
+.jrow.k-hero .ji {
+  color: #ffd84a;
+}
+.jrow.k-berserk .ji,
+.jrow.k-panic .ji {
+  color: #ff9a4a;
+}
+.sheet.journal h4 {
+  margin: 10px 0 4px;
+  color: #c8b890;
+  font-size: 0.9em;
+  letter-spacing: 0.08em;
+}
+.jroll {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(220px, 1fr));
+  gap: 2px 12px;
+  max-height: 22vh;
+  overflow-y: auto;
+}
+.jfallen {
+  font-size: 0.8em;
+  color: #d8ccb4;
+}
+.jfallen span {
+  color: #9a8c78;
+}
+.jempty {
+  color: #9a8c78;
+  font-size: 0.85em;
+  padding: 6px;
+}

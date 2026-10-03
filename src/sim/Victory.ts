@@ -1,3 +1,4 @@
+import { word } from '../data/era';
 import { BUILDINGS } from '../data/buildings';
 import { CAPITAL_RECOVERY_TIME, COMMANDER_RESPAWN, DOMINATION_HOLD, DOMINATION_SHARE, NEUTRAL, TILE, type FactionId } from '../data/constants';
 import type { Settlement } from './territory/Settlement';
@@ -28,7 +29,7 @@ export class VictorySystem {
         if (f.commanderRespawn <= 0) this.respawnCommander(f.id);
       }
     }
-    if (this.domination) {
+    if (this.domination && !w.setup.sandbox) {
       this.domination.t += dt;
       if (this.domination.t >= DOMINATION_HOLD) this.end(this.domination.faction, 'domination');
     }
@@ -48,7 +49,8 @@ export class VictorySystem {
       this.histT = 0;
       for (let f = 0; f < NEUTRAL; f++) w.factions[f]?.stats.history.push(w.factions[f].territoryShare);
     }
-    // domination
+    // domination (a sandbox never ends on its own)
+    if (w.setup.sandbox) return;
     let leader: FactionId | -1 = -1;
     for (let f = 0; f < NEUTRAL; f++) if (w.factions[f]?.alive && w.factions[f].territoryShare >= DOMINATION_SHARE) leader = f as FactionId;
     if (leader >= 0) {
@@ -153,13 +155,13 @@ export class VictorySystem {
     w.events.emit('factionEliminated', { faction: f, by });
     const p = w.setup.player;
     if (f === p) {
-      w.notify({ kind: 'defeat', text: 'YOUR KINGDOM HAS FALLEN', factions: [f], priority: 2 });
+      w.notify({ kind: 'defeat', text: `YOUR ${word('kingdom').toUpperCase()} HAS FALLEN`, factions: [f], priority: 2 });
       this.end(by >= 0 ? by : (-1 as FactionId | -1), 'defeat');
       return;
     }
     w.notify({ kind: 'war', text: `☠ ${fac.name.toUpperCase()} HAS BEEN DESTROYED`, sub: by >= 0 ? `by ${w.factions[by].name}` : undefined, factions: [f], priority: 2, world: true });
     const alive = w.factions.filter((x) => x && x.id !== NEUTRAL && x.alive);
-    if (alive.length === 1) this.end(alive[0].id, 'elimination');
+    if (alive.length === 1 && !w.setup.sandbox) this.end(alive[0].id, 'elimination');
   }
 
   private end(winner: FactionId | -1, reason: 'domination' | 'elimination' | 'defeat') {

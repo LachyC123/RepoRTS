@@ -1,15 +1,50 @@
-import { UNITS } from '../src/data/units';
+import { UNITS, type UnitDef, type UnitLook } from '../src/data/units';
 import { KINGDOM_COLORS } from '../src/data/factions';
 import { buildUnitSheet, sheetFrame } from '../src/render/art/unitArt';
 import { writePng } from './png';
 
-const types = (process.argv[2] ? process.argv[2].split(',') : Object.keys(UNITS));
+/**
+ * Contact sheet of unit animation frames (one row per unit, frames left → right).
+ *   npx tsx tools/unitPreview.ts [ids|modern|modern:inf|modern:veh|modern:eng,...]
+ * Env: SC (scale, default 3), FROM / TO (frame range), OUT (png path), TEAM (0..4 kingdom colour index).
+ * `modern*` entries render built-in test looks on a cloned UnitDef, so looks can be previewed before
+ * any UnitDef exists for them.
+ */
+const base = UNITS.militia;
+const M = (id: string, look: UnitLook, extra: Partial<UnitDef> = {}): UnitDef => ({ ...base, id, look, ...extra });
+const S = { shield: 'none' } as const;
+const MODERN_INF: UnitDef[] = [
+  M('m_conscript', { body: 'soldier', helmet: 'patrol', armor: 'fatigues', weapon: 'rifle', ...S }),
+  M('m_rifleman', { body: 'soldier', helmet: 'combat', armor: 'vest', weapon: 'rifle', ...S }),
+  M('m_at', { body: 'soldier', helmet: 'combat', armor: 'vest', weapon: 'rocket', ...S, backpack: true }),
+  M('m_shield', { body: 'heavy', helmet: 'combat', armor: 'vest', weapon: 'smg', shield: 'riot' }),
+  M('m_mg', { body: 'heavy', helmet: 'combat', armor: 'fatigues', weapon: 'mg', ...S }),
+  M('m_grenadier', { body: 'soldier', helmet: 'combat', armor: 'vest', weapon: 'grenadier', ...S }),
+  M('m_recon', { body: 'soldier', helmet: 'boonie', armor: 'fatigues', weapon: 'smg', ...S, backpack: true }),
+  M('m_sniper', { body: 'soldier', helmet: 'boonie', armor: 'ghillie', weapon: 'sniper', ...S }),
+  M('m_commando', { body: 'heavy', helmet: 'beret', armor: 'vest', weapon: 'smg', ...S }),
+  M('m_engineer', { body: 'soldier', helmet: 'hardhat', armor: 'vest', weapon: 'satchel', ...S }),
+  M('m_officer', { body: 'soldier', helmet: 'officer', armor: 'fatigues', weapon: 'pistol', ...S }),
+  M('m_raider', { body: 'peasant', helmet: 'bandana', armor: 'jacket', weapon: 'rifle', ...S, cloth: '#6a4a32' }),
+  M('m_contractor', { body: 'soldier', helmet: 'cap', armor: 'vest', weapon: 'shotgun', ...S, beard: true }),
+  M('m_worker', { body: 'peasant', helmet: 'hardhat', armor: 'jacket', weapon: 'chainsaw', ...S, cloth: '#8a3a2a' }, { special: 'worker' }),
+];
+const V = (v: NonNullable<UnitLook['vehicle']>) => M('m_' + v, { body: 'vehicle', helmet: 'none', armor: 'tunic', weapon: 'none', ...S, vehicle: v });
+const MODERN_VEH: UnitDef[] = [V('jeep'), V('tank'), V('technical'), V('command'), V('truck')];
+const E = (e: NonNullable<UnitLook['engine']>, extra: Partial<UnitDef> = {}) => M('m_' + e, { body: 'engine', helmet: 'none', armor: 'tunic', weapon: 'none', ...S, engine: e }, extra);
+const MODERN_ENG: UnitDef[] = [E('mortar'), E('atgun'), E('howitzer', { deploy: 5 })];
+
+const args = process.argv[2] ? process.argv[2].split(',') : Object.keys(UNITS);
+const defs: UnitDef[] = args.flatMap((a) =>
+  a === 'modern' ? [...MODERN_INF, ...MODERN_VEH, ...MODERN_ENG] : a === 'modern:inf' ? MODERN_INF : a === 'modern:veh' ? MODERN_VEH : a === 'modern:eng' ? MODERN_ENG : [UNITS[a]],
+);
 const SC = Number(process.env.SC ?? 3);
 const rows: { frames: Uint32Array[]; w: number; h: number }[] = [];
 let maxW = 0;
-for (const t of types) {
-  const sheet = buildUnitSheet(UNITS[t], KINGDOM_COLORS[t.length % 4], 0);
-    const from = Number(process.env.FROM ?? 0);
+for (const def of defs) {
+  const kc = KINGDOM_COLORS[process.env.TEAM !== undefined ? Number(process.env.TEAM) : def.id.length % 4];
+  const sheet = buildUnitSheet(def, kc, 0);
+  const from = Number(process.env.FROM ?? 0);
   const to = Number(process.env.TO ?? sheet.frames.length);
   rows.push({ frames: sheet.frames.slice(from, to).map((_, i) => sheetFrame(sheet, i + from).data), w: sheet.w, h: sheet.h });
   maxW = Math.max(maxW, sheet.w * rows[rows.length - 1].frames.length);

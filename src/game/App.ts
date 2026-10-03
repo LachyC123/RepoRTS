@@ -87,7 +87,7 @@ export class App {
       back: () => this.showMenu(),
       start: (c) => {
         this.choices = c;
-        settings.set('lastChoices', { kingdomName: c.kingdomName, commanderName: c.commanderName, color: c.color, crest: c.crest, difficulty: c.difficulty });
+        settings.set('lastChoices', { kingdomName: c.kingdomName, commanderName: c.commanderName, color: c.color, crest: c.crest, difficulty: c.difficulty, era: c.era, living: c.living, autoArmies: c.autoArmies, sandbox: c.sandbox });
         this.startMatch(c, false);
       },
     });

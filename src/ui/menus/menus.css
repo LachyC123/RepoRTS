@@ -494,3 +494,61 @@
     font-size: calc(13px * var(--ui-scale));
   }
 }
+
+/* era picker */
+.era-row {
+  flex-wrap: nowrap;
+}
+.choice.era-card {
+  flex: 1 1 0;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: 2px;
+  padding: 8px 10px;
+  min-width: 0;
+}
+.choice.era-card b {
+  font-size: 1.05em;
+}
+.era-icon {
+  font-size: 1.4em;
+  line-height: 1;
+}
+.era-desc {
+  font-size: 0.75em;
+  color: #c8b890;
+  white-space: normal;
+}
+.opt-desc {
+  font-size: 0.8em;
+  color: #c8d0a0;
+  margin-top: 6px;
+  min-height: 2.4em;
+  line-height: 1.25;
+}
+.roll {
+  display: flex;
+  gap: 18px;
+  margin-top: 10px;
+  flex-wrap: wrap;
+}
+.roll-col {
+  flex: 1 1 200px;
+  min-width: 0;
+}
+.roll .gt {
+  font-size: 0.75em;
+  letter-spacing: 0.08em;
+  color: #c8b890;
+  margin-bottom: 3px;
+}
+.roll-row {
+  font-size: 0.82em;
+  color: #e8dcc0;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+.roll-row span {
+  color: #9a8c78;
+}

@@ -58,6 +58,25 @@ export class LivingSystem {
     return u.persona ? personaName(u.persona, this.era, full) : u.def.name;
   }
 
+  /** a soldier says a line now (orders acknowledged, squads setting off) */
+  speak(u: Unit, kind: LineKind) {
+    this.say(u, kind, {}, true);
+  }
+
+  /** the player gave direct orders: whatever this soldier was up to, they snap out of it */
+  commanded(u: Unit) {
+    const p = u.persona;
+    if (!p) return;
+    p.idleT = 0;
+    if (p.state === 'nap') this.say(u, 'wake', {}, true);
+    if (p.state === 'nap' || p.state === 'wander' || p.state === 'rescue') {
+      const c = p.state === 'rescue' ? this.w.corpses.find((k) => k.id === p.rescueTarget) : undefined;
+      if (c) c.rescuer = 0;
+      p.rescueTarget = 0;
+      this.setState(u, 'normal', 0);
+    }
+  }
+
   private say(u: Unit, kind: LineKind, vars: { name?: string; buddy?: string } = {}, force = false) {
     const p = u.persona;
     if (!p) return;

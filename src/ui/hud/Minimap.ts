@@ -81,6 +81,7 @@ export class Minimap {
       const [x, y] = toWorld(ev);
       if (ev.button === 2 && this.client.selection.units.size) {
         const ids = [...this.client.selection.units];
+        this.client.world.takeCommand(ids);
         this.client.world.orderMove(ids, x, y, { formation: this.client.formation });
         this.ping(x, y, '#f8f0a0');
         return;

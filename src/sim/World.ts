@@ -244,6 +244,36 @@ export class World {
   }
 
   // ------------------------------------------------------------------ orders
+  /**
+   * The player commands these soldiers directly: they stop thinking for themselves until they have
+   * finished and stood idle a while (or, on hold, until handed back).
+   */
+  takeCommand(ids: number[]) {
+    let spoke = false;
+    for (const id of ids) {
+      const u = this.unitById.get(id);
+      if (!u || !u.alive) continue;
+      u.auto = false;
+      u.manualT = this.time;
+      u.squad = 0;
+      this.living?.commanded(u);
+      if (!spoke && u.persona && this.rng.next() < 0.5) {
+        spoke = true;
+        this.living?.speak(u, 'order');
+      }
+    }
+  }
+
+  /** hand soldiers back to their own judgement */
+  releaseCommand(ids: number[]) {
+    for (const id of ids) {
+      const u = this.unitById.get(id);
+      if (!u || !u.alive || u.def.special === 'worker') continue;
+      u.auto = true;
+      if (u.order.kind === 'hold') u.order = { kind: 'idle' };
+    }
+  }
+
   /** Move a set of units in formation. */
   orderMove(ids: number[], x: number, y: number, opts: { attackMove?: boolean; formation?: FormationKind; queueFlee?: boolean } = {}) {
     const units = ids.map((id) => this.unitById.get(id)).filter((u): u is Unit => !!u && u.alive);

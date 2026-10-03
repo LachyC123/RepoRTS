@@ -8,7 +8,8 @@ const withAI = process.argv[4] !== 'noai';
 const setup = buildMatchSetup({
   ...DEFAULT_CHOICES,
   seed,
-  spectate: true,
+  spectate: !process.env.AUTOP,
+  autoArmies: true,
   difficulty: (process.argv[5] as never) ?? 'normal',
   era: process.env.ERA === 'modern' ? 'modern' : 'medieval',
   living: process.env.LIVING !== '0',
@@ -18,6 +19,28 @@ w.initMatch();
 if (withAI) {
   const mod = await import('../src/sim/ai/AIManager');
   w.ai = new mod.AIManager(w);
+  if (process.env.AUTOP) {
+    // a hands-off player: something else runs the economy and training, the autopilot runs the army
+    const { AIController } = await import('../src/sim/ai/AIController');
+    const { aiEconomy } = await import('../src/sim/ai/AIEconomy');
+    const { aiMilitary } = await import('../src/sim/ai/AIMilitary');
+    const ap = (w.ai as unknown as { autopilot: InstanceType<typeof AIController> }).autopilot;
+    ap.policy = (process.env.AUTOP as never) ?? 'expand';
+    const econ = new AIController(w, 0);
+    const inner = w.ai;
+    let t = 0;
+    w.ai = {
+      update(dt: number) {
+        inner.update(dt);
+        t += dt;
+        if (t > 3) {
+          t = 0;
+          aiEconomy(econ);
+          aiMilitary(econ);
+        }
+      },
+    };
+  }
 }
 try {
   const ev = await import('../src/sim/events/WorldEvents' as string);
@@ -26,6 +49,10 @@ try {
   /* optional */
 }
 const notices: string[] = [];
+const playerNotices: string[] = [];
+w.events.on('notice', (n) => {
+  if (process.env.AUTOP && n.factions?.includes(0)) playerNotices.push(`[${fmt(w.time)}] ${n.text}${n.sub ? ' — ' + n.sub : ''}`);
+});
 const says = new Map<string, number>();
 const journalKinds = new Map<string, number>();
 const journal: string[] = [];
@@ -70,6 +97,7 @@ for (const f of w.factions) {
   console.log(`${f.name}: ${f.alive ? 'alive' : 'dead'} tiers ${JSON.stringify(tiers)} trained ${f.stats.unitsTrained} lost ${f.stats.unitsLost}`);
 }
 console.log('\n' + notices.slice(-60).join('\n'));
+if (playerNotices.length) console.log('\nPLAYER\n' + playerNotices.slice(-50).join('\n'));
 if (w.living) {
   console.log('\nsays', JSON.stringify(Object.fromEntries(says)));
   console.log('journal', JSON.stringify(Object.fromEntries(journalKinds)));

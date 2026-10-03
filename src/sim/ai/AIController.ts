@@ -9,6 +9,16 @@ import { aiEconomy } from './AIEconomy';
 import { aiMilitary } from './AIMilitary';
 import { Intel } from './Intel';
 
+/** what self-running armies may do on their own */
+export type AutoPolicy = 'off' | 'defend' | 'expand' | 'conquer';
+
+export const AUTO_POLICY: Record<AutoPolicy, { label: string; glyph: string; desc: string; toast: string }> = {
+  expand: { label: 'EXPAND', glyph: '⚑', desc: 'Free soldiers defend your land and claim unowned settlements nearby. They leave other realms alone.', toast: 'Your soldiers will defend and claim free land' },
+  conquer: { label: 'CONQUER', glyph: '⚔', desc: 'Free soldiers defend, expand and attack realms you are at war with when they think they can win.', toast: 'Your soldiers will attack your enemies on their own' },
+  defend: { label: 'DEFEND', glyph: '⛨', desc: 'Free soldiers only rush to protect your settlements.', toast: 'Your soldiers will only defend' },
+  off: { label: 'MANUAL', glyph: '✋', desc: 'Soldiers wait for your orders (they still fight back).', toast: 'Soldiers wait for your orders' },
+};
+
 export type SquadKind = 'capture' | 'attack' | 'defend' | 'raid' | 'scout' | 'hire';
 
 export interface Squad {
@@ -65,14 +75,21 @@ export class AIController {
   saveKey = '';
   saveSince = 0;
   musterRegion = -1;
+  /** autopilot: soldiers the player has handed over think for themselves (no economy, no diplomacy) */
+  readonly autopilot: boolean;
+  policy: AutoPolicy = 'expand';
+  /** seconds a hand-commanded soldier waits idle before going back to thinking for themselves */
+  static RESUME_AFTER = 30;
 
   constructor(
     readonly w: World,
     readonly id: FactionId,
+    opts: { autopilot?: boolean } = {},
   ) {
     this.f = w.factions[id];
     this.pers = this.f.personality;
-    this.diff = DIFFICULTIES[w.setup.difficulty];
+    this.autopilot = !!opts.autopilot;
+    this.diff = DIFFICULTIES[this.autopilot ? 'normal' : w.setup.difficulty];
     this.intel = new Intel(w, id, this.diff.counterPlay);
     // stagger AIs
     this.thinkT = 0.5 + id * 0.37;
@@ -84,7 +101,7 @@ export class AIController {
   }
 
   myUnits(): Unit[] {
-    return this.w.units.filter((u) => u.alive && u.faction === this.id && u.def.special !== 'worker');
+    return this.w.units.filter((u) => u.alive && u.faction === this.id && u.def.special !== 'worker' && (!this.autopilot || u.auto));
   }
 
   owned(): Settlement[] {
@@ -109,8 +126,19 @@ export class AIController {
     if (this.tacticT <= 0) {
       this.tacticT = this.diff.tacticInterval;
       this.intel.update(this.diff.tacticInterval);
-      this.updateSquads();
-      this.manageCommander();
+      if (!this.autopilot || this.policy !== 'off') this.updateSquads();
+      if (!this.autopilot) this.manageCommander();
+    }
+    if (this.thinkT <= 0 && this.autopilot) {
+      this.thinkT = this.diff.thinkInterval * (0.85 + this.w.rng.next() * 0.3);
+      this.resumeAuto();
+      if (this.policy === 'off') {
+        for (const q of [...this.squads]) this.disband(q);
+        return;
+      }
+      this.strategy();
+      this.updateDebug();
+      return;
     }
     if (this.thinkT <= 0) {
       this.thinkT = this.diff.thinkInterval * (0.85 + this.w.rng.next() * 0.3);
@@ -194,6 +222,7 @@ export class AIController {
     }
     for (const t of targets) {
       const s = w.settlements[t.id];
+      if (this.autopilot && (this.policy === 'defend' || (this.policy === 'expand' && !t.neutral))) continue;
       if (this.squads.some((q) => q.target === t.id && q.kind !== 'defend')) continue;
       if (t.neutral) {
         if (offense().filter((q) => q.kind === 'capture').length >= maxCaptures) continue;
@@ -212,7 +241,7 @@ export class AIController {
       // capture parties take what they need; the main army takes most of what is spare
       let picked = this.pick(stillAvail, s.px, s.py, t.neutral ? need * 1.3 : Math.max(need * 1.2, spare * 0.85), wantSiege);
       if (this.power(picked) < need) continue;
-      if (!t.neutral && this.f.commanderId) {
+      if (!t.neutral && this.f.commanderId && !this.autopilot) {
         const c = w.unitById.get(this.f.commanderId);
         if (c && c.alive && !busy.has(c.id) && c.hp > c.maxHp * 0.6) picked = [...picked, c];
       }
@@ -223,7 +252,7 @@ export class AIController {
     }
 
     // 3) raids by fast cavalry on exposed enemy economy
-    if (this.aggression > 0.5 && !this.squads.some((q) => q.kind === 'raid')) {
+    if (this.aggression > 0.5 && !this.squads.some((q) => q.kind === 'raid') && (!this.autopilot || this.policy === 'conquer')) {
       const cav = avail.filter((u) => u.def.tags.includes('cavalry') && u.def.tags.includes('light') && !this.squads.some((q) => q.units.has(u.id)));
       if (cav.length >= 3) {
         const tgt = this.raidTarget();
@@ -233,7 +262,7 @@ export class AIController {
 
     // 3b) mercenary companies: send a detachment to hire if we can pay
     const ev = w.events2 as unknown as { camps?: { buildingId: number; stock: Record<string, number> }[] } | null;
-    if (ev?.camps?.length && this.f.res.gold > 380 && !this.squads.some((q) => q.kind === 'hire')) {
+    if (!this.autopilot && ev?.camps?.length && this.f.res.gold > 380 && !this.squads.some((q) => q.kind === 'hire')) {
       const camp = ev.camps[0];
       const b = w.buildingById.get(camp.buildingId);
       if (b) {
@@ -389,7 +418,34 @@ export class AIController {
     };
     for (const u of units) u.squad = q.id;
     this.squads.push(q);
+    if (this.autopilot) this.announce(q, units);
     return q;
+  }
+
+  /** the player hears what their soldiers decided to do */
+  private announced = new Map<string, number>();
+  private announce(q: Squad, units: Unit[]) {
+    const w = this.w;
+    const s = w.settlements[q.target];
+    // one word per objective a minute; small top-ups go unannounced
+    const key = q.kind + ':' + q.target;
+    if (units.length < 2 || (this.announced.get(key) ?? -99) > w.time - 60) return;
+    this.announced.set(key, w.time);
+    const lead = units.filter((u) => u.persona).sort((a, b) => b.persona!.rank - a.persona!.rank || b.persona!.kills - a.persona!.kills)[0];
+    const who = lead && w.living ? `${w.living.name(lead)}'s squad` : 'A squad';
+    const what = q.kind === 'defend' ? `rushes to defend ${s.name}` : q.kind === 'capture' ? `sets off to claim ${s.name}` : q.kind === 'attack' ? `marches on ${s.name}` : q.kind === 'raid' ? `rides out to raid ${s.name}` : `heads for ${s.name}`;
+    w.notify({ kind: 'unit', text: `${who} ${what}`, sub: `${units.length} soldier${units.length > 1 ? 's' : ''} · acting on their own`, factions: [this.id], x: s.px, y: s.py, priority: 0, quiet: units.length < 4, regionId: s.id });
+    if (lead) w.living?.speak(lead, 'order');
+  }
+
+  /** hand-commanded soldiers who have finished their orders and stood idle go back to thinking for themselves */
+  private resumeAuto() {
+    const w = this.w;
+    for (const u of w.units) {
+      if (!u.alive || u.faction !== this.id || u.auto || u.def.special === 'worker' || u.def.special === 'commander') continue;
+      if (u.order.kind === 'hold' || !u.arrived || u.targetId) continue;
+      if (w.time - u.manualT > AIController.RESUME_AFTER) u.auto = true;
+    }
   }
 
   disband(q: Squad) {
@@ -436,14 +492,16 @@ export class AIController {
   private updateSquads() {
     const w = this.w;
     for (const q of [...this.squads]) {
-      const units = [...q.units].map((id) => w.unitById.get(id)).filter((u): u is Unit => !!u && u.alive);
+      // (autopilot) soldiers the player took command of leave the squad
+      const units = [...q.units].map((id) => w.unitById.get(id)).filter((u): u is Unit => !!u && u.alive && (!this.autopilot || u.auto));
       q.units = new Set(units.map((u) => u.id));
       if (!units.length) {
         this.disband(q);
         continue;
       }
       const s = w.settlements[q.target];
-      const ids = units.map((u) => u.id);
+      // soldiers busy with their own drama (dragging a friend out, berserk) are left to it
+      const ids = units.filter((u) => u.persona?.state !== 'rescue' && u.persona?.state !== 'berserk').map((u) => u.id);
       const [cx, cy] = this.centroid(units);
       const myPow = this.power(units);
       // local enemy strength

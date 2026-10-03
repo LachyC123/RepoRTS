@@ -1,3 +1,4 @@
+import { word } from '../data/era';
 import Phaser from 'phaser';
 import { audio, music } from '../audio';
 import { settings } from '../core/Settings';
@@ -8,6 +9,7 @@ import type { InputHooks } from '../input/InputController';
 import { Selection } from '../input/Selection';
 import type { CameraController } from '../render/CameraController';
 import { GameScene } from '../render/GameScene';
+import { AUTO_POLICY, type AIController, type AutoPolicy } from '../sim/ai/AIController';
 import { AIManager } from '../sim/ai/AIManager';
 import { WorldEvents } from '../sim/events/WorldEvents';
 import type { FormationKind } from '../sim/units/Formation';
@@ -67,7 +69,7 @@ export class GameClient {
       if (e.to !== this.playerFaction || this.firstCaptureHint) return;
       this.firstCaptureHint = true;
       const col = this.world.factions[this.playerFaction]?.color.id ?? '';
-      setTimeout(() => this.toast(`Land tinted ${col} is yours. Other colours are rival kingdoms (see KINGDOMS, top right); untinted land is unclaimed.`), 3500);
+      setTimeout(() => this.toast(`Land tinted ${col} is yours. Other colours are rival ${word('kingdoms')} (see ${word('KINGDOMS')}, top right); untinted land is unclaimed.`), 3500);
     });
   }
 
@@ -295,13 +297,38 @@ export class GameClient {
   cmdHold() {
     const ids = [...this.selection.units];
     if (!ids.length) return;
+    this.world.takeCommand(ids);
     this.world.orderHold(ids);
     audio.play('order_move');
     this.toast('Holding position');
   }
 
+  /** the player's self-running armies (null when switched off at setup) */
+  get autopilot(): AIController | null {
+    return (this.world.ai as { autopilot?: AIController | null } | null)?.autopilot ?? null;
+  }
+
+  cmdAutoPolicy() {
+    const ap = this.autopilot;
+    if (!ap) return;
+    const order: AutoPolicy[] = ['expand', 'conquer', 'defend', 'off'];
+    ap.policy = order[(order.indexOf(ap.policy) + 1) % order.length];
+    audio.play('ui_click');
+    this.toast(AUTO_POLICY[ap.policy].toast);
+  }
+
+  /** selected soldiers go back to thinking for themselves */
+  cmdRelease() {
+    const ids = this.selection.unitList().filter((u) => u.faction === this.playerFaction && u.def.special !== 'worker').map((u) => u.id);
+    if (!ids.length) return;
+    this.world.releaseCommand(ids);
+    audio.play('order_move');
+    this.toast(ids.length > 1 ? `${ids.length} soldiers will use their own judgement` : 'They will use their own judgement');
+  }
+
   cmdStop() {
     const ids = [...this.selection.units];
+    this.world.takeCommand(ids);
     this.world.orderStop(ids);
     audio.play('ui_click');
   }
@@ -413,6 +440,7 @@ export class GameClient {
       order: (kind, x, y, target?: Unit) => {
         const ids = this.selection.unitList().filter((u) => u.faction === this.playerFaction).map((u) => u.id);
         if (!ids.length) return;
+        this.world.takeCommand(ids.filter((id) => this.world.unitById.get(id)?.def.special !== 'worker'));
         if (kind === 'attack' && target) {
           this.world.orderAttack(ids, target.id);
           scene.addMarker(target.x, target.y, 'attack');

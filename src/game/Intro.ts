@@ -1,3 +1,4 @@
+import { isModern } from '../data/era';
 import { audio } from '../audio';
 import { TILE } from '../data/constants';
 import type { GameClient } from './GameClient';
@@ -27,8 +28,8 @@ export function playIntro(client: GameClient, root: HTMLElement, done: () => voi
   const byName = (n: string) => w.settlements.find((s) => s.name === n);
   const stops = w.mapDef.tour.map(byName).filter((s): s is NonNullable<typeof s> => !!s);
   const lines: [string, boolean][] = [
-    ['YEAR 846', true],
-    ['Four kingdoms claim this valley.', false],
+    [isModern() ? 'SUMMER, 1974' : 'YEAR 846', true],
+    [isModern() ? 'Four nations claim this valley.' : 'Four kingdoms claim this valley.', false],
     ['Only one will rule it.', false],
   ];
   let finished = false;
@@ -67,7 +68,7 @@ export function playIntro(client: GameClient, root: HTMLElement, done: () => voi
       scene.terrain.prioritize(px, py);
       cam.flyTo(px, py, cam.normalZoom(), 2.4, (k) => 1 - Math.pow(1 - k, 3));
       scene.fog.fadeTo(1, 2200);
-      text.textContent = 'Your kingdom begins.';
+      text.textContent = isModern() ? 'Your nation goes to war.' : 'Your kingdom begins.';
       text.classList.remove('small');
       text.classList.add('show');
       audio.play('horn_victory', { volume: 0.5 });
