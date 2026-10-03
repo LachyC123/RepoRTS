@@ -11,7 +11,21 @@
     <title>Crownshire</title>
     <link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 16 16' shape-rendering='crispEdges'%3E%3Cpath fill='%233a63c8' d='M3 2h10v8l-5 4-5-4z'/%3E%3Cpath fill='%23f1d97a' d='M5 4h2v2h2V4h2v4H5z'/%3E%3C/svg%3E" />
   </head>
-  <body>
+  <body style="background: #1a1420; margin: 0">
+    <!-- shown only if the game script never starts (e.g. this file opened straight from disk) -->
+    <div id="boot-help" style="display: none; position: fixed; inset: 0; align-items: center; justify-content: center; padding: 16px; background: #1a1420; color: #f1e4c0; font: 16px/1.5 system-ui, sans-serif; text-align: center; z-index: 999">
+      <div style="max-width: 520px">
+        <div style="font-size: 26px; margin-bottom: 10px; color: #f8e6b0">Crownshire</div>
+        <p>This page can't start on its own: the game's code has to be served, not opened as a file.</p>
+        <p>From the project folder run <code style="background: #2c202e; padding: 2px 6px">npm install</code> then <code style="background: #2c202e; padding: 2px 6px">npm run dev</code> and open the address it prints.</p>
+        <p>Or build a single self-contained file with <code style="background: #2c202e; padding: 2px 6px">npm run build:single</code> and open <code style="background: #2c202e; padding: 2px 6px">dist-single/crownshire.html</code> directly.</p>
+      </div>
+    </div>
+    <script>
+      setTimeout(function () {
+        if (!window.__crownshireBooted) document.getElementById('boot-help').style.display = 'flex';
+      }, location.protocol === 'file:' ? 2500 : 8000);
+    </script>
     <div id="app">
       <div id="game"></div>
       <div id="ui"></div>

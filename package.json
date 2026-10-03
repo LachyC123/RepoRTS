@@ -3,14 +3,15 @@
   "version": "0.1.0",
   "private": true,
   "type": "module",
-  "description": "Crownshire — a medieval pixel-art 4-kingdom free-for-all RTS for desktop and mobile browsers",
+  "description": "Crownshire \u2014 a medieval pixel-art 4-kingdom free-for-all RTS for desktop and mobile browsers",
   "scripts": {
     "dev": "vite --host",
     "build": "tsc --noEmit && vite build",
     "preview": "vite preview --host",
     "typecheck": "tsc --noEmit",
     "test": "vitest run",
-    "sim": "tsx tools/headless.ts"
+    "sim": "tsx tools/headless.ts",
+    "build:single": "tsc --noEmit && vite build --mode single && tsx tools/inlineHtml.ts"
   },
   "dependencies": {
     "@fontsource/jacquarda-bastarda-9": "^5.3.0",

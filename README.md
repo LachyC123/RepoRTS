@@ -16,8 +16,13 @@ npm install
 npm run dev        # http://localhost:5173
 npm run build      # typecheck + production build into dist/
 npm test           # simulation tests (vitest)
+npm run build:single  # one self-contained file: dist-single/crownshire.html
 npm run sim -- 3 25 ai   # headless AI-vs-AI match: seed, minutes
 ```
+
+Opening `index.html` (or `dist/index.html`) straight from disk can't work: browsers refuse to load
+the game's scripts from `file://`, and the page shows instructions instead. Use `npm run dev`, host
+`dist/`, or open `dist-single/crownshire.html`, which inlines everything and runs from disk.
 
 URL options for development: `?quick` skips the menu and intro, `?spectate` watches four AIs
 play (the top bar shows every kingdom's standing), `?reveal` lifts the fog of war, `?seed=123`

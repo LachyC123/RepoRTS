@@ -3,6 +3,8 @@ import { canvasTexture } from './texUtil';
 import { TILE } from '../data/constants';
 import { CHUNK, type GameMap } from '../sim/map/GameMap';
 import { buildFields, minimapColor, paintChunk, type TerrainFields } from './art/terrainArt';
+// bundled inline so the game also runs as one self-contained HTML file (no separate worker URL)
+import TerrainWorker from './terrainWorker.ts?worker&inline';
 
 const S = CHUNK * TILE;
 
@@ -79,7 +81,7 @@ export class TerrainRenderer {
     };
     try {
       for (let i = 0; i < n; i++) {
-        const w = new Worker(new URL('./terrainWorker.ts', import.meta.url), { type: 'module' });
+        const w: Worker = new TerrainWorker();
         w.onmessage = (e) => this.onWorker(i, e.data);
         w.onerror = (err) => {
           console.warn('terrain worker failed, using main thread', err);

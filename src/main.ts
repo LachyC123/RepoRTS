@@ -1,3 +1,6 @@
+// tell index.html's boot watchdog the script started (it explains how to run the game otherwise)
+(window as unknown as { __crownshireBooted: boolean }).__crownshireBooted = true;
+document.getElementById('boot-help')?.remove();
 import '@fontsource/pixelify-sans/400.css';
 import '@fontsource/pixelify-sans/600.css';
 import '@fontsource/jacquarda-bastarda-9/400.css';
