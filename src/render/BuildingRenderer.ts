@@ -7,6 +7,8 @@ import type { Building } from '../sim/buildings/Building';
 import type { Settlement } from '../sim/territory/Settlement';
 import type { World } from '../sim/World';
 import { drawBuilding, drawCottage, drawFlag, drawRubble, drawWall, type BuildingSprite, type BuildingState } from './art/buildingArt';
+import { drawModernBuilding, drawModernCottage, drawModernRubble, drawModernWall } from './art/modernBuildingArt';
+import { eraState, isModern } from '../data/era';
 import type { Particles } from './Particles';
 import type { SortObj, YSortLayer } from './YSortLayer';
 
@@ -64,7 +66,9 @@ export class BuildingRenderer {
     return this.world.factions[f]?.color ?? null;
   }
 
-  private tex(key: string, make: () => BuildingSprite): { key: string; ox: number; oy: number } {
+  private tex(key0: string, make: () => BuildingSprite): { key: string; ox: number; oy: number } {
+    // the same building id looks different in each era
+    const key = `${eraState.era}|${key0}`;
     const tm = this.scene.textures;
     const meta = this.meta.get(key);
     if (meta && tm.exists(key)) return meta;
@@ -93,7 +97,7 @@ export class BuildingRenderer {
     const cid = team?.id ?? 'n';
     if (b.destroyed) {
       const v = b.id % 3;
-      return this.tex(`bld:rubble:${b.size}:${v}`, () => drawRubble(b.size, v));
+      return this.tex(`bld:rubble:${b.size}:${v}`, () => (isModern() ? drawModernRubble(b.size, v) : drawRubble(b.size, v)));
     }
     if (b.def.id === 'wall' || b.def.id === 'gatehouse') {
       const m = w.map;
@@ -110,7 +114,9 @@ export class BuildingRenderer {
       const kind = s.fortify >= 2 ? 'stone' : 'palisade';
       const dmg = b.hp < b.maxHp * 0.5;
       const gate = b.def.id === 'gatehouse';
-      return this.tex(`bld:wall:${kind}:${mask}:${gate ? 1 : 0}:${cid}:${dmg ? 1 : 0}`, () => drawWall(kind, mask, gate, team, dmg));
+      return this.tex(`bld:wall:${kind}:${mask}:${gate ? 1 : 0}:${cid}:${dmg ? 1 : 0}`, () =>
+        isModern() ? drawModernWall(kind === 'stone' ? 'concrete' : 'sandbag', mask, gate, team, dmg) : drawWall(kind, mask, gate, team, dmg),
+      );
     }
     const st = this.stateOf(b);
     const variant = Math.floor(hash2(b.id, 7, 3) * 4);
@@ -118,7 +124,7 @@ export class BuildingRenderer {
     const landmark = b.def.id === 'landmark' ? s.region.landmark : null;
     const deposit = b.def.id === 'mine' || landmark === 'mine' ? b.depositKind ?? (s.region.features.includes('gold') ? 'gold' : 'stone') : null;
     const key = `bld:${b.def.id}:${b.size}:${cid}:${st}:${variant}:${tier}:${landmark ?? ''}:${deposit ?? ''}`;
-    return this.tex(key, () => drawBuilding(b.def.id, b.size, team, st, { tier, variant, landmark, deposit }));
+    return this.tex(key, () => (isModern() ? drawModernBuilding : drawBuilding)(b.def.id, b.size, team, st, { tier, variant, landmark, deposit }));
   }
 
   private flagKey(team: KingdomColor, frame: number) {
@@ -241,7 +247,7 @@ export class BuildingRenderer {
         const tx = i % m.w;
         const ty = Math.floor(i / m.w);
         const v = Math.floor(hash2(tx, ty, 41) * 6);
-        const k = this.tex(`cottage:${v}:${team?.id ?? 'n'}:${s.tier}`, () => drawCottage(v, team, s.tier));
+        const k = this.tex(`cottage:${v}:${team?.id ?? 'n'}:${s.tier}`, () => (isModern() ? drawModernCottage(v, team, s.tier) : drawCottage(v, team, s.tier)));
         const o = this.scene.make.image({ x: tx * TILE + 8, y: (ty + 1) * TILE, key: k.key }, false) as BObj;
         o.setOrigin(k.ox, k.oy);
         o.sy = (ty + 1) * TILE - 2;

@@ -2,6 +2,8 @@ import { BUILDINGS } from '../../data/buildings';
 import type { KingdomColor } from '../../data/factions';
 import { UNITS } from '../../data/units';
 import { drawBuilding } from '../../render/art/buildingArt';
+import { drawModernBuilding } from '../../render/art/modernBuildingArt';
+import { eraState, isModern } from '../../data/era';
 import { iconDataUrl } from '../../render/art/fxArt';
 import { PixelCanvas } from '../../render/art/PixelCanvas';
 import { buildUnitSheet, sheetFrame } from '../../render/art/unitArt';
@@ -13,7 +15,7 @@ const icons = new Map<string, string>();
 
 /** cropped, padded unit portrait (data URL) */
 export function portraitUrl(type: string, color: KingdomColor): string {
-  const key = type + '|' + color.id;
+  const key = eraState.era + '|' + type + '|' + color.id;
   let u = portraits.get(key);
   if (!u) {
     const def = UNITS[type];
@@ -26,12 +28,12 @@ export function portraitUrl(type: string, color: KingdomColor): string {
 }
 
 export function buildingPreviewUrl(type: string, color: KingdomColor | null): string {
-  const key = type + '|' + (color?.id ?? 'n');
+  const key = eraState.era + '|' + type + '|' + (color?.id ?? 'n');
   let u = previews.get(key);
   if (!u) {
     const def = BUILDINGS[type];
     try {
-      const spr = drawBuilding(type, Math.min(def?.size ?? 2, 3), color, 'built', { tier: 3, variant: 0 });
+      const spr = (isModern() ? drawModernBuilding : drawBuilding)(type, Math.min(def?.size ?? 2, 3), color, 'built', { tier: 3, variant: 0 });
       u = crop(spr.pc).flush().toDataURL();
     } catch {
       u = '';

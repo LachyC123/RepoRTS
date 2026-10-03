@@ -1,5 +1,6 @@
 import { NEUTRAL } from '../../data/constants';
 import { UNITS } from '../../data/units';
+import { eraState } from '../../data/era';
 import type { World } from '../../sim/World';
 import { art } from './ArtRegistry';
 import { drawProp, drawSapling, drawStump, drawTree, drawWindmillBlades } from './propArt';
@@ -50,12 +51,12 @@ export function buildFactionArt(world: World) {
     if (!f) continue;
     const types = f.id === NEUTRAL ? [...neutralTypes, ...kingdomTypes.filter((u) => u.id === 'militia')] : kingdomTypes;
     for (const def of types) {
-      const name0 = `u/${def.id}/${f.color.id}/0`;
+      const name0 = unitFrameName(def.id, f.color.id, 0);
       if (art.has(name0)) continue;
       const sheet = buildUnitSheet(def, f.color, f.id);
       sheet.frames.forEach((pc, i) => {
-        const name = `u/${def.id}/${f.color.id}/${i}`;
-        if (typeof pc === 'number') art.alias(name, `u/${def.id}/${f.color.id}/${pc}`);
+        const name = unitFrameName(def.id, f.color.id, i);
+        if (typeof pc === 'number') art.alias(name, unitFrameName(def.id, f.color.id, pc));
         else art.add(name, pc, sheet.ax, sheet.ay);
       });
     }
@@ -106,8 +107,9 @@ export function buildPostArt(world: World) {
   }
 }
 
+/** unit frames are per era: the same unit id is a spearman in one and a rocket trooper in the other */
 export function unitFrameName(type: string, colorId: string, frame: number) {
-  return `u/${type}/${colorId}/${frame}`;
+  return `u/${eraState.era}/${type}/${colorId}/${frame}`;
 }
 
 export { FRAME_COUNT };
