@@ -54,6 +54,8 @@ export class GameScene extends Phaser.Scene {
   private acc = 0;
   private markers: { x: number; y: number; t: number; kind: 'move' | 'attack' }[] = [];
   private labels = new Map<number, Phaser.GameObjects.Text>();
+  /** "Claiming" / "Taking from X" captions over contested squares */
+  private capLabels = new Map<number, Phaser.GameObjects.Text>();
   private armyTexts: Phaser.GameObjects.Text[] = [];
   renderTime = 0;
   frozenSim = false;
@@ -391,6 +393,7 @@ export class GameScene extends Phaser.Scene {
     const pf = this.client.playerFaction;
     const v = this.camCtl.view(40);
     const lw = Math.max(1, 1 / zoom);
+    const capSeen = new Set<number>();
     for (const s of w.settlements) {
       if (s.px < v.x0 || s.px > v.x1 || s.py < v.y0 || s.py > v.y1) continue;
       if (pf >= 0 && !w.vis.isExplored(pf, s.px, s.py)) continue;
@@ -401,10 +404,32 @@ export class GameScene extends Phaser.Scene {
         const y = s.py - 22;
         g.fillStyle(0x140c14, 0.85);
         g.fillRect(x - lw, y - lw, bw + lw * 2, bh + lw * 2);
+        // tug of war: the current owner's colour fills what the attacker hasn't won yet
+        const ownerCol = s.owner === NEUTRAL ? 0x8a8070 : Phaser.Display.Color.HexStringToColor(w.factions[s.owner].color.main).color;
+        g.fillStyle(ownerCol, 0.75);
+        g.fillRect(x, y, bw, bh);
         if (s.capFaction >= 0) {
           const c = Phaser.Display.Color.HexStringToColor(w.factions[s.capFaction].color.light).color;
           g.fillStyle(c, 1);
           g.fillRect(x, y, bw * s.capProgress, bh);
+          // caption: who is taking it from whom
+          if (zoom >= 0.9) {
+            capSeen.add(s.id);
+            let t = this.capLabels.get(s.id);
+            if (!t) {
+              t = this.make.text({ x: 0, y: 0, text: '', style: { fontFamily: 'Pixelify Sans', fontSize: '24px', color: '#ffffff', stroke: '#1b1420', strokeThickness: 6 } }, false);
+              t.setOrigin(0.5, 1);
+              this.overLayer.add(t);
+              this.capLabels.set(s.id, t);
+            }
+            const cap = w.factions[s.capFaction];
+            const who = s.capFaction === pf ? 'You' : cap.name;
+            const txt = s.owner === NEUTRAL ? `${who}: claiming` : s.owner === pf ? `${who}: taking it from you!` : `${who}: taking from ${w.factions[s.owner].name}`;
+            if (t.text !== txt) t.setText(txt);
+            const col = cap.color.light;
+            if (t.style.color !== col) t.setColor(col);
+            t.setScale(12 / 24 / zoom).setPosition(s.px, y - lw * 2).setVisible(true);
+          }
         }
         if (s.needsBreach) {
           g.fillStyle(0xff7060, 0.6 + 0.4 * Math.sin(this.renderTime * 6));
@@ -412,8 +437,9 @@ export class GameScene extends Phaser.Scene {
         }
       }
     }
-    // name labels at strategic / mid zoom
-    const showLabels = zoom < 1.35;
+    for (const [id, t] of this.capLabels) if (!capSeen.has(id)) t.setVisible(false);
+    // name labels in the owner's colour at every zoom (small up close)
+    const showLabels = true;
     for (const s of w.settlements) {
       let t = this.labels.get(s.id);
       const explored = pf < 0 || w.vis.isExplored(pf, s.cx, s.cy);
@@ -431,7 +457,9 @@ export class GameScene extends Phaser.Scene {
       const col = s.owner === NEUTRAL ? '#e8dcc0' : w.factions[s.owner].color.light;
       if (t.style.color !== col) t.setColor(col);
       // constant on-screen size (~11-15 css px)
-      const px = s.isCapital ? 15 : s.tier >= 3 ? 13 : s.tier === 0 ? 10 : 11.5;
+      const close = zoom >= 1.35;
+      const px = close ? (s.isCapital ? 11 : 9.5) : s.isCapital ? 15 : s.tier >= 3 ? 13 : s.tier === 0 ? 10 : 11.5;
+      t.setAlpha(close ? 0.9 : 1);
       const sc = px / 28 / zoom;
       t.setScale(sc).setPosition(s.cx, s.cy - (s.region.coreSize * TILE) / 2 - 4 - px / zoom).setVisible(true);
       t.setText(s.isCapital ? `♛ ${s.name}` : s.name);

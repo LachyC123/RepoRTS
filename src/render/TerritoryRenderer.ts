@@ -230,7 +230,7 @@ export class TerritoryRenderer {
     if (col) {
       const main = rgb(col.main) as [number, number, number];
       const dk = rgb(col.dark) as [number, number, number];
-      wash = pack(main, 0.11);
+      wash = pack(main, 0.15);
       line = pack(main, 0.85);
       dark = pack(dk, 0.55);
       glow = pack(main, 0.23);

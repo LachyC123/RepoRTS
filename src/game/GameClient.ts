@@ -3,7 +3,7 @@ import { audio, music } from '../audio';
 import { settings } from '../core/Settings';
 import { EventBus } from '../core/EventBus';
 import { BUILDINGS } from '../data/buildings';
-import { TILE, type FactionId } from '../data/constants';
+import { NEUTRAL, TILE, type FactionId } from '../data/constants';
 import type { InputHooks } from '../input/InputController';
 import { Selection } from '../input/Selection';
 import type { CameraController } from '../render/CameraController';
@@ -62,6 +62,13 @@ export class GameClient {
       if (n.alarm && n.x !== undefined && n.y !== undefined) this.lastAlert = { x: n.x, y: n.y, t: this.world.time };
     });
     this.world.events.on('matchOver', (e) => this.ui.emit('matchEnd', { winner: e.winner, reason: e.reason }));
+    // the first capture explains how to read the map
+    this.world.events.on('regionCaptured', (e) => {
+      if (e.to !== this.playerFaction || this.firstCaptureHint) return;
+      this.firstCaptureHint = true;
+      const col = this.world.factions[this.playerFaction]?.color.id ?? '';
+      setTimeout(() => this.toast(`Land tinted ${col} is yours. Other colours are rival kingdoms (see KINGDOMS, top right); untinted land is unclaimed.`), 3500);
+    });
   }
 
   start() {
@@ -121,6 +128,50 @@ export class GameClient {
     audio.update(dt);
     music.update(dt);
     if (this.world.tick % 15 === 0) this.selection.prune();
+    this.borderT -= dt;
+    if (this.borderT <= 0) {
+      this.borderT = 0.5;
+      this.checkBorders();
+    }
+  }
+
+  private borderT = 0;
+  private unitRegion = new Map<number, number>();
+  private borderSaid = new Map<number, number>();
+  private firstCaptureHint = false;
+
+  /** tell the player when their troops march into another kingdom's land (or unclaimed land) */
+  private checkBorders() {
+    const w = this.world;
+    const pf = this.playerFaction;
+    if (pf < 0 || this.cinematic) return;
+    const m = w.map;
+    const seen = new Set<number>();
+    for (const u of w.units) {
+      if (!u.alive || u.faction !== pf || u.def.special === 'worker') continue;
+      seen.add(u.id);
+      const tx = Math.floor(u.x / TILE);
+      const ty = Math.floor(u.y / TILE);
+      if (tx < 0 || ty < 0 || tx >= m.w || ty >= m.h) continue;
+      const rid = m.region[ty * m.w + tx];
+      const prev = this.unitRegion.get(u.id);
+      this.unitRegion.set(u.id, rid);
+      if (prev === undefined || prev === rid) continue;
+      const s = w.settlements[rid];
+      const before = w.settlements[prev]?.owner;
+      if (s.owner === pf || s.owner === before) continue;
+      // one line per owner every 40 s
+      if ((this.borderSaid.get(s.owner) ?? -99) > w.time - 40) continue;
+      this.borderSaid.set(s.owner, w.time);
+      if (s.owner === NEUTRAL) this.toast(`Entering unclaimed land: ${s.name}`);
+      else {
+        const f = w.factions[s.owner];
+        const st = w.diplomacy.stance(pf as FactionId, s.owner as FactionId);
+        const rel = st === 'war' ? 'at war' : st === 'ceasefire' ? 'truce' : st === 'hostile' ? 'hostile' : 'at peace';
+        this.toast(`Entering ${f.name}'s land (${f.color.id}, ${rel}): ${s.name}`);
+      }
+    }
+    for (const id of this.unitRegion.keys()) if (!seen.has(id)) this.unitRegion.delete(id);
   }
 
   applyCameraSettings(c: CameraController) {

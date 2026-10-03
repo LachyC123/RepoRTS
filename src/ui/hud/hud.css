@@ -268,7 +268,10 @@
 .toast {
   position: absolute;
   left: 50%;
-  bottom: calc(120px * var(--ui-scale));
+  /* clear of the selection panel */
+  bottom: calc(150px * var(--ui-scale));
+  max-width: min(560px, calc(100vw - 24px));
+  text-align: center;
   transform: translateX(-50%);
   padding: 4px 12px;
   font-size: 0.9em;
@@ -838,4 +841,157 @@
   .hud-kingdom .ktext {
     display: none;
   }
+}
+/* ---------- kingdoms key (top right): colour, crest, relation, share ---------- */
+.hud-realms {
+  position: absolute;
+  top: calc(max(4px, env(safe-area-inset-top)) + 80px * var(--ui-scale));
+  right: max(6px, env(safe-area-inset-right));
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  padding: 4px 6px 5px;
+  font-size: 0.74em;
+  min-width: 150px;
+}
+.hud-realms .rh {
+  font-family: var(--font-small);
+  font-size: 0.82em;
+  letter-spacing: 0.14em;
+  color: #c8a860;
+  margin-bottom: 1px;
+}
+.realm {
+  display: grid;
+  grid-template-columns: 14px 1fr auto auto;
+  align-items: center;
+  gap: 5px;
+  padding: 1px 3px 1px 0;
+  border-left: 3px solid var(--rc, #8a8070);
+  padding-left: 4px;
+  cursor: pointer;
+  white-space: nowrap;
+}
+.realm:hover {
+  background: rgba(255, 240, 200, 0.06);
+}
+.realm .crest {
+  width: 14px;
+  height: auto;
+  image-rendering: pixelated;
+}
+.realm .rn {
+  color: var(--rc, #e8dcc0);
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+.realm .rp {
+  font-family: var(--font-small);
+  font-size: 0.9em;
+  color: #e8dcc0;
+  min-width: 2.6em;
+  text-align: right;
+}
+.realm.dead {
+  opacity: 0.4;
+  filter: grayscale(1);
+}
+.realm.unclaimed {
+  border-left: 3px dotted #9a9080;
+  cursor: help;
+}
+.realm.unclaimed .rn,
+.realm.unclaimed .rs {
+  color: #b8ac98;
+}
+.realm .swatch {
+  width: 12px;
+  height: 9px;
+  border: 1px dotted #b8ac98;
+}
+/* relation pills: shared by the key and the settlement panel */
+.rs {
+  font-family: var(--font-small);
+  font-size: 0.78em;
+  letter-spacing: 0.04em;
+  padding: 0 4px;
+  border-radius: 2px;
+  color: #d8ccac;
+}
+.rs.war {
+  background: #8a2420;
+  color: #ffe0d8;
+}
+.rs.hostile {
+  background: #7a4a1a;
+  color: #ffe8c8;
+}
+.rs.ceasefire {
+  background: #6a6020;
+  color: #fff4c8;
+}
+.rs.neutral {
+  background: #2e4a36;
+  color: #d8f0d8;
+}
+.rs.self {
+  color: #c8d8a0;
+}
+.own-chip {
+  display: inline-block;
+  width: 9px;
+  height: 9px;
+  margin-right: 5px;
+  background: var(--rc);
+  box-shadow: 0 0 0 1px #1b1420;
+  vertical-align: -1px;
+}
+.own-chip.unclaimed {
+  background: none;
+  border: 1px dotted #b8ac98;
+  width: 8px;
+  height: 8px;
+}
+.sel-hint {
+  font-size: 0.8em;
+  color: #d8c89a;
+  margin-top: 2px;
+}
+@media (max-height: 520px), (max-width: 700px) {
+  /* phones: crest + relation only (tap a row for details) */
+  .hud-realms {
+    min-width: 0;
+    top: calc(max(4px, env(safe-area-inset-top)) + 74px * var(--ui-scale));
+  }
+  .hud-realms .rh,
+  .realm .rn,
+  .realm .rp {
+    display: none;
+  }
+  .realm {
+    grid-template-columns: 14px auto;
+  }
+}
+/* hover card over the map: whose land is this? */
+.map-tip {
+  position: fixed;
+  z-index: 49;
+  pointer-events: none;
+  padding: 4px 9px;
+  font-size: 0.8em;
+  width: max-content;
+  max-width: min(260px, calc(100vw - 12px));
+  font-family: var(--font-ui);
+  color: #f4e4b8;
+}
+.map-tip .tt {
+  color: #f8e8b0;
+}
+.map-tip .td {
+  color: #d8ccac;
+  margin-top: 2px;
+}
+.map-tip .hint {
+  color: #c8b890;
+  font-size: 0.92em;
 }

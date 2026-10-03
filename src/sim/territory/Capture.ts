@@ -118,9 +118,32 @@ export class CaptureSystem {
       }
     });
     const playerInvolved = to === w.setup.player || from === w.setup.player;
-    if (to === w.setup.player) w.notify({ kind: 'capture', text: `${s.name.toUpperCase()} CAPTURED`, sub: yields.join('  '), factions: [to], x: s.px, y: s.py, priority: 2, regionId: s.id });
-    else if (from === w.setup.player) w.notify({ kind: 'lost', text: `${s.name.toUpperCase()} LOST TO ${w.factions[to].name.toUpperCase()}`, factions: [from, to], x: s.px, y: s.py, priority: 2, alarm: true, regionId: s.id });
-    else if (from !== NEUTRAL || s.tier >= 3 || s.region.value >= 1.4) w.notify({ kind: 'capture', text: `${w.factions[to].name.toUpperCase()} TAKES ${s.name.toUpperCase()}`, factions: [to, from], x: s.px, y: s.py, priority: from !== NEUTRAL ? 1 : 0, world: true, regionId: s.id });
+    // every message says whose land it was, so a capture is never ambiguous
+    const fromName = from === NEUTRAL ? null : w.factions[from].name;
+    if (to === w.setup.player)
+      w.notify({
+        kind: 'capture',
+        text: fromName ? `${s.name.toUpperCase()} TAKEN FROM ${fromName.toUpperCase()}` : `${s.name.toUpperCase()} CLAIMED`,
+        sub: `${fromName ? `It was ${fromName}'s; now it's yours.` : 'Unclaimed land, now yours.'}  ${yields.join('  ')}`,
+        factions: from === NEUTRAL ? [to] : [to, from],
+        x: s.px,
+        y: s.py,
+        priority: 2,
+        regionId: s.id,
+      });
+    else if (from === w.setup.player) w.notify({ kind: 'lost', text: `${s.name.toUpperCase()} LOST TO ${w.factions[to].name.toUpperCase()}`, sub: 'Retake its square to win it back', factions: [from, to], x: s.px, y: s.py, priority: 2, alarm: true, regionId: s.id });
+    else if (from !== NEUTRAL || s.tier >= 3 || s.region.value >= 1.4)
+      w.notify({
+        kind: 'capture',
+        text: `${w.factions[to].name.toUpperCase()} TAKES ${s.name.toUpperCase()}`,
+        sub: fromName ? `from ${fromName}` : 'unclaimed land',
+        factions: [to, from],
+        x: s.px,
+        y: s.py,
+        priority: from !== NEUTRAL ? 1 : 0,
+        world: true,
+        regionId: s.id,
+      });
     void playerInvolved;
   }
 }

@@ -1,3 +1,4 @@
+import { TILE, type FactionId } from '../data/constants';
 import type { CameraController } from '../render/CameraController';
 import type { Unit } from '../sim/units/Unit';
 import type { World } from '../sim/World';
@@ -441,6 +442,16 @@ export class InputController {
       if (s.kind === 'plot') this.hooks.plotTapped?.(s.region, s.plot);
       else if (s.kind === 'building') this.sel.selectBuilding(s.id, s.region);
       else this.sel.selectRegion(s.id);
+      this.hooks.selected();
+      return;
+    }
+    // open ground with nothing selected: show whose land this is (phones have no hover);
+    // a second tap on open ground clears it
+    const m = this.world.map;
+    const tx = Math.floor(wx / TILE);
+    const ty = Math.floor(wy / TILE);
+    if (this.sel.region < 0 && !this.sel.building && tx >= 0 && ty >= 0 && tx < m.w && ty < m.h && (this.faction < 0 || this.world.vis.isExplored(this.faction as FactionId, wx, wy))) {
+      this.sel.selectRegion(m.region[ty * m.w + tx]);
       this.hooks.selected();
       return;
     }

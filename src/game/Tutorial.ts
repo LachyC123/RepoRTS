@@ -64,7 +64,7 @@ export class Tutorial {
       },
       {
         title: 'OBJECTIVE 4 / 4',
-        text: `Capture <b>${grey.name}</b>. Select your troops (${touch ? 'tap ARMY, or drag across them' : 'drag a box or press Q'}), then ${touch ? 'tap' : 'right-click'} the village square.`,
+        text: `Capture <b>${grey.name}</b>, an unclaimed village (no colour on the map). Select your troops (${touch ? 'tap ARMY, or drag across them' : 'drag a box or press Q'}), then ${touch ? 'tap' : 'right-click'} the village square.`,
         check: () => grey.owner === pf,
         target: () => ({ x: grey.px, y: grey.py - 26 }),
       },

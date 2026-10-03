@@ -53,6 +53,14 @@ const NOTICE_ICONS: Record<string, string> = {
  * notifications (tap to fly there), battle alerts, minimap, army banners, a contextual selection
  * panel and a thumb-sized action bar, build/recruit/trade sheets, tooltips and modals.
  */
+const STANCE_LABEL: Record<string, string> = { war: 'At war', hostile: 'Hostile', ceasefire: 'Truce', neutral: 'Peace', self: 'your land' };
+const STANCE_HELP: Record<string, string> = {
+  war: 'You are at war: their troops and towns are fair game, and they will attack yours.',
+  hostile: 'Relations are hostile: border skirmishes happen, and full war may follow.',
+  ceasefire: 'A truce holds for now. Attacking them breaks it.',
+  neutral: 'You are at peace. Attacking or capturing their land declares war.',
+};
+
 export class HUD {
   root: HTMLDivElement;
   private resEls: Record<string, { val: HTMLElement; inc: HTMLElement; last: number }> = {};
@@ -66,6 +74,9 @@ export class HUD {
   private timerEl!: HTMLElement;
   private tooltipEl!: HTMLElement;
   private standEls: { id: number; it: HTMLElement; val: HTMLElement; inc: HTMLElement }[] = [];
+  private realmEls: { id: number; row: HTMLElement; st: HTMLElement; pct: HTMLElement }[] = [];
+  private mapTipEl!: HTMLElement;
+  private hover: { x: number; y: number; t: number; onMap: boolean; region: number } = { x: 0, y: 0, t: 0, onMap: false, region: -1 };
   private sheetEl: HTMLElement | null = null;
   private fpsEl!: HTMLElement;
   private debugEl: HTMLElement | null = null;
@@ -96,6 +107,7 @@ export class HUD {
     this.noticesEl = el('div', 'hud-notices', this.root);
     this.objectiveEl = el('div', 'hud-objective panel', this.root);
     this.timerEl = el('div', 'hud-timer panel', this.root);
+    this.buildRealms();
     this.buildMinimap();
     this.armiesEl = el('div', 'hud-armies', this.root);
     this.selEl = el('div', 'hud-sel panel', this.root);
@@ -122,6 +134,9 @@ export class HUD {
     client.ui.on('armies', () => this.renderArmies());
     settings.onChange(() => this.applySettings());
     window.addEventListener('keydown', this.onKey);
+    window.addEventListener('pointermove', this.onHoverMove);
+    this.mapTipEl = el('div', 'map-tip panel dark', document.body);
+    this.mapTipEl.style.display = 'none';
     window.addEventListener('keyup', this.keyUp);
     this.renderArmies();
   }
@@ -129,6 +144,8 @@ export class HUD {
   destroy() {
     window.removeEventListener('keydown', this.onKey);
     window.removeEventListener('keyup', this.keyUp);
+    window.removeEventListener('pointermove', this.onHoverMove);
+    this.mapTipEl.remove();
     this.root.remove();
     this.tooltipEl.remove();
   }
@@ -205,7 +222,42 @@ export class HUD {
   }
 
   // ------------------------------------------------------------------ frame update
+  /** desktop: resting the mouse on the map shows whose land it is */
+  private onHoverMove = (e: PointerEvent) => {
+    if (e.pointerType !== 'mouse') return;
+    const onMap = e.target instanceof HTMLCanvasElement;
+    this.hover = { x: e.clientX, y: e.clientY, t: performance.now(), onMap, region: this.hover.region };
+    this.mapTipEl.style.display = 'none';
+  };
+
+  private refreshMapTip() {
+    const h = this.hover;
+    const c = this.client;
+    const cam = c.scene?.camCtl;
+    if (!h.onMap || !cam || c.cinematic || performance.now() - h.t < 450 || this.mapTipEl.style.display === 'block') return;
+    const canvas = c.scene!.game.canvas.getBoundingClientRect();
+    const [wx, wy] = cam.screenToWorld(h.x - canvas.left, h.y - canvas.top);
+    const w = c.world;
+    const m = w.map;
+    const tx = Math.floor(wx / TILE);
+    const ty = Math.floor(wy / TILE);
+    if (tx < 0 || ty < 0 || tx >= m.w || ty >= m.h) return;
+    const pf = c.playerFaction as FactionId;
+    if (pf >= 0 && !w.vis.isExplored(pf, wx, wy)) return;
+    const s = w.settlements[m.region[ty * m.w + tx]];
+    if (!s) return;
+    let html = `<div class="tt">${s.name}</div><div class="td">${this.ownerLine(s)}</div>`;
+    const hint = this.ownerHint(s);
+    if (hint) html += `<div class="td hint">${hint}</div>`;
+    this.mapTipEl.innerHTML = html;
+    this.mapTipEl.style.display = 'block';
+    const r = this.mapTipEl.getBoundingClientRect();
+    this.mapTipEl.style.left = `${Math.min(window.innerWidth - r.width - 6, h.x + 16)}px`;
+    this.mapTipEl.style.top = `${Math.min(window.innerHeight - r.height - 6, h.y + 18)}px`;
+  }
+
   update(dt: number) {
+    this.refreshMapTip();
     this.t += dt;
     this.frames++;
     this.fpsT += dt;
@@ -259,7 +311,59 @@ export class HUD {
     }
   }
 
+  /** who is who: every kingdom's colour and crest, how it stands with you, and its share of land */
+  private buildRealms() {
+    const c = this.client;
+    const w = c.world;
+    if (c.playerFaction < 0) return;
+    const box = el('div', 'hud-realms panel dark pe', this.root);
+    el('div', 'rh', box, 'KINGDOMS');
+    const order = w.factions.filter((f) => f && f.id !== NEUTRAL).sort((a, b) => (a.id === c.playerFaction ? -1 : b.id === c.playerFaction ? 1 : a.id - b.id));
+    for (const f of order) {
+      const row = el('div', 'realm', box);
+      row.style.setProperty('--rc', f.color.light);
+      (el('img', 'crest', row) as HTMLImageElement).src = crestUrl(f.setup.crest, f.color);
+      el('span', 'rn', row, f.id === c.playerFaction ? 'You' : f.name);
+      const st = el('span', 'rs', row);
+      const pct = el('span', 'rp', row);
+      this.realmEls.push({ id: f.id, row, st, pct });
+      onPress(row, () => {
+        const me = f.id === c.playerFaction;
+        const rel = me ? '' : ` · ${STANCE_LABEL[w.diplomacy.stance(c.playerFaction as FactionId, f.id as FactionId)]}`;
+        c.toast(me ? `Your land is tinted ${f.color.id}` : `${f.name}${rel} · their land is tinted ${f.color.id}`);
+        const cap = f.capitalSettlement >= 0 ? w.settlements[f.capitalSettlement] : null;
+        if (cap && (w.vis.isExplored(c.playerFaction as FactionId, cap.cx, cap.cy) || f.id === c.playerFaction)) c.focus(cap.cx, cap.cy + 20);
+      }, { sound: () => audio.play('ui_click') });
+      this.tip(row, () => ({ title: f.id === c.playerFaction ? `${f.name} (you)` : f.name, desc: f.id === c.playerFaction ? 'Land tinted this colour is yours.' : `Land tinted this colour belongs to ${f.name}. ${STANCE_HELP[w.diplomacy.stance(c.playerFaction as FactionId, f.id as FactionId)]}`, extra: `${f.regionsOwned} region${f.regionsOwned === 1 ? '' : 's'} · tap to view their capital` }));
+    }
+    const un = el('div', 'realm unclaimed', box);
+    el('span', 'swatch', un);
+    el('span', 'rn', un, 'Unclaimed');
+    el('span', 'rs', un, 'no colour');
+    onPress(un, () => c.toast('Untinted land is unclaimed: stand troops on its square to claim it'));
+    this.tip(un, () => ({ title: 'Unclaimed land', desc: 'Untinted regions belong to no kingdom. Stand troops on a region’s square to claim it; some are guarded by bandits or rebels.' }));
+  }
+
+  private refreshRealms() {
+    const c = this.client;
+    const w = c.world;
+    for (const e of this.realmEls) {
+      const f = w.factions[e.id];
+      const me = e.id === c.playerFaction;
+      const stance = me ? 'self' : w.diplomacy.stance(c.playerFaction as FactionId, e.id as FactionId);
+      const label = !f.alive ? 'fallen' : me ? 'your land' : STANCE_LABEL[stance];
+      if (e.st.textContent !== label) {
+        e.st.textContent = label;
+        e.st.className = `rs ${f.alive ? stance : 'dead'}`;
+      }
+      const p = `${Math.round(f.territoryShare * 100)}%`;
+      if (e.pct.textContent !== p) e.pct.textContent = p;
+      e.row.classList.toggle('dead', !f.alive);
+    }
+  }
+
   private refreshTop() {
+    this.refreshRealms();
     if (this.standEls.length) return this.refreshStandings();
     const f = this.client.world.player;
     if (!f) return;
@@ -359,7 +463,7 @@ export class HUD {
   toast(text: string, error = false) {
     this.root.querySelectorAll('.toast').forEach((t) => t.remove());
     const t = el('div', `toast panel dark ${error ? 'error' : ''}`, this.root, text);
-    setTimeout(() => t.remove(), 1800);
+    setTimeout(() => t.remove(), Math.min(6500, 1400 + text.length * 45)); // long enough to read
   }
 
   setObjective(o: { title: string; text: string; done: boolean } | null) {
@@ -582,6 +686,38 @@ export class HUD {
     });
   }
 
+  /** "Your village", "Varnmark's town · At war", "Unclaimed village" — with the owner's colour */
+  private ownerLine(s: Settlement): string {
+    const w = this.client.world;
+    const pf = this.client.playerFaction as FactionId;
+    const tier = s.tierName.toLowerCase();
+    if (s.owner === pf) return `<span class="own-chip" style="--rc:${w.factions[pf].color.light}"></span><b style="color:${w.factions[pf].color.light}">Your</b> ${tier}`;
+    if (s.owner === NEUTRAL) return `<span class="own-chip unclaimed"></span>Unclaimed ${tier}`;
+    const f = w.factions[s.owner];
+    const stance = pf >= 0 ? w.diplomacy.stance(pf, s.owner as FactionId) : 'neutral';
+    const pill = pf >= 0 ? ` <span class="rs ${stance}">${STANCE_LABEL[stance]}</span>` : '';
+    return `<span class="own-chip" style="--rc:${f.color.light}"></span><b style="color:${f.color.light}">${f.name}</b>'s ${tier}${pill}`;
+  }
+
+  /** what taking this settlement would mean */
+  private ownerHint(s: Settlement): string {
+    const w = this.client.world;
+    const pf = this.client.playerFaction as FactionId;
+    if (pf < 0 || s.owner === pf) return '';
+    if (s.owner === NEUTRAL) return 'No kingdom holds it. Stand troops on its square to claim it.';
+    const f = w.factions[s.owner];
+    switch (w.diplomacy.stance(pf, s.owner as FactionId)) {
+      case 'war':
+        return `You are at war with ${f.name}. Capture its square to take it from them.`;
+      case 'hostile':
+        return `Relations with ${f.name} are hostile. Taking it starts a war.`;
+      case 'ceasefire':
+        return `You have a truce with ${f.name}. Attacking it breaks the truce.`;
+      default:
+        return `You are at peace with ${f.name}. Attacking it means war.`;
+    }
+  }
+
   private renderSettlement(s: Settlement, core: Building | null) {
     const w = this.client.world;
     const p = this.selEl;
@@ -592,8 +728,7 @@ export class HUD {
     if (coreB) img.src = buildingPreviewUrl(coreB.def.id, s.owner === NEUTRAL ? null : this.colorOf(s.owner));
     const t = el('div', '', head);
     el('div', 'sel-title', t, s.name);
-    const owner = s.owner === NEUTRAL ? 'Unclaimed' : w.factions[s.owner].name;
-    el('div', 'sel-sub', t, `${s.tierName} · ${owner}`);
+    el('div', 'sel-sub', t, this.ownerLine(s));
     if (coreB && coreB.def.category !== 'landmark') {
       const hp = el('div', 'hpbar', t);
       (el('i', '', hp) as HTMLElement).style.width = `${(coreB.hp / coreB.maxHp) * 100}%`;
@@ -612,6 +747,8 @@ export class HUD {
     if (s.needsBreach) bits.push('<span style="color:#ff9a8a">Breach the keep to capture</span>');
     if (!own && s.owner === NEUTRAL && s.region.def.garrison) bits.push(`Garrison: ${s.region.def.garrison.map(([u, n]) => `${n} ${UNITS[u].plural}`).join(', ')}`);
     st.innerHTML = bits.map((x) => `<span>${x}</span>`).join('');
+    const hint = this.ownerHint(s);
+    if (hint) el('div', 'sel-hint', p, hint);
     if (coreB && coreB.queue.length) this.renderQueue(coreB, p);
     if (s.region.def.lore && !own) el('div', 'sel-sub', p, `<i>${s.region.def.lore}</i>`);
   }
