@@ -29,8 +29,8 @@ export const PERSONALITIES: Record<PersonalityId, Personality> = {
     economy: 0.4,
     fortify: 0.2,
     homeGuard: 0.15,
-    attackRatio: 1.05,
-    retreatRatio: 0.45,
+    attackRatio: 1.2,
+    retreatRatio: 0.5,
     mix: { melee: 0.45, ranged: 0.2, cavalry: 0.3, siege: 0.05 },
   },
   defensive: {

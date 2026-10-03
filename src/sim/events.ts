@@ -16,6 +16,10 @@ export interface Notice {
   /** if true, played as an alarm (horn + minimap flash) */
   alarm?: boolean;
   regionId?: number;
+  /** don't show as a banner, only log (e.g. unit ready) */
+  quiet?: boolean;
+  /** world event visible to everyone */
+  world?: boolean;
 }
 
 /** Events emitted by the simulation for render/audio/UI layers. Sim never reads these back. */
@@ -36,6 +40,7 @@ export interface SimEvents {
   settlementUpgraded: { regionId: number; tier: number; faction: FactionId };
   notice: Notice;
   treeFelled: { x: number; y: number };
+  treeGrown: { x: number; y: number; i: number };
   resourceGained: { faction: FactionId; x: number; y: number; res: string; amount: number };
   stanceChanged: { a: FactionId; b: FactionId; stance: string };
   factionEliminated: { faction: FactionId; by: FactionId | -1 };
