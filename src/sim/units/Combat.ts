@@ -273,6 +273,14 @@ export class CombatSystem {
     if (isUnit(t)) {
       tx = t.x;
       ty = t.y;
+      if (!u.isRanged && d > 2) {
+        // aim for a spot on the target's rim, fanned out per attacker, so a crowd wraps
+        // around its enemy instead of piling onto the same point
+        const a = Math.atan2(u.y - t.y, u.x - t.x) + ((u.id % 5) - 2) * 0.32;
+        const rr = t.radius + u.radius + 1;
+        tx += Math.cos(a) * rr;
+        ty += Math.sin(a) * rr;
+      }
     } else {
       [tx, ty] = t.closestPoint(u.x, u.y);
       // aim slightly outside the wall

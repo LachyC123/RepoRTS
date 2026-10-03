@@ -107,6 +107,9 @@ export class UnitRenderer {
       }
       this.apply(s, c, c.x, c.y);
       const age = w.time - c.deathT;
+      // corpses leave the sim's update loop, so their hit flash never decays: flash only briefly
+      if (age < 0.08) s.setTintFill(0xffffff);
+      else s.clearTint();
       s.sy = c.y - (age > 0.4 ? 10 : 0);
       s.setAlpha(age > 9 ? Math.max(0, 1 - (age - 9) / 3) : 1);
     }
