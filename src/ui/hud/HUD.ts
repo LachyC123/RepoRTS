@@ -245,7 +245,7 @@ export class HUD {
     const ptxt = `${Math.round(f.pop)}/${f.popCap}`;
     if (this.popEl.textContent !== ptxt) this.popEl.textContent = ptxt;
     this.popEl.classList.toggle('low', f.pop >= f.popCap);
-    const terr = `Territory <b>${Math.round(f.territoryShare * 100)}%</b> · ${f.regionsOwned} regions`;
+    const terr = `Territory <b>${Math.round(f.territoryShare * 100)}%</b> · ${f.regionsOwned} region${f.regionsOwned === 1 ? '' : 's'}`;
     if (this.terrEl.innerHTML !== terr) this.terrEl.innerHTML = terr;
   }
 
@@ -948,6 +948,8 @@ export class HUD {
 
   private placeTip(x: number, y: number) {
     const t = this.tooltipEl;
+    // measure at the origin so the box never shrink-wraps against the right edge
+    t.style.left = '0px';
     const w = t.offsetWidth;
     const h = t.offsetHeight;
     t.style.left = `${Math.min(window.innerWidth - w - 6, Math.max(6, x + 14))}px`;

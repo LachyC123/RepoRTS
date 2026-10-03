@@ -411,8 +411,10 @@ export class GameScene extends Phaser.Scene {
       }
       const col = s.owner === NEUTRAL ? '#e8dcc0' : w.factions[s.owner].color.light;
       if (t.style.color !== col) t.setColor(col);
-      const sc = (s.isCapital ? 0.62 : s.tier >= 3 ? 0.52 : 0.44) / zoom / 1.6;
-      t.setScale(sc).setPosition(s.cx, s.cy + (s.region.coreSize * TILE) / 2 + 6).setVisible(true);
+      // constant on-screen size (~11-15 css px)
+      const px = s.isCapital ? 15 : s.tier >= 3 ? 13 : s.tier === 0 ? 10 : 11.5;
+      const sc = px / 28 / zoom;
+      t.setScale(sc).setPosition(s.cx, s.cy - (s.region.coreSize * TILE) / 2 - 4 - px / zoom).setVisible(true);
       t.setText(s.isCapital ? `♛ ${s.name}` : s.name);
     }
   }
@@ -444,8 +446,15 @@ export class GameScene extends Phaser.Scene {
     for (const gr of groups.values()) {
       const x = gr.x / gr.n;
       const y = gr.y / gr.n;
-      const col = gr.f === NEUTRAL ? 0x9a8a70 : Phaser.Display.Color.HexStringToColor(w.factions[gr.f].color.main).color;
-      const r = (5 + Math.min(7, Math.sqrt(gr.n) * 1.6)) * s;
+      const col = gr.f === NEUTRAL ? 0x8a7a64 : Phaser.Display.Color.HexStringToColor(w.factions[gr.f].color.main).color;
+      const r = (gr.f === NEUTRAL ? 3.5 : 5 + Math.min(7, Math.sqrt(gr.n) * 1.6)) * s;
+      if (gr.f === NEUTRAL) {
+        g.fillStyle(0x1b1420, 0.6);
+        g.fillCircle(x, y, r + s);
+        g.fillStyle(col, 0.7);
+        g.fillCircle(x, y, r);
+        continue;
+      }
       // shield-shaped banner
       g.fillStyle(0x1b1420, 0.9);
       g.fillRoundedRect(x - r - s, y - r * 1.1 - s, (r + s) * 2, r * 2.3 + s * 2, 2 * s);

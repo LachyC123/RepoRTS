@@ -220,7 +220,7 @@ export class MenuBackground {
       if (s.t > 1.05) s.t -= 1.1;
       if (s.t < -0.05) s.t += 1.1;
       const [x, y] = this.road(Math.max(0, Math.min(1, s.t)));
-      const fr = s.frames[Math.floor(this.t * 7 + s.t * 50) % 4];
+      const fr = s.frames[(((Math.floor(this.t * 7 + s.t * 50) % 4) + 4) % 4)];
       ctx.drawImage(fr, Math.round(x - fr.width / 2), Math.round(y - fr.height + 3));
     }
     // birds

@@ -157,4 +157,11 @@ export class FogRenderer {
   setVisible(v: boolean) {
     this.img.setVisible(v && this.enabled);
   }
+
+  /** Thin the fog (cinematics) or restore it; tweened so the reveal never pops. */
+  fadeTo(alpha: number, ms = 800) {
+    this.scene.tweens.killTweensOf(this.img);
+    if (ms <= 0) this.img.setAlpha(alpha);
+    else this.scene.tweens.add({ targets: this.img, alpha, duration: ms, ease: 'Sine.easeInOut' });
+  }
 }

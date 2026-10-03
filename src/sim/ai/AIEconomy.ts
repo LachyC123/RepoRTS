@@ -215,8 +215,10 @@ export function aiEconomy(ai: AIController) {
       ai.saveKey = key;
       ai.saveSince = w.time;
     }
-    const patience = w.time - ai.saveSince < 50;
-    ai.savingFor = choice.score >= 6 && minutes < 1.2 && patience ? JSON.stringify(choice.cost) : null;
+    // save for up to 70s, take a 25s break (so the army isn't starved), then save again
+    const cycle = (w.time - ai.saveSince) % 95;
+    const patience = cycle < 70;
+    ai.savingFor = choice.score >= 6 && minutes < 2.5 && patience ? JSON.stringify(choice.cost) : null;
     if (!ai.savingFor) {
       // buy the best thing we *can* afford instead
       const alt = cands.find((c) => c !== choice && c.score > 3 && RES_KEYS.every((k) => (c.cost[k] ?? 0) <= f.res[k]));

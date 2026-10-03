@@ -11,7 +11,7 @@ import type { World } from './World';
  */
 export class VictorySystem {
   domination: { faction: FactionId; t: number } | null = null;
-  private t = 0;
+  private t = 1; // tally territory on the first tick so the HUD never shows 0%
   private histT = 0;
 
   constructor(private w: World) {}

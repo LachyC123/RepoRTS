@@ -58,7 +58,7 @@ export const CAPITAL_TIERS: Record<number, { name: string; popCap: number; tax: 
   4: { name: 'Royal Capital', popCap: 30, tax: { gold: 48, food: 16 }, plots: 10 },
 };
 
-export const CAPITAL_UPGRADE = { cost: { wood: 400, stone: 350, gold: 450, food: 200 } as Cost, time: 45 };
+export const CAPITAL_UPGRADE = { cost: { wood: 300, stone: 300, gold: 400, food: 150 } as Cost, time: 45 };
 
 /** income from simply owning a region with these features (per minute) */
 export const REGION_YIELD: Record<string, { gold?: number; wood?: number; food?: number; stone?: number }> = {

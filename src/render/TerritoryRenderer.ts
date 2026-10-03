@@ -24,6 +24,9 @@ export class TerritoryRenderer {
   private owners: number[] = [];
   private pulses: { region: number; t: number; color: string }[] = [];
   private pulseGfx: Phaser.GameObjects.Graphics;
+  /** strong low-res wash for the strategic view */
+  private strat: HTMLCanvasElement;
+  private stratImg: Phaser.GameObjects.Image;
   /** tiles per region for pulse drawing */
   private regionTiles: number[][] = [];
   symbols = false;
@@ -46,6 +49,13 @@ export class TerritoryRenderer {
     canvasTexture(scene, this.key, this.canvas);
     this.img = scene.make.image({ x: 0, y: 0, key: this.key }, false).setOrigin(0, 0).setScale(TILE / PX);
     layer.add(this.img);
+    this.strat = document.createElement('canvas');
+    this.strat.width = m.w;
+    this.strat.height = m.h;
+    canvasTexture(scene, 'territory_strat', this.strat);
+    scene.textures.get('territory_strat').setFilter(0); // LINEAR: soft edges at strategic zoom
+    this.stratImg = scene.make.image({ x: 0, y: 0, key: 'territory_strat' }, false).setOrigin(0, 0).setScale(TILE).setAlpha(0);
+    layer.add(this.stratImg);
     this.pulseGfx = scene.make.graphics({}, false);
     layer.add(this.pulseGfx);
     for (let r = 0; r < m.regions.length; r++) this.regionTiles.push([]);
@@ -74,6 +84,22 @@ export class TerritoryRenderer {
 
   private refresh() {
     this.scene.textures.get(this.key).source[0].update();
+    // strategic wash
+    const w = this.world;
+    const m = w.map;
+    const ctx = this.strat.getContext('2d')!;
+    const img = ctx.createImageData(m.w, m.h);
+    const cols = w.settlements.map((s) => (s.owner === NEUTRAL ? null : rgb(w.factions[s.owner].color.main)));
+    for (let i = 0; i < m.w * m.h; i++) {
+      const c = cols[m.region[i]];
+      if (!c) continue;
+      img.data[i * 4] = c[0];
+      img.data[i * 4 + 1] = c[1];
+      img.data[i * 4 + 2] = c[2];
+      img.data[i * 4 + 3] = 120;
+    }
+    ctx.putImageData(img, 0, 0);
+    this.scene.textures.get('territory_strat').source[0].update();
   }
 
   redrawRegion(rid: number, refresh: boolean) {
@@ -230,6 +256,8 @@ export class TerritoryRenderer {
     // stronger at strategic zoom, subtle up close
     const a = zoom < 0.9 ? 1 : zoom < 1.6 ? 0.85 : 0.65;
     this.img.setAlpha(a);
+    const sa = zoom < 0.7 ? 0.75 : zoom < 1.1 ? ((1.1 - zoom) / 0.4) * 0.75 : 0;
+    this.stratImg.setAlpha(sa);
     const g = this.pulseGfx;
     g.clear();
     const m = this.world.map;

@@ -14,6 +14,8 @@ export function playIntro(client: GameClient, root: HTMLElement, done: () => voi
   scene.frozenSim = true;
   client.cinematic = true;
   client.ui.emit('cinematic', { on: true });
+  // the tour shows the whole valley, so the fog is only a light veil until play begins
+  scene.fog.fadeTo(0.22, 0);
   const top = el('div', 'letterbox top out', root);
   const bot = el('div', 'letterbox bottom out', root);
   const text = el('div', 'cine-text', root);
@@ -64,6 +66,7 @@ export function playIntro(client: GameClient, root: HTMLElement, done: () => voi
     window.setTimeout(() => {
       scene.terrain.prioritize(px, py);
       cam.flyTo(px, py, cam.normalZoom(), 2.4, (k) => 1 - Math.pow(1 - k, 3));
+      scene.fog.fadeTo(1, 2200);
       text.textContent = 'Your kingdom begins.';
       text.classList.remove('small');
       text.classList.add('show');
@@ -80,6 +83,7 @@ export function playIntro(client: GameClient, root: HTMLElement, done: () => voi
     bot.classList.add('out');
     skip.remove();
     cam.cancelFly();
+    scene.fog.fadeTo(1, 400);
     cam.x = px;
     cam.y = py;
     cam.zoom = cam.targetZoom = cam.normalZoom();

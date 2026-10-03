@@ -2,7 +2,7 @@ import { audio } from '../../audio';
 import { settings, type SettingsData } from '../../core/Settings';
 import { formatTime } from '../../core/math';
 import { CRESTS, DIFFICULTIES, KINGDOM_COLORS, type CrestId, type Difficulty } from '../../data/factions';
-import { NEUTRAL } from '../../data/constants';
+import { DOMINATION_SHARE, NEUTRAL } from '../../data/constants';
 import type { PlayerChoices } from '../../game/matchSetup';
 import type { World } from '../../sim/World';
 import { installFrames } from '../hud/assets';
@@ -333,25 +333,45 @@ export function endScreen(
   add(String(st.unitsLost), 'UNITS LOST');
   add(String(st.largestArmy), 'LARGEST ARMY');
   add(Math.round(st.goldEarned).toLocaleString('en-US'), 'GOLD EARNED');
-  // territory over time
-  const g = el('canvas', 'graph', d) as HTMLCanvasElement;
-  g.width = 300;
-  g.height = 60;
+  // territory over time: y auto-scales to the leader so early, close matches stay readable
+  const gw = el('div', 'graph-wrap', d);
+  const gh = el('div', 'graph-head', gw);
+  el('span', 'gt', gh, 'TERRITORY OVER TIME');
+  const legend = el('span', 'legend', gh);
+  const g = el('canvas', 'graph', gw) as HTMLCanvasElement;
+  const W = 300;
+  const H = 60;
+  g.width = W;
+  g.height = H;
   const ctx = g.getContext('2d')!;
   ctx.fillStyle = '#1b1420';
-  ctx.fillRect(0, 0, 300, 60);
-  for (const fac of world.factions) {
-    if (!fac || fac.id === NEUTRAL) continue;
+  ctx.fillRect(0, 0, W, H);
+  const facs = world.factions.filter((fac) => fac && fac.id !== NEUTRAL);
+  let top = 0.25;
+  for (const fac of facs) for (const v of fac.stats.history) top = Math.max(top, v * 1.15);
+  top = Math.min(1, top);
+  const yOf = (v: number) => Math.round(H - 3 - (v / top) * (H - 6)) + 0.5;
+  ctx.fillStyle = '#2a2030';
+  for (let q = 0.25; q < top; q += 0.25) ctx.fillRect(0, yOf(q) - 0.5, W, 1);
+  if (DOMINATION_SHARE <= top) {
+    ctx.fillStyle = '#7a5a30';
+    for (let x = 0; x < W; x += 6) ctx.fillRect(x, yOf(DOMINATION_SHARE) - 0.5, 3, 1);
+  }
+  // the player's line last, so it sits on top
+  facs.sort((a, b) => (a.id === player ? 1 : 0) - (b.id === player ? 1 : 0));
+  for (const fac of facs) {
+    const item = el('span', 'lg', legend);
+    item.style.color = fac.color.light;
+    item.textContent = `■ ${fac.name.replace(/^Kingdom of /, '')}`;
     const hdata = fac.stats.history;
     if (hdata.length < 2) continue;
     ctx.strokeStyle = fac.color.light;
     ctx.lineWidth = fac.id === player ? 2 : 1;
     ctx.beginPath();
     hdata.forEach((v, i) => {
-      const x = (i / (hdata.length - 1)) * 296 + 2;
-      const y = 58 - v * 56;
-      if (i === 0) ctx.moveTo(x, y);
-      else ctx.lineTo(x, y);
+      const x = (i / (hdata.length - 1)) * (W - 4) + 2;
+      if (i === 0) ctx.moveTo(x, yOf(v));
+      else ctx.lineTo(x, yOf(v));
     });
     ctx.stroke();
   }
