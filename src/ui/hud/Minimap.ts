@@ -186,7 +186,7 @@ export class Minimap {
         for (let x = 0; x < m.w; x++) {
           const i = y * m.w + x;
           if (vis[i]) continue;
-          ctx.fillStyle = exp[i] ? 'rgba(14,10,22,0.45)' : 'rgba(14,10,22,0.94)';
+          ctx.fillStyle = exp[i] ? 'rgba(14,10,22,0.42)' : 'rgba(38,30,44,0.92)';
           ctx.fillRect(x * S, y * S, S, S);
         }
       }

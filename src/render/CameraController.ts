@@ -46,8 +46,13 @@ export class CameraController {
     return this.cam.height / this.dpr;
   }
 
+  /** "normal" zoom adapts to the screen so phones see a sensible slice of the battlefield */
+  normalZoom() {
+    return Math.max(1.35, Math.min(2.4, Math.min(this.viewW / 600, this.viewH / 330)));
+  }
+
   presetZoom(p: ZoomPreset) {
-    return p === 'strategic' ? Math.max(this.minZoom, this.fitZoom() * 1.05) : p === 'normal' ? 2 : 3.5;
+    return p === 'strategic' ? Math.max(this.minZoom, this.fitZoom() * 1.05) : p === 'normal' ? this.normalZoom() : this.normalZoom() * 1.75;
   }
 
   fitZoom() {
@@ -56,7 +61,7 @@ export class CameraController {
 
   currentPreset(): ZoomPreset {
     if (this.zoom < 1.05) return 'strategic';
-    if (this.zoom < 2.8) return 'normal';
+    if (this.zoom < this.normalZoom() * 1.35) return 'normal';
     return 'close';
   }
 

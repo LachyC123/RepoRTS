@@ -109,6 +109,13 @@ export function aiEconomy(ai: AIController) {
       if (def.category === 'military' && frontier.has(s.id) && !s.isCapital) base *= 0.6;
       if (def.category === 'military' && s.isCapital) base *= 1.15;
       if (def.category === 'economy' && def.id !== 'market' && s.isCapital && roomElsewhere) base *= 0.75;
+      // spread economy buildings: few of a kind per settlement, keep the capital for the army
+      if (def.category === 'economy' && def.id !== 'market') {
+        const here = mine.filter((b) => b.settlementId === s.id && b.def.id === type).length;
+        const cap = s.isCapital ? (type === 'mine' ? 2 : 1) : 2;
+        if (here >= cap) continue;
+      }
+      if ((type === 'barracks' || type === 'archery_range' || type === 'stable') && mine.some((b) => b.settlementId === s.id && b.def.id === type) && !s.isCapital) continue;
       for (const p of free) {
         if (!sys.meetsRequirement(s, p, def).ok) continue;
         // keep requirement-free plots for buildings that need them less: prefer resource plots for resource buildings

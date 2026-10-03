@@ -142,6 +142,7 @@ export class GameScene extends Phaser.Scene {
     const [fx, fy] = this.client.startFocus();
     this.camCtl.x = fx;
     this.camCtl.y = fy;
+    this.camCtl.zoom = this.camCtl.targetZoom = this.camCtl.normalZoom();
     this.terrain.prioritize(fx, fy);
     world.vis.update();
     this.fog.update(true);
@@ -248,6 +249,29 @@ export class GameScene extends Phaser.Scene {
       g.strokeEllipse(x, y + 0.5, rx * 2 + 1, rx + 1.5);
       g.lineStyle(lw, own ? 0xf8f0a0 : 0xff8070, 0.95);
       g.strokeEllipse(x, y, rx * 2, rx);
+    }
+    // debug: show unit paths
+    if (settings.data.debug) {
+      g.lineStyle(lw, 0x80e0ff, 0.6);
+      for (const id of sel.units) {
+        const u = world.unitById.get(id);
+        if (!u || !u.path) continue;
+        let px = u.x;
+        let py = u.y;
+        for (let k = u.pathIdx; k < u.path.length / 2; k++) {
+          g.lineBetween(px, py, u.path[k * 2], u.path[k * 2 + 1]);
+          px = u.path[k * 2];
+          py = u.path[k * 2 + 1];
+        }
+        if (u.targetId) {
+          const t = world.unitById.get(u.targetId) ?? world.buildingById.get(u.targetId);
+          if (t) {
+            g.lineStyle(lw, 0xff6060, 0.7);
+            g.lineBetween(u.x, u.y, t.x, t.y);
+            g.lineStyle(lw, 0x80e0ff, 0.6);
+          }
+        }
+      }
     }
     // selected building / settlement outline + its plots
     const s = this.selectedSettlement();

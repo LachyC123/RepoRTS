@@ -243,6 +243,7 @@ export class World {
       const slots = computeSlots(list, x, y, opts.formation ?? 'line', this.pathfinder, faction, group);
       for (const u of list) {
         const s = slots.get(u.id) ?? { x, y };
+        if (Math.abs(s.x - u.x) > 4 && u.windup <= 0) u.facing = s.x > u.x ? 1 : -1;
         u.order = { kind: 'move', x, y, attackMove: !!opts.attackMove };
         u.targetId = 0;
         u.routing = 0;
@@ -447,6 +448,17 @@ export class World {
     if (this.time - last < 40) return;
     this.alertT.set(s.id, this.time);
     if (s.owner === this.setup.player) this.notify({ kind: 'attack', text: `⚔ ${s.name.toUpperCase()} UNDER ATTACK`, factions: [s.owner], x: s.cx, y: s.cy, priority: 2, alarm: true, regionId: s.id });
+  }
+
+  /** a player's building is being hit (rate limited per settlement) */
+  alertBuilding(b: Building) {
+    const key = 100000 + b.settlementId;
+    const last = this.alertT.get(key) ?? -999;
+    if (this.time - last < 35) return;
+    this.alertT.set(key, this.time);
+    const s = this.settlements[b.settlementId];
+    const what = b.def.category === 'core' ? s.name.toUpperCase() : `${b.def.name.toUpperCase()} AT ${s.name.toUpperCase()}`;
+    this.notify({ kind: 'attack', text: `🔥 ${what} UNDER ATTACK`, factions: [b.faction], x: b.x, y: b.y, priority: 2, alarm: true, regionId: s.id });
   }
 
   despawn(u: Unit) {

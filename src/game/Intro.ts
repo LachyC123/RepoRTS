@@ -63,7 +63,7 @@ export function playIntro(client: GameClient, root: HTMLElement, done: () => voi
   timers.push(
     window.setTimeout(() => {
       scene.terrain.prioritize(px, py);
-      cam.flyTo(px, py, 2.2, 2.4, (k) => 1 - Math.pow(1 - k, 3));
+      cam.flyTo(px, py, cam.normalZoom(), 2.4, (k) => 1 - Math.pow(1 - k, 3));
       text.textContent = 'Your kingdom begins.';
       text.classList.remove('small');
       text.classList.add('show');
@@ -82,7 +82,7 @@ export function playIntro(client: GameClient, root: HTMLElement, done: () => voi
     cam.cancelFly();
     cam.x = px;
     cam.y = py;
-    cam.zoom = cam.targetZoom = 2.2;
+    cam.zoom = cam.targetZoom = cam.normalZoom();
     setTimeout(() => {
       top.remove();
       bot.remove();

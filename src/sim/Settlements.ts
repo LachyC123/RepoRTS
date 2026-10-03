@@ -589,7 +589,7 @@ export class SettlementSystem {
     if (s.cottages.length >= want) return;
     const r = s.region;
     const cands: { i: number; d: number }[] = [];
-    const R = s.isCapital ? 10 : 9;
+    const R = s.isCapital ? 13 : s.tier >= 3 ? 11 : 9;
     for (let y = r.cy - R; y <= r.cy + R; y++)
       for (let x = r.cx - R; x <= r.cx + R; x++) {
         if (x < 2 || y < 2 || x >= m.w - 2 || y >= m.h - 2) continue;
@@ -619,12 +619,19 @@ export class SettlementSystem {
         const ny = y + dy;
         const i = ny * m.w + nx;
         const t = m.terrain[i];
-        if (m.occ[i] || m.tree[i] || m.ore[i]) return false;
-        if (t === T.WATER || t === T.ROCK || t === T.ROAD || t === T.BRIDGE || t === T.SHALLOW) return false;
+        if (m.occ[i]) return false;
+        if (dx === 0 && dy === 0 && (m.tree[i] || m.ore[i])) return false;
+        if (t === T.WATER || t === T.ROCK || t === T.BRIDGE || t === T.SHALLOW) return false;
+        if (dx === 0 && dy === 0 && t === T.ROAD) return false;
+        // keep roads lined but never walled off: a cottage may touch a road only orthogonally
+        if (t === T.ROAD && dx !== 0 && dy !== 0) return false;
         if (dx === 0 && dy === 0 && (t === T.FARMLAND || t === T.MARSH)) return false;
-        for (const p of s.plots) {
-          const pd = p.def;
-          if (nx >= pd.x - (dx === 0 && dy === 0 ? 1 : 0) && ny >= pd.y - (dx === 0 && dy === 0 ? 1 : 0) && nx < pd.x + pd.size + (dx === 0 && dy === 0 ? 1 : 0) && ny < pd.y + pd.size + (dx === 0 && dy === 0 ? 1 : 0)) return false;
+        if (dx === 0 && dy === 0) {
+          // never on a plot; keep a one-tile lane around plots
+          for (const p of s.plots) {
+            const pd = p.def;
+            if (nx >= pd.x - 1 && ny >= pd.y - 1 && nx < pd.x + pd.size + 1 && ny < pd.y + pd.size + 1) return false;
+          }
         }
       }
     // don't block the plaza / capture point
@@ -641,6 +648,7 @@ export class SettlementSystem {
     b.lastAttacker = attacker;
     const s = w.settlements[b.settlementId];
     s.lastAttackedT = w.time;
+    if (b.faction === w.setup.player && b.def.id !== 'wall' && b.def.id !== 'gatehouse') w.alertBuilding(b);
     if (b.hp <= 0) {
       if (b.id === s.coreId || b.def.category === 'core') {
         b.hp = 0;

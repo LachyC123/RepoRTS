@@ -27,6 +27,7 @@ export class App {
   private musicT = 0;
   private combatHeat = 0;
   private ended = false;
+  private reveal = false;
 
   constructor(
     private gameEl: HTMLElement,
@@ -48,8 +49,8 @@ export class App {
   start() {
     const p = new URLSearchParams(location.search);
     if (p.has('quick') || p.has('spectate')) {
+      this.reveal = p.has('reveal');
       this.startMatch({ ...this.choices, tutorial: p.has('tutorial'), seed: p.has('seed') ? Number(p.get('seed')) : undefined, spectate: p.has('spectate') }, !p.has('intro'));
-      if (p.has('reveal')) this.client!.world.vis.revealAll = true;
     } else this.showMenu();
   }
 
@@ -105,6 +106,7 @@ export class App {
       const setup = buildMatchSetup(c);
       const client = new GameClient(setup, this.gameEl);
       this.client = client;
+      if (this.reveal) client.world.vis.revealAll = true;
       load.set(0.25);
       client.start();
       client.onReady((scene) => {

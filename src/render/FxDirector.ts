@@ -281,7 +281,22 @@ export class FxDirector {
     this.floaters.push(f);
   }
 
+  private dustT = 0;
+
   update(dt: number, alpha: number) {
+    // hooves kick up dust
+    this.dustT += dt;
+    if (this.dustT > 0.12 && this.cam.zoom > 1.1) {
+      this.dustT = 0;
+      const v = this.cam.view(10);
+      for (const u of this.world.units) {
+        if (!u.alive || !u.def.look.mount) continue;
+        if (u.x < v.x0 || u.x > v.x1 || u.y < v.y0 || u.y > v.y1) continue;
+        const spd = Math.hypot(u.vx, u.vy);
+        if (spd < 25 || Math.random() > 0.6) continue;
+        this.fx.emit({ frame: 'fx/puff2', x: u.x - u.facing * 6, y: u.y, vx: -u.vx * 0.15, vy: -u.vy * 0.1, vz: 4, life: 0.6, s0: 0.6, s1: 1.3, tint: DUST, alpha: 0.55, drag: 2 });
+      }
+    }
     // projectiles
     const live = new Set<number>();
     for (const p of this.world.combat.projectiles) {

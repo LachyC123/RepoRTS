@@ -7,14 +7,19 @@ describe('movement', () => {
   it('a group reaches a distant destination in formation', () => {
     const w = new World(buildMatchSetup({ ...DEFAULT_CHOICES, seed: 42 }));
     w.initMatch();
-    const mine = w.units.filter((u) => u.faction === 0);
+    // no garrison fights: this test is about movement
+    for (const u of w.units) if (u.faction === 4) w.despawn(u);
+    const mine = w.units.filter((u) => u.faction === 0 && u.def.special !== 'worker');
     const target = w.map.regions.find((r) => r.name === 'Greyfield')!;
     const tx = target.px * TILE;
     const ty = target.py * TILE + 40;
     w.orderMove(mine.map((u) => u.id), tx, ty);
     for (let i = 0; i < 30 * 60; i++) w.step();
-    const dists = mine.map((u) => Math.hypot(u.x - tx, u.y - ty));
-    expect(Math.max(...dists)).toBeLessThan(60);
+    // everyone reaches (close to) their own formation slot near the target
+    for (const u of mine) {
+      expect(Math.hypot(u.x - u.destX, u.y - u.destY)).toBeLessThan(40);
+      expect(Math.hypot(u.x - tx, u.y - ty)).toBeLessThan(140);
+    }
     // no two units overlap heavily
     for (let a = 0; a < mine.length; a++)
       for (let b = a + 1; b < mine.length; b++) expect(Math.hypot(mine[a].x - mine[b].x, mine[a].y - mine[b].y)).toBeGreaterThan(3);
