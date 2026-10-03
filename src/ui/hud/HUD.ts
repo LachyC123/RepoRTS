@@ -811,7 +811,7 @@ export class HUD {
       const b = el('button', `act ${a.disabled ? 'disabled' : ''} ${a.active ? 'active' : ''}`, this.actEl) as HTMLButtonElement;
       if (a.img) (el('img', '', b) as HTMLImageElement).src = a.img;
       else if (a.glyph) el('span', 'glyph', b, a.glyph);
-      el('span', a.label.length > 7 ? 'al long' : 'al', b, a.label);
+      el('span', a.label.length > 6 ? 'al long' : 'al', b, a.label);
       if (a.badge) el('span', 'badge', b, a.badge);
       if (a.key && !matchMedia('(pointer: coarse)').matches) el('span', 'key', b, a.key);
       onPress(b, () => a.press(), { long: a.long ?? (a.tip ? () => this.showTipFor(b, a.tip!) : undefined), sound: () => audio.play('ui_click') });

@@ -448,22 +448,27 @@ export class GameScene extends Phaser.Scene {
       const y = gr.y / gr.n;
       const col = gr.f === NEUTRAL ? 0x8a7a64 : Phaser.Display.Color.HexStringToColor(w.factions[gr.f].color.main).color;
       const r = (gr.f === NEUTRAL ? 3.5 : 5 + Math.min(7, Math.sqrt(gr.n) * 1.6)) * s;
+      // chamfered rects only: rounded shapes and circles get re-triangulated every frame
+      const chamfer = (x0: number, y0: number, w: number, h: number, c: number) => {
+        g.fillRect(x0 + c, y0, w - 2 * c, h);
+        g.fillRect(x0, y0 + c, w, h - 2 * c);
+      };
       if (gr.f === NEUTRAL) {
         g.fillStyle(0x1b1420, 0.6);
-        g.fillCircle(x, y, r + s);
+        chamfer(x - r - s, y - r - s, (r + s) * 2, (r + s) * 2, 1.5 * s);
         g.fillStyle(col, 0.7);
-        g.fillCircle(x, y, r);
+        chamfer(x - r, y - r, r * 2, r * 2, 1.5 * s);
         continue;
       }
       // shield-shaped banner
-      g.fillStyle(0x1b1420, 0.9);
-      g.fillRoundedRect(x - r - s, y - r * 1.1 - s, (r + s) * 2, r * 2.3 + s * 2, 2 * s);
-      g.fillStyle(col, 1);
-      g.fillRoundedRect(x - r, y - r * 1.1, r * 2, r * 2.3, 2 * s);
       if (gr.sel) {
-        g.lineStyle(2 * s, 0xf8f0a0, 1);
-        g.strokeRoundedRect(x - r - 2 * s, y - r * 1.1 - 2 * s, r * 2 + 4 * s, r * 2.3 + 4 * s, 2 * s);
+        g.fillStyle(0xf8f0a0, 1);
+        chamfer(x - r - 3 * s, y - r * 1.1 - 3 * s, r * 2 + 6 * s, r * 2.3 + 6 * s, 3 * s);
       }
+      g.fillStyle(0x1b1420, 0.9);
+      chamfer(x - r - s, y - r * 1.1 - s, (r + s) * 2, r * 2.3 + s * 2, 2 * s);
+      g.fillStyle(col, 1);
+      chamfer(x - r, y - r * 1.1, r * 2, r * 2.3, 2 * s);
       let t = this.armyTexts[ti];
       if (!t) {
         t = this.make.text({ x: 0, y: 0, text: '', style: { fontFamily: 'Pixelify Sans', fontSize: '24px', color: '#fff6e0', stroke: '#1b1420', strokeThickness: 5 } }, false);
