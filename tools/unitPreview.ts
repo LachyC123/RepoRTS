@@ -1,14 +1,17 @@
 import { UNITS, type UnitDef, type UnitLook } from '../src/data/units';
 import { KINGDOM_COLORS } from '../src/data/factions';
 import { buildUnitSheet, sheetFrame } from '../src/render/art/unitArt';
+import { setEra } from '../src/data/era';
 import { writePng } from './png';
 
 /**
  * Contact sheet of unit animation frames (one row per unit, frames left → right).
- *   npx tsx tools/unitPreview.ts [ids|modern|modern:inf|modern:veh|modern:eng,...]
+ *   npx tsx tools/unitPreview.ts [ids|modern|modern:inf|modern:veh|modern:eng|new|new:med|new:mod,...]
  * Env: SC (scale, default 3), FROM / TO (frame range), OUT (png path), TEAM (0..4 kingdom colour index).
  * `modern*` entries render built-in test looks on a cloned UnitDef, so looks can be previewed before
- * any UnitDef exists for them.
+ * any UnitDef exists for them. `new*` entries render the support / new-arms troops (friar, bard,
+ * firebrand, volley gun) from the real tables: `new:med` medieval, `new:mod` modern (via setEra), `new` both;
+ * `mod:<id>` renders any unit id as its modern-era version.
  */
 const base = UNITS.militia;
 const M = (id: string, look: UnitLook, extra: Partial<UnitDef> = {}): UnitDef => ({ ...base, id, look, ...extra });
@@ -34,9 +37,35 @@ const MODERN_VEH: UnitDef[] = [V('jeep'), V('tank'), V('technical'), V('command'
 const E = (e: NonNullable<UnitLook['engine']>, extra: Partial<UnitDef> = {}) => M('m_' + e, { body: 'engine', helmet: 'none', armor: 'tunic', weapon: 'none', ...S, engine: e }, extra);
 const MODERN_ENG: UnitDef[] = [E('mortar'), E('atgun'), E('howitzer', { deploy: 5 })];
 
+const NEW_IDS = ['medic', 'bard', 'flamer', 'volley'];
+const eraDefs = (era: 'medieval' | 'modern', ids = NEW_IDS): UnitDef[] => {
+  setEra(era);
+  const out = ids.filter((id) => UNITS[id]).map((id) => structuredClone(UNITS[id]));
+  setEra('medieval');
+  return out;
+};
+const NEW_MED = eraDefs('medieval');
+const NEW_MOD = eraDefs('modern');
+
 const args = process.argv[2] ? process.argv[2].split(',') : Object.keys(UNITS);
 const defs: UnitDef[] = args.flatMap((a) =>
-  a === 'modern' ? [...MODERN_INF, ...MODERN_VEH, ...MODERN_ENG] : a === 'modern:inf' ? MODERN_INF : a === 'modern:veh' ? MODERN_VEH : a === 'modern:eng' ? MODERN_ENG : [UNITS[a]],
+  a === 'modern'
+    ? [...MODERN_INF, ...MODERN_VEH, ...MODERN_ENG]
+    : a === 'modern:inf'
+      ? MODERN_INF
+      : a === 'modern:veh'
+        ? MODERN_VEH
+        : a === 'modern:eng'
+          ? MODERN_ENG
+          : a === 'new'
+            ? [...NEW_MED, ...NEW_MOD]
+            : a === 'new:med'
+              ? NEW_MED
+              : a === 'new:mod'
+                ? NEW_MOD
+                : a.startsWith('mod:')
+                  ? eraDefs('modern', [a.slice(4)])
+                  : [UNITS[a] ?? [...MODERN_INF, ...MODERN_VEH, ...MODERN_ENG].find((d) => d.id === a)!],
 );
 const SC = Number(process.env.SC ?? 3);
 const rows: { frames: Uint32Array[]; w: number; h: number }[] = [];

@@ -83,6 +83,17 @@ interface Pose {
   saw?: number;
   /** hand-held prop: grenade (off hand), thrown grenade, placed / thrown satchel, artillery rounds, carried mortar tube */
   prop?: 'grenade' | 'toss' | 'placed' | 'chargeFly' | 'shell' | 'round' | 'tube';
+  // ---- support troops (optional, so existing poses are untouched)
+  /** instrument played / satchel carried, phase 0..1; undefined = wielded along the arm like a club */
+  play?: number;
+  /** firepot: held lit in the hand, or just let go (overhand throw / underarm lob) */
+  pot?: 'hand' | 'fly' | 'lob';
+  /** flamethrower: 1 full jet, 2 jet tailing off */
+  jet?: number;
+  /** medic: sidearm drawn */
+  gun?: boolean;
+  /** the look is modern (picks the medic's kit over the friar's satchel) */
+  mod?: boolean;
 }
 
 const BASE_POSE: Pose = { bob: 0, legF: 1, legB: -1, liftF: 0, liftB: 0, arm: -0.9, reach: 0, draw: 0, lean: 0, crouch: 0, jump: 0, kneel: false, armB: null, shieldUp: 0, shieldPush: 0, noWeapon: false };
@@ -155,6 +166,7 @@ function drawFigure(p: PixelCanvas, look: UnitLook, pal: Palette, pose: Pose, cx
     ? modernSleeve(look, pal)
     : look.armor === 'plate' ? M0[4] : look.armor === 'mail' ? M0[3] : look.armor === 'gambeson' ? '#c4b48e' : look.armor === 'leather' ? pal.leather[3] : pal.cloth[2];
   if (look.backpack) drawBackpack(p, look, tx, torsoTop);
+  if (weaponClass(look.weapon) === 'support') supportBack(p, look, pal, pose, tx, torsoTop);
   // ---- trader's pack on the back
   if (look.sack) {
     p.rect(tx - 3, torsoTop - 1, 4, 5, '#c8b484');
@@ -227,6 +239,7 @@ function drawFigure(p: PixelCanvas, look: UnitLook, pal: Palette, pose: Pose, cx
     p.px(tx + 3, torsoTop + 3, T.dark);
   }
   if (look.armor === 'robe') p.rect(tx, torsoTop + 4, tw, 3, pal.cloth[1]);
+  if (weaponClass(look.weapon) === 'support') supportBelt(p, look, pal, tx, tw, torsoTop);
 
   // ---- head
   const hx = tx + (heavy ? 1 : 0) + 1;
@@ -313,6 +326,7 @@ function drawFigure(p: PixelCanvas, look: UnitLook, pal: Palette, pose: Pose, cx
       break;
   }
   if (look.armor === 'ghillie') ghillieTufts(p, hx, headTop, tx, tw, torsoTop, legTop);
+  if (weaponClass(look.weapon) === 'support') supportHead(p, look, pal, pose, hx, headTop);
 
   // ---- shield (carried forward)
   const sx = tx + tw - 1 + Math.round(pose.reach * 0.5) + pose.shieldPush;
@@ -360,6 +374,7 @@ function drawFigure(p: PixelCanvas, look: UnitLook, pal: Palette, pose: Pose, cx
   // ---- weapon arm + weapon
   const handX = shoulderX + 1 + Math.round(Math.cos(pose.arm) * 2) + pose.reach;
   const handY = shoulderY + 1 + Math.round(Math.sin(pose.arm) * 2);
+  if (weaponClass(look.weapon) === 'support') supportFront(p, look, pal, pose, tx, torsoTop, hx, headTop, handX, handY);
   p.line(shoulderX + 1, shoulderY, handX, handY, armCol);
   p.px(handX, handY, look.armor === 'plate' ? M[5] : skin[3]);
   if (!pose.noWeapon) drawWeapon(p, look.weapon, handX, handY, pose, pal);
@@ -731,6 +746,82 @@ function drawEngine(p: PixelCanvas, look: UnitLook, pal: Palette, ph: EnginePhas
   }
 }
 
+/** ribauldequin: two-wheeled cart with a fan of eight small barrels (ph 1: top four fire, 2: bottom four, 3: smoke) */
+function drawVolleyGun(p: PixelCanvas, pal: Palette, ph: EnginePhase, cx: number, fy: number, wheelTurn: number) {
+  const W = RAMP.wood;
+  const M = pal.metal;
+  const T = pal.team;
+  const F = RAMP.fire;
+  const SM = RAMP.smoke;
+  // trail down to the ground behind, with push handles
+  p.line(cx - 3, fy - 7, cx - 11, fy - 2, W[2]);
+  p.line(cx - 3, fy - 8, cx - 11, fy - 3, W[3]);
+  p.line(cx - 11, fy - 3, cx - 12, fy - 6, W[2]);
+  // bed
+  p.rect(cx - 7, fy - 9, 12, 2, W[3]);
+  p.hline(cx - 7, cx + 4, fy - 9, W[4]);
+  p.px(cx + 4, fy - 8, W[1]);
+  // breech block, painted in team colours, with a pennant
+  p.rect(cx - 6, fy - 16, 3, 7, W[2]);
+  p.vline(cx - 6, fy - 16, fy - 10, W[3]);
+  p.hline(cx - 6, cx - 4, fy - 16, W[4]);
+  p.rect(cx - 6, fy - 14, 3, 2, T.main);
+  p.hline(cx - 6, cx - 4, fy - 14, T.light);
+  p.vline(cx - 5, fy - 20, fy - 17, W[2]);
+  p.rect(cx - 4, fy - 20, 3, 2, T.main);
+  p.px(cx - 4, fy - 20, T.light);
+  p.px(cx - 1, fy - 19, T.dark);
+  // eight barrels packed at the breech, fanning apart toward the muzzles
+  const ends: [number, number][] = [];
+  for (let k = 0; k < 8; k++) {
+    const y0 = fy - 15 + Math.floor(k * 0.75);
+    const y1 = Math.round(fy - 18 + k * 1.45);
+    const x1 = cx + 7 + (k % 2);
+    p.line(cx - 3, y0, x1, y1, k % 2 ? M[3] : M[5]);
+    p.px(x1, y1, '#151018');
+    ends.push([x1, y1]);
+  }
+  // iron band binding the fan at the breech
+  p.vline(cx - 2, fy - 15, fy - 10, M[1]);
+  // cart wheel (spokes turn as it rolls)
+  const wx = cx - 1;
+  const wy = fy - 4;
+  p.ellipse(wx + 0.5, wy + 0.5, 3.6, 3.6, W[1]);
+  p.ellipse(wx + 0.5, wy + 0.5, 2.6, 2.6, W[3]);
+  const a = wheelTurn * (Math.PI / 4);
+  for (const q of [0, Math.PI / 2]) {
+    p.line(wx - Math.round(Math.cos(a + q) * 2), wy - Math.round(Math.sin(a + q) * 2), wx + Math.round(Math.cos(a + q) * 2), wy + Math.round(Math.sin(a + q) * 2), W[1]);
+  }
+  p.px(wx, wy, M[3]);
+  // firing: barrels flash in sequence, then smoke
+  const flash = (x: number, y: number) => {
+    p.px(x + 1, y, FLASH[0]);
+    p.px(x + 2, y, FLASH[1]);
+    p.px(x + 3, y, FLASH[2]);
+  };
+  const puff = (x: number, y: number, big: boolean) => {
+    p.px(x + 1, y, SM[4]);
+    p.px(x + 2, y - 1, SM[3]);
+    if (big) {
+      p.px(x + 2, y, SM[3]);
+      p.px(x + 3, y - 1, SM[4]);
+      p.px(x + 3, y - 2, SM[2]);
+    }
+  };
+  if (ph === 1) for (let k = 0; k < 4; k++) flash(...ends[k]);
+  if (ph === 2) {
+    for (let k = 0; k < 4; k++) puff(...ends[k], false);
+    for (let k = 4; k < 8; k++) flash(...ends[k]);
+    setMuzzle(cx + 9, fy - 12);
+    p.px(cx - 4, fy - 18, F[4]); // touch-hole spit
+  }
+  if (ph === 3) {
+    for (let k = 0; k < 8; k++) puff(ends[k][0] + (k & 1), ends[k][1] - 1, true);
+    p.px(cx + 12, fy - 19, SM[3]);
+    p.px(cx + 11, fy - 20, SM[4]);
+  }
+}
+
 // ---------------------------------------------------------------------------------------------
 type BeastState = 'idle0' | 'idle1' | 'walk' | 'run' | 'lunge0' | 'lunge1' | 'leap0' | 'leap1' | 'howl' | 'flinch';
 
@@ -778,7 +869,7 @@ function drawBeast(p: PixelCanvas, st: BeastState, step0: number, cx: number, fy
   }
 }
 
-type WeaponClass = 'ranged' | 'crossbow' | 'polearm' | 'lance' | 'great' | 'chop' | 'sword' | 'none' | 'gun' | 'launcher' | 'charge' | 'saw';
+type WeaponClass = 'ranged' | 'crossbow' | 'polearm' | 'lance' | 'great' | 'chop' | 'sword' | 'none' | 'gun' | 'launcher' | 'charge' | 'saw' | 'support';
 
 function weaponClass(w: UnitLook['weapon']): WeaponClass {
   switch (w) {
@@ -817,6 +908,12 @@ function weaponClass(w: UnitLook['weapon']): WeaponClass {
       return 'charge';
     case 'chainsaw':
       return 'saw';
+    case 'medkit':
+    case 'lute':
+    case 'bagpipes':
+    case 'firepot':
+    case 'flamethrower':
+      return 'support';
     default:
       return 'none';
   }
@@ -842,6 +939,7 @@ const STANCE: Partial<Pose> = { legF: 2, legB: -2 };
 function figurePose(kind: PoseKind, i: number, look: UnitLook, mounted = false): Pose {
   const wc = weaponClass(look.weapon);
   if (wc === 'gun' || wc === 'launcher' || wc === 'charge' || wc === 'saw') return modernPose(kind, i, look, wc);
+  if (wc === 'support') return supportPose(kind, i, look, mounted);
   const p: Pose = { ...BASE_POSE };
   const rest = wc === 'ranged' || wc === 'crossbow' ? 0 : wc === 'polearm' ? -0.35 : wc === 'lance' ? -0.12 : -0.9;
   p.arm = rest;
@@ -1095,7 +1193,8 @@ export function buildUnitSheet(def: UnitDef, kc: KingdomColor, seed = 0): UnitSh
   const vehicle = look.body === 'vehicle';
   const howitzer = look.engine === 'howitzer';
   const modernEngine = engine && isModernEngine(look.engine);
-  const w = vehicle ? VEH_W : engine ? (tall || howitzer ? 40 : 30) : mounted ? 30 : 22;
+  const flamer = look.weapon === 'flamethrower';
+  const w = vehicle ? VEH_W : engine ? (tall || howitzer ? 40 : 30) : mounted ? 30 : flamer ? FLAMER_W : 22;
   const h = vehicle ? VEH_H : engine ? (tall ? 44 : howitzer ? 30 : 26) : mounted ? 30 : 22;
   const ax = Math.floor(w / 2);
   const ay = h - 3;
@@ -1147,8 +1246,53 @@ export function buildUnitSheet(def: UnitDef, kc: KingdomColor, seed = 0): UnitSh
     if (c) drawFigure(pc, MODERN_CREW, pal, c.pose, ax + dx + c.x, ay);
     return pc;
   };
+  // ---- volley gun: gunner at the trail with a linstock, loader on the far side
+  const loaderLook: UnitLook = { body: 'peasant', helmet: 'hood', armor: 'tunic', weapon: 'none', shield: 'none', cloth: '#5e4e3a' };
+  const loaderPal = makePalette(loaderLook, kc, seed + def.id.length + 1);
+  const volley = (kind: PoseKind, i: number) => {
+    const pc = new PixelCanvas(w, h);
+    const moving = kind === 'walk';
+    const ph = (kind === 'atkA' || kind === 'atkB' ? i + 1 : 0) as EnginePhase;
+    const dx = kind === 'flinch' ? -1 : 0;
+    const P = (o: Partial<Pose>): Pose => ({ ...BASE_POSE, noWeapon: true, ...o });
+    const cheer = (k: number) => P(k === 0 ? { arm: -1.57, armB: -2.0, jump: 1 } : { arm: -1.35, armB: -1.85 });
+    const loader = moving
+      ? P({ ...WALK[(i + 2) % 4], arm: 0, lean: 1 })
+      : kind === 'cheer'
+        ? cheer(1 - i)
+        : kind === 'flinch'
+          ? P({ lean: -1, arm: 0.4, crouch: 1, legF: 0, legB: -2 })
+          : ph === 1 || ph === 2
+            ? P({ crouch: 1, arm: -2.3, armB: -2.0, lean: -1 }) // ears covered
+            : ph === 3
+              ? P({ arm: -0.4, reach: 1, lean: 1 }) // ramming the next charge
+              : P({ arm: 0.6 });
+    drawFigure(pc, loaderLook, loaderPal, loader, ax - 5 + dx, ay);
+    drawVolleyGun(pc, pal, ph, ax + 2 + dx, ay, moving ? i : 0);
+    const gx = ax - 11 + dx;
+    const gunner = moving
+      ? P({ ...WALK[i], arm: 0, lean: 1 })
+      : kind === 'cheer'
+        ? cheer(i)
+        : kind === 'flinch'
+          ? P({ lean: -1, arm: 0.4, crouch: 1, legF: 0, legB: -2 })
+          : ph === 1 || ph === 2
+            ? P({ arm: -0.3, reach: 1, lean: 1, ...STANCE })
+            : P({ arm: 0.5 });
+    drawFigure(pc, crewLook, pal, gunner, gx, ay);
+    if (ph === 1 || ph === 2) {
+      // linstock from the gunner's hand to the touch-holes, slow match glowing
+      const hx = gx + 4; // hand: shoulder (gx) + 1 + arm reach 2 + lunge 1
+      const hy = ay - 8 + 1 + 1 - 1;
+      pc.line(hx, hy, hx + 3, hy - 3, RAMP.wood[2]);
+      pc.px(hx + 4, hy - 4, RAMP.fire[5]);
+      pc.px(hx + 4, hy - 5, RAMP.fire[3]);
+    }
+    return pc;
+  };
   const living = (kind: PoseKind, i: number): PixelCanvas => {
     if (vehicle) return vehicleFrame(look, pal, kind, i, w, h, ax, ay);
+    if (look.engine === 'volleygun') return volley(kind, i);
     if (engine && modernEngine) return kind === 'flinch' ? mSiege(kind, i, { dx: -1 }) : mSiege(kind, i);
     if (engine) {
       switch (kind) {
@@ -1222,13 +1366,13 @@ export function buildUnitSheet(def: UnitDef, kc: KingdomColor, seed = 0): UnitSh
     if (i === 1 && m) muzzleA = { x: m.x - ax, y: m.y - ay };
   });
   FR.atkB.forEach((f, i) => {
-    if (engine || vehicle) return alias(f, unarmed ? FR.idle[0] : FR.atkA[i]);
+    if ((engine || vehicle) && look.vehicle !== 'mlrs') return alias(f, unarmed ? FR.idle[0] : FR.atkA[i]);
     resetMuzzle();
     put(f, living('atkB', i));
     const m = lastMuzzle();
     if (i === 1 && m) muzzleB = { x: m.x - ax, y: m.y - ay };
   });
-  if (engine || vehicle) muzzleB = muzzleA;
+  if ((engine || vehicle) && look.vehicle !== 'mlrs') muzzleB = muzzleA;
   put(FR.flinch, living('flinch', 0));
   if (engine || beast || vehicle) alias(FR.block, FR.flinch);
   else put(FR.block, living('block', 0));
@@ -1256,7 +1400,14 @@ export function buildUnitSheet(def: UnitDef, kc: KingdomColor, seed = 0): UnitSh
   } else FR.deploy.forEach((f) => alias(f, FR.idle[0]));
 
   // ---- deaths
-  const base = living('idle', 0);
+  const base = flamer
+    ? (() => {
+        // long flame gun hangs along the body so the fallen figure doesn't prop itself up on it
+        const pc = new PixelCanvas(w, h);
+        drawFigure(pc, look, pal, { ...figurePose('idle', 0, look), arm: 1.4 }, ax, ay);
+        return pc;
+      })()
+    : living('idle', 0);
   if (vehicle) {
     vehicleDeaths(look, pal, w, h, ax, ay, seed + def.id.length).forEach((pc, k) => put(k < 3 ? FR.dieA[k] : FR.dieB[k - 3], pc));
   } else if (modernEngine) {
@@ -1321,7 +1472,7 @@ export function buildUnitSheet(def: UnitDef, kc: KingdomColor, seed = 0): UnitSh
       if (look.weapon === 'none') return pc;
       const wpn = new PixelCanvas(w, h);
       const lie = weaponClass(look.weapon) === 'ranged' ? -1.57 : 0.08;
-      drawWeapon(wpn, look.weapon, ax + 3, ay - 1, { ...BASE_POSE, arm: lie }, pal);
+      drawWeapon(wpn, look.weapon, ax + 3, ay - 1, weaponClass(look.weapon) === 'support' ? { ...BASE_POSE, arm: lie, mod: isModernArmor(look.armor) } : { ...BASE_POSE, arm: lie }, pal);
       stamp(pc, wpn, 0, 0, dark);
       return pc;
     };
@@ -1452,7 +1603,12 @@ function drawBackpack(p: PixelCanvas, look: UnitLook, tx: number, torsoTop: numb
   p.rect(tx - 2, torsoTop, 3, 5, B[2]);
   p.vline(tx - 2, torsoTop, torsoTop + 4, B[1]);
   p.hline(tx - 2, tx, torsoTop, B[3]);
-  if (look.weapon === 'rocket') {
+  if (look.weapon === 'medkit') {
+    // medical pack: white panel with a red cross
+    p.rect(tx - 2, torsoTop, 3, 3, '#ece8dc');
+    p.vline(tx - 1, torsoTop, torsoTop + 2, '#c8202a');
+    p.hline(tx - 2, tx, torsoTop + 1, '#c8202a');
+  } else if (look.weapon === 'rocket') {
     // spare rockets poking out of the pack
     p.vline(tx - 2, torsoTop - 3, torsoTop - 1, B[3]);
     p.px(tx - 2, torsoTop - 4, B[0]);
@@ -1739,6 +1895,36 @@ function drawModernWeapon(p: PixelCanvas, w: UnitLook['weapon'], hx: number, hy:
       p.hline(hx - 1, hx + 2, hy + 2, O[4]);
       p.px(hx + 2, hy + 3, '#e03020');
       break;
+    case 'medkit':
+      if (pose.gun) {
+        seg(0, 2, GUN2);
+        P(0, 1, GUN);
+        flash(2);
+      } else if (pose.mod) {
+        // rolled field dressing
+        p.px(hx, hy - 1, '#f2eee4');
+        p.px(hx + 1, hy - 1, '#d8d2c4');
+      } else drawSatchel(p, hx, hy, pose);
+      break;
+    case 'lute':
+    case 'bagpipes':
+      if (pose.play === undefined) drawInstrumentWielded(p, w, hx, hy, pose, pal);
+      break;
+    case 'firepot':
+      if (pose.pot === 'hand') drawFirePot(p, hx, hy - 1, 2);
+      else if (pose.pot === 'fly') {
+        drawFirePot(p, hx + 3, hy - 4, 2);
+        p.px(hx + 1, hy - 2, RAMP.fire[3]);
+        p.px(hx, hy - 1, RAMP.fire[2]);
+      } else if (pose.pot === 'lob') {
+        drawFirePot(p, hx + 2, hy - 4, 2);
+        p.px(hx + 1, hy - 2, RAMP.fire[3]);
+        p.px(hx + 1, hy - 1, RAMP.fire[2]);
+      }
+      break;
+    case 'flamethrower':
+      drawFlameGun(p, at, P, seg, pose);
+      break;
     case 'chainsaw': {
       const ph = pose.saw ?? 0;
       p.rect(hx - 1, hy - 1, 3, 3, '#d8641c');
@@ -1862,6 +2048,339 @@ function modernPose(kind: PoseKind, i: number, look: UnitLook, wc: WeaponClass):
     }
   }
   return p;
+}
+
+// ---------------------------------------------------------------------------------------------
+// support troops (both eras): friar / medic, bard / piper, firebrand, flamethrower.
+// Only reached by the weapons 'medkit' | 'lute' | 'bagpipes' | 'firepot' | 'flamethrower'.
+
+const CLAY = ['#4a2216', '#7a3e26', '#a85a36', '#c87c4c'];
+const CROSS_RED = '#c8202a';
+const CROSS_WHITE = '#f0ece0';
+const PIPE_WOOD = '#2a1e18';
+const IVORY = '#e8e0c8';
+const DRONE_WOOD = '#5a3a22';
+
+function supportPose(kind: PoseKind, i: number, look: UnitLook, mounted: boolean): Pose {
+  const mod = isModernArmor(look.armor);
+  const p: Pose = { ...BASE_POSE, mod };
+  const w = look.weapon;
+  const set = (o: Partial<Pose>) => Object.assign(p, o);
+  const instr = w === 'lute' || w === 'bagpipes';
+  const kn = { kneel: true, crouch: 2, legF: 2, legB: -1 };
+  const aim = { legF: 2, legB: -2 };
+  const lunge = { ...STANCE, crouch: mounted ? 0 : 1 };
+  /** carried / played rest arm */
+  const carry = (ph: number): Partial<Pose> => {
+    switch (w) {
+      case 'lute':
+        return { play: ph, arm: ph ? 1.1 : 0.6 };
+      case 'bagpipes':
+        return { play: ph, arm: ph ? 1.25 : 1.0, reach: 1 };
+      case 'medkit':
+        return mod ? { arm: 1.1 + ph * 0.1 } : { play: ph, arm: 1.2 + ph * 0.1 };
+      case 'firepot':
+        return { arm: 0.9 + ph * 0.08 };
+      default:
+        return { arm: 0.3 + ph * 0.1 };
+    }
+  };
+  switch (kind) {
+    case 'idle':
+      set(carry(i));
+      break;
+    case 'walk':
+      set({ ...WALK[i], ...carry(instr ? i % 2 : 0) });
+      break;
+    case 'run':
+      set({ ...RUN[i], ...carry(instr ? i % 2 : 0) });
+      if (w === 'firepot') p.arm = 0.5;
+      else if (w === 'flamethrower') p.arm = 0.15;
+      else if (w === 'medkit' && mod) p.arm = 0.9;
+      break;
+    case 'flee':
+      set(RUN[i]);
+      set({ noWeapon: true, arm: -2.1 + (i % 2) * 0.7, armB: -2.5 + ((i + 1) % 2) * 0.7 });
+      break;
+    case 'flinch':
+      set({ ...carry(0), lean: -1, crouch: 1, legF: 0, legB: -2, reach: -1 });
+      if (!instr) p.arm -= 0.5;
+      break;
+    case 'block':
+      if (mod) set({ ...kn, ...carry(0), lean: -1 }); // hunker down
+      else set({ arm: -1.3, reach: 1, crouch: 1, ...STANCE }); // fend off with whatever is in hand
+      break;
+    case 'cheer':
+      set(i === 0 ? { arm: -1.57, armB: -2.0, jump: mounted ? 0 : 1 } : { arm: -1.35, armB: -1.85 });
+      if (w === 'firepot') p.pot = 'hand';
+      if (w === 'flamethrower') p.arm = i === 0 ? -1.2 : -1.0;
+      if (instr) set({ arm: i === 0 ? -1.05 : -0.85, reach: 1 }); // instrument brandished up and forward
+      break;
+    case 'kneel':
+      set({ kneel: true, crouch: 2, noWeapon: true, arm: 0.9, lean: 1, legF: 2, legB: -1 });
+      break;
+    case 'work':
+      set([{ crouch: 1, arm: 0.6 }, { crouch: 2, arm: 0.9 }, { crouch: 2, arm: 0.7 }, { crouch: 1, arm: 0.4 }][i]);
+      break;
+    case 'atkA':
+    case 'atkB': {
+      const b = kind === 'atkB';
+      let seq: Partial<Pose>[];
+      switch (w) {
+        case 'medkit':
+          if (mod)
+            seq = b
+              ? [{ ...kn, arm: 0, gun: true }, { ...kn, arm: -0.2, gun: true, flash: true }, { ...kn, arm: -0.02, gun: true }] // kneeling shot
+              : [{ ...aim, arm: 0, reach: 1, gun: true }, { ...aim, arm: -0.25, gun: true, flash: true }, { ...aim, arm: -0.05, reach: 1, gun: true }];
+          else
+            seq = b
+              ? [{ arm: 1.9, lean: -1, crouch: 1 }, { arm: -0.9, lean: 1, reach: 1 }, { arm: -0.4 }] // backhand swat
+              : [{ arm: -2.4, lean: -1 }, { arm: 0.4, lean: 1, ...lunge }, { arm: 1.0, play: 0 }]; // overhead swat
+          break;
+        case 'lute':
+        case 'bagpipes':
+          seq = b
+            ? [{ arm: 0.3, reach: -1 }, { arm: 0, reach: 3, lean: 1, ...lunge }, { arm: 0.2 }] // shove with the body
+            : [{ arm: -2.6, lean: -1 }, { arm: 0.6, lean: 1, reach: 1, ...lunge }, { arm: 0.4, crouch: mounted ? 0 : 1 }]; // overhead bonk
+          break;
+        case 'firepot':
+          seq = b
+            ? [{ arm: 2.2, lean: -1, crouch: 1, pot: 'hand' }, { ...aim, arm: -0.5, lean: 1, pot: 'lob' }, { arm: -1.0 }] // underarm lob
+            : [{ arm: -2.6, lean: -1, pot: 'hand' }, { arm: -0.5, lean: 1, ...lunge, pot: 'fly' }, { arm: 0.5, crouch: 1 }]; // overhand throw
+          break;
+        default:
+          // flamethrower
+          seq = b
+            ? [{ ...kn, arm: 0.15 }, { ...kn, arm: 0.1, jet: 1 }, { ...kn, arm: 0.2, jet: 2 }]
+            : [{ ...aim, arm: 0.05 }, { ...aim, arm: 0, lean: -1, jet: 1 }, { ...aim, arm: 0.05, jet: 2 }];
+      }
+      set(seq[i]);
+      break;
+    }
+  }
+  if (mounted) Object.assign(p, { legF: 0, legB: 0, bob: 0, jump: 0, crouch: 0, kneel: false });
+  return p;
+}
+
+/** woven tartan inside an ellipse (piper's bag): team colour with dark sett lines */
+function tartan(p: PixelCanvas, cx: number, cy: number, rx: number, ry: number, T: Palette['team']) {
+  for (let y = Math.floor(cy - ry); y <= Math.ceil(cy + ry); y++)
+    for (let x = Math.floor(cx - rx); x <= Math.ceil(cx + rx); x++) {
+      const dx = (x + 0.5 - cx) / rx;
+      const dy = (y + 0.5 - cy) / ry;
+      if (dx * dx + dy * dy > 1) continue;
+      const a = (x & 3) === 0;
+      const b = (y & 3) === 2;
+      p.px(x, y, a && b ? '#1e1a22' : a || b ? T.dark : dy < -0.4 ? T.light : T.main);
+    }
+}
+
+/** small clay pot of pitch centred at (x, y), rag in the neck, lit (flame 0 none, 1 tiny, 2 tuft) */
+function drawFirePot(p: PixelCanvas, x: number, y: number, flame: number) {
+  const F = RAMP.fire;
+  p.rect(x - 1, y - 1, 3, 3, CLAY[2]);
+  p.px(x - 1, y - 1, CLAY[3]);
+  p.vline(x + 1, y - 1, y + 1, CLAY[1]);
+  p.px(x, y + 1, CLAY[1]);
+  p.px(x, y - 2, CLAY[0]);
+  if (flame >= 1) p.px(x, y - 3, F[5]);
+  if (flame >= 2) {
+    p.px(x + 1, y - 3, F[4]);
+    p.px(x, y - 4, F[3]);
+    p.px(x - 1, y - 3, F[3]);
+  }
+}
+
+/** friar's leather satchel with a white cross and a rolled bandage; hangs from the hand or swings on its strap */
+function drawSatchel(p: PixelCanvas, hx: number, hy: number, pose: Pose) {
+  const L = RAMP.leather;
+  let bx: number;
+  let by: number;
+  if (pose.play !== undefined) {
+    bx = hx - 1;
+    by = hy + 1;
+  } else {
+    const dx = Math.cos(pose.arm);
+    const dy = Math.sin(pose.arm);
+    const ex = hx + dx * 3;
+    const ey = hy + dy * 3;
+    p.line(hx, hy, ex, ey, L[1]);
+    bx = Math.round(ex - 1.5);
+    by = Math.round(ey - 1);
+  }
+  p.rect(bx, by, 4, 3, L[3]);
+  p.vline(bx + 3, by, by + 2, L[1]);
+  p.px(bx + 3, by, L[2]);
+  // cross
+  p.px(bx + 1, by, CROSS_WHITE);
+  p.hline(bx, bx + 2, by + 1, CROSS_WHITE);
+  p.px(bx + 1, by + 2, CROSS_WHITE);
+  // rolled bandage poking out of the flap
+  p.px(bx + 3, by - 1, CROSS_WHITE);
+  p.px(bx + 2, by - 1, '#cfc6b2');
+}
+
+/** lute or bagpipes held by the neck / drones and swung like a club (also lying dropped) */
+function drawInstrumentWielded(p: PixelCanvas, w: UnitLook['weapon'], hx: number, hy: number, pose: Pose, pal: Palette) {
+  const dx = Math.cos(pose.arm);
+  const dy = Math.sin(pose.arm);
+  const at = (k: number, n = 0): [number, number] => [hx + dx * k - dy * n, hy + dy * k + dx * n];
+  const seg = (a: number, b: number, c: string, n = 0) => {
+    const [x0, y0] = at(a, n);
+    const [x1, y1] = at(b, n);
+    p.line(x0, y0, x1, y1, c);
+  };
+  const W = RAMP.wood;
+  if (w === 'lute') {
+    seg(-1, 3, W[2]);
+    const [px0, py0] = at(-2);
+    p.px(px0, py0, W[1]);
+    const [bx, by] = at(5.2);
+    p.ellipse(bx, by, 2.1, 2.1, W[4]);
+    p.px(bx - 1, by - 1, W[5]);
+    p.px(bx, by, W[0]);
+    p.px(bx + 1, by + 1, W[3]);
+  } else {
+    seg(-2, 3, PIPE_WOOD, -1);
+    seg(-1, 3, PIPE_WOOD, 0);
+    seg(-1, 3, PIPE_WOOD, 1);
+    const [t0x, t0y] = at(-3, -1);
+    p.px(t0x, t0y, IVORY);
+    const [t1x, t1y] = at(-2, 1);
+    p.px(t1x, t1y, IVORY);
+    const [bx, by] = at(5);
+    tartan(p, bx, by, 2.3, 2.1, pal.team);
+    p.line(bx, by + 2, bx + 1, by + 4, PIPE_WOOD); // chanter dangling
+  }
+}
+
+/** flamethrower wand: body, grip, wand, nozzle, pilot light and (firing) the flame jet */
+function drawFlameGun(
+  p: PixelCanvas,
+  at: (k: number, n?: number) => [number, number],
+  P: (k: number, n: number, c: string) => void,
+  seg: (a: number, b: number, c: string, n?: number) => void,
+  pose: Pose,
+) {
+  const F = RAMP.fire;
+  seg(-2, 1, GUN2);
+  P(0, 1, GUN);
+  P(-1, 1, MIL.olive[2]);
+  seg(2, 6, GUN3);
+  P(7, 0, GUN);
+  P(7, -1, GUN2);
+  P(6, 1, pose.jet ? FLASH[1] : F[3]); // ignitor
+  if (!pose.jet) return;
+  const [mx, my] = at(8, 0);
+  if (pose.jet === 1) setMuzzle(mx, my);
+  const full = pose.jet === 1;
+  const L = full ? 12 : 9;
+  const start = full ? 8 : 10;
+  for (let j = 0; j <= L; j++) {
+    const k = start + j;
+    const t = j / L;
+    const hw = j < 1 ? 0 : j < 3 ? 1 : j < 8 ? 1.5 : 2;
+    const sag = j * j * 0.012;
+    for (let n = -Math.ceil(hw); n <= Math.ceil(hw); n++) {
+      const d = Math.abs(n) / Math.max(1, hw);
+      if (d > 1) continue;
+      const r = hash2i(k, n, pose.jet);
+      if (!full && r < 0.22) continue; // tailing off: ragged
+      if (j === L && d > 0.5) continue;
+      const heat = 1 - t * 0.75 - d * 0.45 + (r - 0.5) * 0.15;
+      const c = heat > 0.82 && d < 0.5 ? '#ffffff' : heat > 0.66 ? F[5] : heat > 0.5 ? F[4] : heat > 0.34 ? F[3] : heat > 0.18 ? F[2] : F[1];
+      P(k, n + sag, c);
+    }
+  }
+  if (!full) {
+    // smoke curling off the tip
+    P(start + L + 1, -1, SMOKE[2]);
+    P(start + L, -2, SMOKE[3]);
+  }
+}
+
+/** gear behind the body: fuel tanks, bagpipe drones over the shoulder */
+function supportBack(p: PixelCanvas, look: UnitLook, pal: Palette, pose: Pose, tx: number, torsoTop: number) {
+  if (look.weapon === 'flamethrower') {
+    const G = MIL.grey;
+    // rear tank (darker), front tank, rounded caps, valve between
+    p.rect(tx - 4, torsoTop, 2, 5, G[2]);
+    p.hline(tx - 4, tx - 3, torsoTop - 1, G[3]);
+    p.rect(tx - 2, torsoTop, 2, 5, G[3]);
+    p.vline(tx - 2, torsoTop, torsoTop + 4, G[4]);
+    p.hline(tx - 2, tx - 1, torsoTop - 1, G[5]);
+    p.hline(tx - 4, tx - 1, torsoTop + 4, G[1]);
+    p.px(tx - 3, torsoTop - 2, GUN);
+    p.px(tx - 2, torsoTop + 2, '#c8a028'); // hazard stencil
+  } else if (look.weapon === 'bagpipes' && pose.play !== undefined) {
+    // three drones fanning up over the shoulder, ivory ferrules at the tips
+    p.line(tx, torsoTop - 1, tx - 1, torsoTop - 9, DRONE_WOOD);
+    p.line(tx, torsoTop, tx - 5, torsoTop - 7, DRONE_WOOD);
+    p.line(tx + 1, torsoTop + 1, tx - 6, torsoTop - 2, DRONE_WOOD);
+    p.px(tx - 1, torsoTop - 10, IVORY);
+    p.px(tx - 6, torsoTop - 8, IVORY);
+    p.px(tx - 7, torsoTop - 3, IVORY);
+    // cord with a team-colour tassel
+    p.px(tx - 3, torsoTop - 3, pal.team.main);
+    p.px(tx - 3, torsoTop - 2, pal.team.light);
+  }
+}
+
+/** kit at the belt: a lit pot of pitch, the medic's hip bag */
+function supportBelt(p: PixelCanvas, look: UnitLook, pal: Palette, tx: number, tw: number, torsoTop: number) {
+  if (look.weapon === 'firepot') {
+    const x = tx - 1;
+    const y = torsoTop + 4;
+    p.rect(x, y, 2, 2, CLAY[2]);
+    p.px(x, y, CLAY[3]);
+    p.px(x + 1, y + 1, CLAY[1]);
+    p.px(x, y - 1, RAMP.fire[4]); // tiny flame at the rag
+  } else if (look.weapon === 'medkit' && isModernArmor(look.armor)) {
+    // canvas aid bag on the hip with a white tab
+    const x = tx + tw - 2;
+    const y = torsoTop + 3;
+    p.rect(x, y, 3, 2, MIL.drab[3]);
+    p.hline(x, x + 2, y, MIL.drab[4]);
+    p.px(x + 2, y + 1, MIL.drab[1]);
+    p.px(x + 1, y + 1, CROSS_WHITE);
+  }
+}
+
+/** helmet patch, puffed cheeks */
+function supportHead(p: PixelCanvas, look: UnitLook, pal: Palette, pose: Pose, hx: number, ht: number) {
+  if (look.weapon === 'medkit' && look.helmet === 'combat') {
+    p.rect(hx, ht - 2, 3, 3, CROSS_WHITE);
+    p.vline(hx + 1, ht - 2, ht, CROSS_RED);
+    p.hline(hx, hx + 2, ht - 1, CROSS_RED);
+  } else if (look.weapon === 'bagpipes' && pose.play !== undefined) {
+    p.px(hx + 3, ht + 2, pal.skin[4]);
+    p.px(hx + 3, ht + 3, pal.skin[3]);
+    p.px(hx + 2, ht + 2, pal.skin[4]);
+  }
+}
+
+/** instruments held in front of the body (drawn under the hand) and the flamethrower hose */
+function supportFront(p: PixelCanvas, look: UnitLook, pal: Palette, pose: Pose, tx: number, tt: number, hx: number, ht: number, handX: number, handY: number) {
+  const W = RAMP.wood;
+  if (look.weapon === 'lute' && pose.play !== undefined && !pose.noWeapon) {
+    p.line(tx + 5, tt + 1, tx + 8, tt - 2, W[2]);
+    p.px(tx + 9, tt - 2, W[1]);
+    p.px(tx + 9, tt - 3, W[1]);
+    p.ellipse(tx + 3.5, tt + 3.5, 2.2, 1.7, W[4]);
+    p.hline(tx + 2, tx + 4, tt + 2, W[5]);
+    p.hline(tx + 2, tx + 4, tt + 4, W[3]);
+    p.px(tx + 3, tt + 3, W[0]);
+    p.px(tx + 7, tt - 1, pal.skin[3]); // fretting hand
+  } else if (look.weapon === 'bagpipes' && pose.play !== undefined && !pose.noWeapon) {
+    const sq = pose.play === 1;
+    tartan(p, tx + 2.5, tt + 2.5, sq ? 1.8 : 2.4, sq ? 1.6 : 2, pal.team);
+    p.line(hx + 3, ht + 4, tx + 4, tt + 1, PIPE_WOOD); // blowpipe
+    p.line(tx + 4, tt + 3, tx + 6, tt + 6, PIPE_WOOD); // chanter
+    p.px(tx + 6, tt + 6, IVORY);
+    p.px(tx + 5, tt + 3, pal.skin[3]); // upper hand
+  } else if (look.weapon === 'flamethrower' && !pose.noWeapon) {
+    p.line(tx - 2, tt + 5, handX - 2, handY + 1, MIL.rubber[3]);
+  }
 }
 
 // ---------------------------------------------------------------------------------------------
@@ -2054,6 +2573,8 @@ function drawModernEngine(p: PixelCanvas, look: UnitLook, pal: Palette, ph: Engi
 // ---------------------------------------------------------------------------------------------
 // vehicles (facing right, wheels / tracks on the ground line)
 export const VEH_W = 36;
+/** flamethrower troops get a wider (still feet-centred) frame so the jet fits */
+export const FLAMER_W = 40;
 export const VEH_H = 28;
 
 interface VState {
@@ -2077,6 +2598,13 @@ interface VState {
   noWheels?: boolean;
   /** truck canvas burnt away, ribs bare */
   stripped?: boolean;
+  // ---- rocket artillery (mlrs)
+  /** pod elevation (rad, nose up) */
+  elev?: number;
+  /** launch beat: 1 salvo leaving, 2 rockets away, 3 haze, 4 second salvo, 5 rockets away */
+  launch?: number;
+  /** fraction of tubes already fired */
+  spent?: number;
 }
 
 const V_DRIVER: UnitLook = { body: 'soldier', helmet: 'combat', armor: 'fatigues', weapon: 'mg', shield: 'none' };
@@ -2244,6 +2772,9 @@ function drawVehicle(p: PixelCanvas, look: UnitLook, pal: Palette, s: VState, cx
       puff(cx + 3, by - 16);
       break;
     }
+    case 'mlrs':
+      drawMlrs(p, pal, s, cx, by, fy);
+      break;
     case 'tank':
     default: {
       const R = MIL.rubber;
@@ -2330,6 +2861,157 @@ function drawVehicle(p: PixelCanvas, look: UnitLook, pal: Palette, s: VState, cx
   }
 }
 
+/** rocket artillery truck: cab, flatbed, turntable and a box pod of tubes that elevates to fire */
+function drawMlrs(p: PixelCanvas, pal: Palette, s: VState, cx: number, by: number, fy: number) {
+  const O = MIL.olive;
+  const S = MIL.steel;
+  const T = pal.team;
+  const F = RAMP.fire;
+  const SM = SMOKE;
+  const wheel = (x: number) => {
+    if (!s.noWheels) modernWheel(p, x, fy - 3, 2, s.ph, O[2]);
+  };
+  // pod geometry: pivot at its rear-bottom corner over the turntable
+  const th = s.elev ?? 0;
+  const ca = Math.cos(th);
+  const sa = Math.sin(th);
+  const L = 14;
+  const H = 5;
+  const ox = cx - 11;
+  const oy = by - 10 + (s.dead ? 1 : 0);
+  const pt = (u: number, v: number): [number, number] => [ox + u * ca - v * sa, oy - u * sa - v * ca];
+  if (s.part !== 'top') {
+    // chassis rail and flatbed
+    p.hline(cx - 14, cx + 13, by - 5, S[1]);
+    p.rect(cx - 14, by - 8, 18, 3, O[3]);
+    camoSwap(p, O[3], cx - 14, by - 8, cx + 3, by - 6, 4);
+    p.hline(cx - 14, cx + 3, by - 8, O[4]);
+    p.vline(cx - 14, by - 8, by - 6, O[1]);
+    // stabiliser jack at the tail
+    p.vline(cx - 13, by - 5, by - 3, S[2]);
+    // cab + hood
+    p.rect(cx + 4, by - 13, 6, 8, O[3]);
+    p.rect(cx + 10, by - 10, 3, 5, O[3]);
+    camoSwap(p, O[3], cx + 4, by - 13, cx + 12, by - 5, 6);
+    p.hline(cx + 4, cx + 9, by - 13, O[4]);
+    p.hline(cx + 10, cx + 12, by - 10, O[4]);
+    p.rect(cx + 7, by - 12, 3, 2, MIL.glass[1]);
+    p.px(cx + 9, by - 12, MIL.glass[2]);
+    if (!s.dead) {
+      p.px(cx + 8, by - 11, pal.skin[3]);
+      p.px(cx + 7, by - 11, pal.skin[2]);
+      p.hline(cx + 7, cx + 8, by - 12, O[4]);
+      if (s.wave) {
+        // driver waving out of the window
+        const up = s.wave === 1 ? 0 : 1;
+        p.line(cx + 10, by - 11, cx + 11, by - 14 + up, O[3]);
+        p.px(cx + 11, by - 15 + up, pal.skin[3]);
+      }
+    }
+    p.vline(cx + 13, by - 10, by - 6, O[1]);
+    p.px(cx + 13, by - 8, '#e8e0b0');
+    // team marking on the cab door
+    p.rect(cx + 4, by - 10, 3, 2, T.main);
+    p.hline(cx + 4, cx + 6, by - 10, T.light);
+    // turntable
+    p.rect(cx - 10, by - 10, 6, 2, S[2]);
+    p.hline(cx - 10, cx - 5, by - 10, S[3]);
+    if (th > 0.05) {
+      // elevating ram
+      const [rx, ry] = pt(8, 0);
+      p.line(cx - 3, by - 9, rx, ry, S[3]);
+      p.line(cx - 2, by - 9, rx + 1, ry, S[1]);
+    }
+    wheel(cx - 10);
+    wheel(cx - 5);
+    wheel(cx + 9);
+    if (s.puff) {
+      p.px(cx + 3, by - 15, SM[3]);
+      p.px(cx + 2, by - 16, SM[4]);
+    }
+    p.vline(cx + 3, by - 15, by - 13, GUN2); // exhaust stack
+  }
+  if (s.part === 'hull') return;
+  // ---- the pod (drawn by inverse-mapping so it stays solid at any elevation)
+  const spent = s.spent ?? 0;
+  for (let y = Math.floor(oy - L * sa - H - 1); y <= oy + 1; y++)
+    for (let x = ox - H - 1; x <= ox + L + 1; x++) {
+      const rx = x + 0.5 - ox;
+      const ry = y + 0.5 - oy;
+      const u = rx * ca - ry * sa;
+      const v = -(rx * sa + ry * ca);
+      if (u < 0 || u >= L || v < 0 || v >= H) continue;
+      const ui = Math.floor(u);
+      const vi = Math.floor(v);
+      let c: string;
+      if (ui >= L - 2) {
+        // tube ends: a checker of muzzles (rocket noses while loaded, black once fired)
+        const hole = (ui + vi) % 2 === 0;
+        const fired = vi >= Math.round(H * (1 - spent));
+        c = hole ? (fired ? '#0e0c10' : MIL.grey[4]) : vi === H - 1 ? O[5] : O[4];
+      } else if (vi === H - 1) c = O[4];
+      else if (vi === 0) c = O[1];
+      else c = ui % 4 === 1 ? O[2] : O[3];
+      p.px(x, y, c);
+    }
+  // stencil and team flash on the pod side
+  {
+    const [sx, sy] = pt(4, 2);
+    p.px(sx, sy, T.main);
+    const [sx2, sy2] = pt(5, 2);
+    p.px(sx2, sy2, T.main);
+  }
+  if (s.dead || !s.launch) return;
+  // ---- salvo: flashes at the tubes, rockets climbing away on smoke trails
+  const fire = s.launch === 1 || s.launch === 4;
+  const away = s.launch === 2 || s.launch === 5;
+  const along = (u: number, v: number, c: string) => {
+    const [x, y] = pt(u, v);
+    p.px(x, y, c);
+  };
+  const rocket = (u: number, v: number) => {
+    for (let t = 1; t <= 4; t++) along(u - 2 - t, v, t < 2 ? F[4] : t < 3 ? SM[4] : SM[3]);
+    along(u - 2, v, F[5]);
+    along(u - 1, v, '#e8e4d8');
+    along(u, v, '#e8e4d8');
+    along(u + 1, v, '#c03028');
+  };
+  if (fire) {
+    const [mx, my] = pt(L + 1, H / 2);
+    setMuzzle(mx, my);
+    for (let v = 0; v < H; v++) {
+      along(L, v + 0.5, v % 2 ? FLASH[1] : FLASH[0]);
+      along(L + 1, v + 0.5, FLASH[2]);
+    }
+    rocket(L + 5, 1.5);
+    rocket(L + 9, 3.5);
+    // backblast billowing off the bed
+    const [bx, bxy] = pt(-1, 1);
+    p.ellipse(bx - 1, bxy + 1, 2.6, 2.2, SM[2]);
+    p.ellipse(bx - 1.5, bxy, 1.8, 1.5, SM[3]);
+    p.px(bx - 2, bxy - 1, SM[4]);
+    p.px(bx + 1, bxy - 1, FLASH[2]);
+    p.px(bx, bxy, FLASH[1]);
+  }
+  if (away || s.launch === 3) {
+    // rockets gone: drifting trails and a smoke bank behind the truck
+    const far = away ? 1 : 0;
+    if (away) {
+      rocket(L + 13, 2.5);
+      for (let t = 0; t < 6; t++) along(L + 2 + t, 1 + (t & 1), SM[3 + (t & 1)]);
+    }
+    for (let k = 0; k < 4 + far * 4; k++) {
+      const r = hash2i(k, s.launch, 5);
+      const x = cx - 15 + Math.round(r * 6);
+      const y = by - 9 - (k % 4) - far;
+      p.px(x, y, SM[2 + (k % 3)]);
+      p.px(x + 1, y, SM[3]);
+    }
+    along(L + 1, 1, SM[4]);
+    along(L + 2, 3, SM[3]);
+  }
+}
+
 function vehicleFrame(look: UnitLook, pal: Palette, kind: PoseKind, i: number, w: number, h: number, ax: number, ay: number): PixelCanvas {
   let pc = new PixelCanvas(w, h);
   const s: VState = { ph: 0 };
@@ -2355,6 +3037,13 @@ function vehicleFrame(look: UnitLook, pal: Palette, kind: PoseKind, i: number, w
       break;
     default:
       break;
+  }
+  if (look.vehicle === 'mlrs' && (kind === 'atkA' || kind === 'atkB')) {
+    const b = kind === 'atkB';
+    s.elev = 0.42;
+    s.launch = (b ? 3 : 0) + i;
+    s.spent = b ? [0.5, 1, 1][i] : [0, 0.5, 0.5][i];
+    s.fire = s.launch === 1 || s.launch === 4;
   }
   drawVehicle(pc, look, pal, s, ax + (kind === 'flinch' ? -1 : 0), ay);
   const rock = kind === 'flinch' ? -0.07 : (kind === 'atkA' || kind === 'atkB') && i === 1 ? 0.07 : 0;
@@ -2384,6 +3073,29 @@ function vehicleDeaths(look: UnitLook, pal: Palette, w: number, h: number, ax: n
       return pc;
     };
     out.push(blown(0.5, -0.12, -1, -4), blown(0.75, 0.18, -7, 3), blown(0.92, 0.18, -7, 3));
+  } else if (look.vehicle === 'mlrs') {
+    // the pod is torn off its turntable, tumbles and lands behind the gutted truck
+    const hull = draw({ ph: 0, dead: true, part: 'hull' });
+    const pod = (elev: number) => draw({ ph: 0, dead: true, part: 'top', elev });
+    const hulk = (k: number) => {
+      const pc = new PixelCanvas(w, h);
+      drawVehicle(pc, look, pal, { ph: 0, dead: true, noWheels: true, part: 'hull' }, ax, ay + 3);
+      const tilted = shear(pc, ax, -0.06);
+      modernWheel(tilted, ax + 15, ay - 2, 2, 1, MIL.olive[2]);
+      tilted.ellipse(ax + 9.5, ay - 0.5, 2.6, 1.1, MIL.rubber[1]);
+      for (let j = 0; j < 5; j++) {
+        const r = hash2i(j, seed, 9);
+        tilted.px(ax - 8 + Math.round(r * 22), ay - 1 - (j % 2), j % 2 ? MIL.olive[1] : MIL.steel[2]);
+      }
+      return burn(tilted, k, seed);
+    };
+    const f0 = burn(shear(hull, ax - 4, 0.1), 0.5, seed);
+    stamp(f0, burn(pod(0.45), 0.45, seed + 1), 1, -5);
+    const f1 = hulk(0.75);
+    stamp(f1, burn(pod(1.25), 0.7, seed + 1), -3, 8);
+    const f2 = hulk(0.92);
+    stamp(f2, burn(pod(-0.08), 0.9, seed + 1), -5, 8);
+    out.push(f0, f1, f2);
   } else {
     // body thrown nose-up, then dropped on its belly with the wheels blown off and scattered
     const base = draw({ ph: 0, dead: true });

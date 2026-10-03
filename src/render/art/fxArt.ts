@@ -238,6 +238,7 @@ export function buildFxArt() {
     add('fx/shadow', sh);
   }
   buildModernFx(add);
+  buildSupportFx(add);
   // ---- resource icons (also used by the HUD via data URLs)
   for (const [name, pc] of Object.entries(resourceIcons())) add(`icon/${name}`, pc);
   // ---- rally flag / capture banner
@@ -313,7 +314,7 @@ export function resourceIcons(): Record<string, PixelCanvas> {
   crown.px(3, 5, '#c83a3a');
   crown.px(6, 5, '#3a63c8');
   crown.outline(OUTLINE, 0.7);
-  iconCache = { gold, wood, food, stone, pop, sword, crown, ...modernIcons() };
+  iconCache = { gold, wood, food, stone, pop, sword, crown, ...modernIcons(), ...superIcons() };
   return iconCache;
 }
 
@@ -544,4 +545,297 @@ function modernIcons(): Record<string, PixelCanvas> {
   trooper.px(2, 7, '#c23a32');
   trooper.outline(OUTLINE, 0.7);
   return { m_gold: cash, m_wood: lumber, m_food: ration, m_stone: steel, m_pop: trooper };
+}
+
+// ---------------------------------------------------------------------------------------------
+// support troops and superweapons: firepots, flame jets, ground fires, missiles, great bombard
+// shots, huge explosions, target warnings, smoke columns, hearts and music notes.
+// (The flame-jet tongues are 'fx/jet0..3' because 'fx/flame0..3' are the building fires.)
+
+const HEART = ['#a82030', '#e83848', '#ff9aa8'];
+const NOTE = ['#c8bc9c', '#fff4d8'];
+
+function buildSupportFx(add: AddFn) {
+  const F = RAMP.fire;
+  const SM = RAMP.smoke;
+  // ---- firepot in flight: clay pot with a burning rag tuft
+  {
+    const pc = new PixelCanvas(7, 8);
+    const C = ['#4a2216', '#7a3e26', '#a85a36', '#c87c4c'];
+    pc.rect(2, 4, 3, 3, C[2]);
+    pc.px(2, 4, C[3]);
+    pc.vline(4, 4, 6, C[1]);
+    pc.px(3, 6, C[1]);
+    pc.px(3, 3, C[0]);
+    pc.outline(OUTLINE, 0.6);
+    pc.px(3, 2, F[5]);
+    pc.px(2, 2, F[4]);
+    pc.px(4, 2, F[3]);
+    pc.px(3, 1, F[4]);
+    pc.px(2, 1, F[2]);
+    pc.px(3, 0, F[3]);
+    add('fx/firepot', pc, 3.5, 5);
+  }
+  // ---- flame-jet tongues (pointing right, the way the jet flows): fresh and white-hot → ragged and red
+  for (let k = 0; k < 4; k++) {
+    const pc = new PixelCanvas(8, 6);
+    for (let y = 0; y < 6; y++)
+      for (let x = 0; x < 8; x++) {
+        const u = (x + 0.5) / 8; // 0 tail .. 1 tip
+        const half = 2.9 * Math.sin(Math.min(1, u * 1.25) * Math.PI * 0.5 + 0.15) * (1 - Math.max(0, u - 0.55) * 1.6);
+        const dy = Math.abs(y + 0.5 - 3 + (k === 2 ? 0.5 : k === 3 ? -0.5 : 0) * u);
+        const n = hashf(x, y, 40 + k);
+        if (dy > half + (n - 0.5) * 0.9) continue;
+        if (k >= 2 && n < 0.12 * k) continue;
+        const heat = 1 - dy / Math.max(0.6, half) * 0.55 - u * 0.35 - k * 0.14 + (n - 0.5) * 0.2;
+        const c = heat > 0.8 ? '#ffffff' : heat > 0.66 ? F[5] : heat > 0.5 ? F[4] : heat > 0.36 ? F[3] : heat > 0.2 ? F[2] : F[1];
+        pc.px(x, y, c);
+      }
+    add(`fx/jet${k}`, pc);
+  }
+  // ---- small burning-ground / building fire loop (anchored at its foot)
+  for (let k = 0; k < 4; k++) {
+    const pc = new PixelCanvas(8, 10);
+    const tongues: [number, number, number][] = [
+      [2, [6, 7, 5, 6][k], [0, 1, 0, -1][k]],
+      [5, [8, 6, 7, 9][k], [1, 0, -1, 0][k]],
+      [4, [4, 5, 6, 4][k], [-1, 0, 1, 0][k]],
+    ];
+    for (const [tx, th, sway] of tongues)
+      for (let j = 0; j < th; j++) {
+        const t = j / th;
+        const hw = 1.6 * (1 - t) + 0.3;
+        const xc = tx + Math.round(sway * t);
+        for (let x = Math.floor(xc - hw); x <= Math.ceil(xc + hw); x++) {
+          if (Math.abs(x + 0.5 - (xc + 0.5)) > hw) continue;
+          const d = Math.abs(x - xc) / Math.max(1, hw);
+          const heat = 1 - t * 0.7 - d * 0.45;
+          const c = heat > 0.72 ? F[5] : heat > 0.55 ? F[4] : heat > 0.38 ? F[3] : F[2];
+          const y = 8 - j;
+          const cur = pc.get(x, y);
+          // keep the hotter of two overlapping tongues
+          if (cur && heat < 0.55) continue;
+          pc.px(x, y, c);
+        }
+      }
+    // embers / charred ground at the base
+    for (let x = 0; x < 8; x++) pc.px(x, 9, hashf(x, k, 9) > 0.5 ? F[1] : F[0]);
+    pc.px([1, 6, 3, 5][k], 9, F[3]);
+    // a spark floating off
+    pc.px([6, 1, 5, 2][k], [1, 2, 0, 1][k], F[4]);
+    add(`fx/fire${k}`, pc, 4, 9);
+  }
+  // ---- ballistic missile (pointing right): white body, red nose, dark fins
+  {
+    const pc = new PixelCanvas(12, 4);
+    const Wt = ['#8a8e94', '#c4c6c4', '#eeece4'];
+    pc.hline(2, 9, 1, Wt[2]);
+    pc.hline(2, 9, 2, Wt[1]);
+    pc.px(5, 2, Wt[0]);
+    pc.hline(6, 7, 1, '#c03028'); // band
+    pc.hline(6, 7, 2, '#8a1e1a');
+    pc.px(10, 1, '#d83a2c');
+    pc.px(10, 2, '#a02820');
+    pc.px(11, 1, '#e8584a');
+    pc.px(11, 2, '#c03028');
+    pc.px(2, 0, MIL.grey[2]);
+    pc.px(3, 0, MIL.grey[3]);
+    pc.px(2, 3, MIL.grey[1]);
+    pc.px(3, 3, MIL.grey[2]);
+    pc.px(1, 1, MIL.steel[2]);
+    pc.px(1, 2, MIL.steel[1]);
+    pc.blend(0, 1, '#ffd860', 0.9);
+    pc.blend(0, 2, '#f08a28', 0.8);
+    add('fx/missile', pc, 6, 2);
+  }
+  // ---- great bombard shot: huge flaming stone with a fire trail behind (moving right)
+  {
+    const pc = new PixelCanvas(11, 8);
+    for (let x = 0; x < 6; x++)
+      for (let y = 1; y < 7; y++) {
+        const dy = Math.abs(y + 0.5 - 4);
+        const reach = (x + 1) / 6;
+        if (dy > reach * 3 + (hashf(x, y, 21) - 0.5)) continue;
+        const heat = reach - dy * 0.12 + (hashf(x, y, 22) - 0.5) * 0.3;
+        pc.px(x, y, heat > 0.85 ? F[5] : heat > 0.6 ? F[4] : heat > 0.4 ? F[3] : heat > 0.2 ? F[2] : F[1]);
+      }
+    blob(pc, 7, 4, 3.1, 3.1, RAMP.stone.slice(0, 6), 13);
+    // fire licking round the back of the stone, cracks glowing
+    for (const [x, y, c] of [[5, 2, F[3]], [4, 3, F[4]], [5, 3, F[4]], [4, 4, F[5]], [5, 4, F[5]], [4, 5, F[4]], [5, 5, F[3]], [6, 6, F[2]], [6, 1, F[2]], [7, 4, F[3]], [8, 5, F[2]]] as [number, number, string][])
+      pc.px(x, y, c);
+    pc.px(9, 2, RAMP.stone[6]);
+    add('fx/fireball', pc, 7, 4);
+  }
+  // ---- huge explosion: flash → fireball → mushroom under a smoke cap → dark rolling smoke → thinning → wisps
+  for (let k = 0; k < 6; k++) {
+    const S = 48;
+    const pc = new PixelCanvas(S, S);
+    const c = 23.5;
+    for (let y = 0; y < S; y++)
+      for (let x = 0; x < S; x++) {
+        const n = hashf(x, y, k + 31);
+        const n2 = hashf(x >> 1, y >> 1, k + 57);
+        const dx = x - c;
+        const dy = y - c;
+        const d = Math.sqrt(dx * dx + dy * dy) + (n2 - 0.5) * 4;
+        switch (k) {
+          case 0: {
+            if (d < 7) pc.px(x, y, '#ffffff');
+            else if (d < 11) pc.px(x, y, F[5]);
+            else if (d < 13.5) pc.blend(x, y, F[4], 0.85);
+            else if (d < 20 && (Math.abs(dx) < 1.2 || Math.abs(dy) < 1.2 || Math.abs(Math.abs(dx) - Math.abs(dy)) < 1.4)) pc.blend(x, y, F[4], 0.7 * (1 - d / 20) + 0.2);
+            break;
+          }
+          case 1: {
+            const R = 16;
+            if (d > R) break;
+            const t = d / R;
+            pc.px(x, y, t < 0.3 ? '#ffffff' : t < 0.45 ? F[5] : t < 0.65 ? F[4] : t < 0.85 ? F[3] : F[2]);
+            break;
+          }
+          case 2:
+          case 3:
+          case 4: {
+            // cap (fire under smoke), stem and the ground ring
+            const capY = [14, 12, 10][k - 2];
+            const capRx = [14, 16, 18][k - 2];
+            const capRy = [9, 10, 10][k - 2];
+            const cdx = dx / capRx;
+            const cdy = (y - capY) / capRy;
+            const cd = Math.sqrt(cdx * cdx + cdy * cdy) + (n2 - 0.5) * 0.28;
+            const sw = [3.5, 3, 2.6][k - 2] + (n - 0.5) * 1.4;
+            const stem = y > capY && y < 38 && Math.abs(dx) < sw + (y > 32 ? (y - 32) * 0.8 : 0);
+            const gdx = dx / [17, 20, 22][k - 2];
+            const gdy = (y - 38) / 5;
+            const gd = Math.sqrt(gdx * gdx + gdy * gdy) + (n2 - 0.5) * 0.3;
+            const fade = k === 4 ? 0.82 : 1;
+            if (cd < 1) {
+              const under = cdy > 0.15;
+              const smokeTop = cdy < -0.1 + (n2 - 0.5) * 0.6 + Math.abs(cdx) * 0.25;
+              if (k === 2) pc.px(x, y, cd < 0.45 && under ? F[5] : cd < 0.65 && under ? F[4] : smokeTop ? (n > 0.5 ? SM[1] : SM[0]) : cd < 0.8 ? F[3] : F[2]);
+              else if (k === 3) pc.px(x, y, under && cd < 0.55 ? (n > 0.5 ? F[3] : F[2]) : cdy < -0.2 ? (n > 0.6 ? SM[2] : SM[1]) : n > 0.5 ? SM[1] : SM[0]);
+              else pc.blend(x, y, cd < 0.6 ? (n > 0.55 ? SM[2] : SM[1]) : n > 0.5 ? SM[1] : SM[0], fade);
+            } else if (stem) {
+              const t = (y - capY) / (38 - capY);
+              if (k === 2) pc.px(x, y, Math.abs(dx) < sw * 0.45 ? F[5] : t > 0.7 ? F[2] : F[3]);
+              else if (k === 3) pc.px(x, y, Math.abs(dx) < sw * 0.4 && n > 0.4 ? F[2] : n > 0.5 ? SM[1] : SM[0]);
+              else if (n > 0.3) pc.blend(x, y, n > 0.7 ? SM[2] : SM[1], 0.75);
+            } else if (gd < 1) {
+              if (k === 2) pc.px(x, y, gd < 0.5 ? F[4] : gd < 0.8 ? F[2] : SM[1]);
+              else if (k === 3) pc.px(x, y, gd < 0.4 && n > 0.5 ? F[2] : n > 0.5 ? SM[2] : SM[1]);
+              else if (n > 0.25) pc.blend(x, y, SM[2], 0.7);
+            }
+            if (k >= 3 && n > 0.985 && (cd < 0.9 || gd < 0.9)) pc.px(x, y, F[3]); // embers
+            break;
+          }
+          default: {
+            // wisps drifting from where the cap was
+            const wy = (y - 12) / 12;
+            const wd = Math.sqrt((dx / 20) ** 2 + wy * wy) + (n2 - 0.5) * 0.4;
+            if (wd > 1 || n < 0.4) break;
+            pc.blend(x, y, n > 0.75 ? SM[3] : SM[2], 0.45 * (1 - wd) + 0.12);
+            const gy = (y - 38) / 5;
+            if (Math.sqrt((dx / 20) ** 2 + gy * gy) < 1 && n > 0.7) pc.blend(x, y, SM[1], 0.35);
+          }
+        }
+      }
+    if (k >= 1 && k <= 4) pc.outline(OUTLINE, k <= 2 ? 0.35 : 0.55);
+    add(`fx/bigblast${k}`, pc, 24, 24);
+  }
+  // ---- target warning on the ground: red dashed ellipse with a crosshair
+  {
+    const pc = new PixelCanvas(24, 12);
+    const red = '#e02828';
+    const hot = '#ff6a50';
+    for (let i = 0; i < 120; i++) {
+      const a = (i / 120) * Math.PI * 2;
+      if (Math.floor((i / 120) * 16) % 2) continue; // dashes
+      pc.px(11.5 + Math.cos(a) * 11, 5.5 + Math.sin(a) * 5, red);
+      if (i % 3 === 0) pc.blend(11.5 + Math.cos(a) * 10, 5.5 + Math.sin(a) * 4.2, hot, 0.6);
+    }
+    pc.hline(5, 9, 6, red);
+    pc.hline(14, 18, 6, red);
+    pc.vline(12, 3, 4, red);
+    pc.vline(12, 8, 9, red);
+    pc.px(12, 6, hot);
+    add('fx/warn', pc, 12, 6);
+  }
+  // ---- tall smoke column puff
+  {
+    const pc = new PixelCanvas(10, 14);
+    blob(pc, 5, 9.5, 4, 3.8, SM.slice(1), 3);
+    blob(pc, 4.5, 5.5, 3.5, 3.4, SM.slice(1), 5, 0.05);
+    blob(pc, 5.5, 3, 2.6, 2.6, SM.slice(2), 7, 0.1);
+    add('fx/smokecol', pc);
+  }
+  // ---- heart (healing)
+  {
+    const pc = new PixelCanvas(5, 5);
+    const rows = ['.#.#.', '#####', '#####', '.###.', '..#..'];
+    rows.forEach((r, y) => [...r].forEach((ch, x) => ch === '#' && pc.px(x, y, y >= 3 || x === 4 ? HEART[0] : HEART[1])));
+    pc.px(1, 1, HEART[2]);
+    pc.px(0, 1, HEART[1]);
+    add('fx/heart', pc);
+  }
+  // ---- music notes (light, tinted at runtime if wanted)
+  {
+    const n0 = new PixelCanvas(4, 6);
+    n0.rect(0, 4, 2, 2, NOTE[1]);
+    n0.px(1, 5, NOTE[0]);
+    n0.vline(1, 0, 3, NOTE[1]);
+    n0.px(2, 1, NOTE[1]);
+    n0.px(3, 2, NOTE[0]);
+    add('fx/note0', n0);
+    const n1 = new PixelCanvas(4, 6);
+    // two quavers on a beam
+    n1.px(0, 5, NOTE[1]);
+    n1.px(2, 4, NOTE[1]);
+    n1.px(3, 4, NOTE[0]);
+    n1.vline(0, 1, 4, NOTE[1]);
+    n1.vline(3, 0, 3, NOTE[1]);
+    n1.hline(0, 3, 0, NOTE[1]);
+    n1.px(0, 0, NOTE[0]);
+    n1.px(1, 1, NOTE[0]);
+    add('fx/note1', n1);
+  }
+}
+
+/** HUD icons for superweapons and building levels */
+function superIcons(): Record<string, PixelCanvas> {
+  const missile = new PixelCanvas(10, 10);
+  // climbing up-right
+  missile.line(2, 7, 6, 3, '#eeece4');
+  missile.line(3, 7, 7, 3, '#c4c6c4');
+  missile.line(2, 6, 6, 2, '#eeece4');
+  missile.px(7, 2, '#d83a2c');
+  missile.px(8, 1, '#e8584a');
+  missile.px(7, 1, '#c03028');
+  missile.px(8, 2, '#a02820');
+  missile.px(1, 6, MIL.grey[3]); // fins
+  missile.px(3, 8, MIL.grey[2]);
+  missile.px(1, 8, '#ffc548'); // exhaust
+  missile.px(2, 8, '#f8902a');
+  missile.outline(OUTLINE, 0.7);
+  const bombard = new PixelCanvas(10, 10);
+  const M = RAMP.metal;
+  bombard.ellipse(5, 5, 3.7, 3.7, M[1]);
+  bombard.ellipse(4.6, 4.6, 3, 3, M[2]);
+  bombard.ellipse(4.2, 4.2, 1.9, 1.9, M[3]);
+  bombard.px(3, 3, M[5]);
+  bombard.px(4, 3, M[4]);
+  bombard.px(3, 4, M[4]);
+  bombard.outline(OUTLINE, 0.7);
+  const level = new PixelCanvas(10, 10);
+  const G = RAMP.goldm;
+  // two rank chevrons
+  for (const oy of [0, 3]) {
+    level.line(1, 4 + oy, 4, 1 + oy, G[3]);
+    level.line(5, 1 + oy, 8, 4 + oy, G[2]);
+    level.line(1, 5 + oy, 4, 2 + oy, G[2]);
+    level.line(5, 2 + oy, 8, 5 + oy, G[1]);
+    level.px(4, 1 + oy, G[4]);
+    level.px(5, 1 + oy, G[4]);
+  }
+  level.outline(OUTLINE, 0.7);
+  return { missile, bombard, level };
 }

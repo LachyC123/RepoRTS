@@ -22,6 +22,9 @@ export const SFX_NAMES = [
   'rifle_shot', 'mg_burst', 'smg_burst', 'sniper_shot', 'shotgun', 'rocket_launch',
   'explosion', 'tank_fire', 'mortar_launch', 'shell_whistle', 'engine_idle', 'engine_rev',
   'bugle', 'radio_chatter', 'ricochet',
+  // support troops and superweapons
+  'flame', 'firepot_smash', 'siren', 'missile_launch', 'bombard_fire', 'big_explosion',
+  'lute', 'bagpipe', 'heal', 'volley', 'salvo',
 ] as const;
 
 export type SfxName = (typeof SFX_NAMES)[number];
@@ -126,6 +129,43 @@ function diesel(k: SynthKit, o: AudioNode, t: number, f0: number, f1: number, le
   tone(k, o, t, { type: 'sawtooth', freq: f0, freqEnd: f1, glide: len * 0.6, attack: 0.08, hold: len * 0.4, decay: len * 0.6, peak, filter: 'lowpass', ffreq: lp0, ffreqEnd: lp1, fq: 2, vibRate: f0 / 4, vibDepth: f0 * 0.12 });
   tone(k, o, t, { type: 'square', freq: f0 / 2, freqEnd: f1 / 2, glide: len * 0.6, attack: 0.08, hold: len * 0.4, decay: len * 0.6, peak: peak * 0.5, filter: 'lowpass', ffreq: lp0 * 0.7, fq: 1 });
   return noise(k, o, t, { color: 'brown', filter: 'lowpass', ffreq: lp0 * 1.4, attack: 0.08, hold: len * 0.4, decay: len * 0.6, peak: peak * 1.4 });
+}
+
+/** Pitch-contoured, lowpassed oscillator pair (sirens): contour = [time offset, freq] points. */
+function sweep(k: SynthKit, o: AudioNode, t: number, contour: Array<[number, number]>, peak: number, lp: number, attack = 0.2, release = 0.5): number {
+  const c = k.ctx;
+  const last = contour[contour.length - 1] as [number, number];
+  const end = t + last[0];
+  const g = c.createGain();
+  g.gain.setValueAtTime(0.0001, t);
+  g.gain.linearRampToValueAtTime(peak, t + attack);
+  g.gain.setValueAtTime(peak, Math.max(t + attack, end - release));
+  g.gain.exponentialRampToValueAtTime(0.0001, end);
+  const f = c.createBiquadFilter();
+  f.type = 'lowpass';
+  f.frequency.value = lp;
+  f.Q.value = 0.9;
+  f.connect(g);
+  g.connect(o);
+  const oscs: OscillatorNode[] = [];
+  for (const [type, mul, det] of [['sawtooth', 1, -6], ['triangle', 1, 5], ['sine', 0.5, 0]] as const) {
+    const osc = c.createOscillator();
+    osc.type = type;
+    osc.detune.value = det;
+    osc.frequency.setValueAtTime((contour[0] as [number, number])[1] * mul, t);
+    for (let i = 1; i < contour.length; i++) {
+      const pt = contour[i] as [number, number];
+      osc.frequency.linearRampToValueAtTime(pt[1] * mul, t + pt[0]);
+    }
+    osc.connect(f);
+    osc.start(t);
+    osc.stop(end + 0.02);
+    oscs.push(osc);
+  }
+  (oscs[0] as OscillatorNode).onended = () => {
+    for (const n of [...oscs, f, g]) n.disconnect();
+  };
+  return end;
 }
 
 // ------------------------------------------------------------- recipes ----
@@ -520,6 +560,123 @@ const R: Record<SfxName, Recipe> = {
     noise(k, o, t, { filter: 'highpass', ffreq: 4000, decay: 0.01, peak: 0.2 });
     return tone(k, o, t + 0.005, { freq: rand(2600, 3600) * r, freqEnd: rand(900, 1400) * r, glide: 0.3, decay: 0.32, peak: 0.05, vibRate: 35, vibDepth: 90 });
   },
+  // ------------------------------------------------- support / superweapons ----
+  flame: (k, o, t, r) => {
+    noise(k, o, t, { color: 'brown', filter: 'lowpass', ffreq: 1500 * r, ffreqEnd: 450, attack: 0.06, hold: 0.22, decay: 0.32, peak: 0.45 });
+    noise(k, o, t, { color: 'pink', filter: 'bandpass', ffreq: 650 * r, ffreqEnd: 1700 * r, fq: 0.8, attack: 0.05, hold: 0.18, decay: 0.3, peak: 0.13 });
+    tone(k, o, t, { type: 'sawtooth', freq: 62 * r, freqEnd: 46 * r, attack: 0.05, hold: 0.22, decay: 0.3, peak: 0.08, filter: 'lowpass', ffreq: 260, vibRate: 17, vibDepth: 9 });
+    for (let i = 0; i < 7; i++) {
+      noise(k, o, t + rand(0.04, 0.55), { filter: 'highpass', ffreq: rand(2500, 5000), decay: rand(0.004, 0.012), peak: rand(0.04, 0.1) });
+    }
+    return t + 0.62;
+  },
+  firepot_smash: (k, o, t, r) => {
+    // pottery breaking: bright ceramic clinks and grit
+    noise(k, o, t, { filter: 'highpass', ffreq: 2400, decay: 0.03, peak: 0.3 });
+    partials(k, o, t, rand(1900, 2400) * r, [1, 1.83, 2.71, 3.9], [0.07, 0.05, 0.04, 0.03], [0.05, 0.04, 0.03, 0.02]);
+    for (let i = 0; i < 5; i++) {
+      const tt = t + 0.02 + rand(0, 0.18);
+      partials(k, o, tt, rand(2600, 4800) * r, [1, 1.6], [0.03, 0.02], [0.025, 0.015]);
+      noise(k, o, tt, { filter: 'bandpass', ffreq: rand(2500, 5000), fq: 3, decay: 0.015, peak: rand(0.04, 0.09) });
+    }
+    // whoomph as the pitch catches
+    noise(k, o, t + 0.05, { color: 'brown', filter: 'lowpass', ffreq: 220, ffreqEnd: 1300, attack: 0.08, decay: 0.42, peak: 0.5 });
+    tone(k, o, t + 0.05, { freq: 95 * r, freqEnd: 48 * r, attack: 0.04, decay: 0.3, peak: 0.3 });
+    return t + 0.6;
+  },
+  siren: (k, o, t, r) => {
+    // air-raid siren: wind up, wail, wind down
+    const lo = 260 * r;
+    const hi = 720 * r;
+    sweep(k, o, t, [[0, lo], [0.9, hi], [1.6, hi * 0.97], [2.2, hi * 0.9], [3.0, lo * 0.85]], 0.085, 1700, 0.5, 0.7);
+    return sweep(k, o, t, [[0, lo * 1.5], [0.9, hi * 1.5], [1.6, hi * 1.46], [2.2, hi * 1.35], [3.0, lo * 1.27]], 0.025, 2200, 0.5, 0.7);
+  },
+  missile_launch: (k, o, t, r) => {
+    // ignition bang, then a long deep roar with a rising hiss
+    noise(k, o, t, { filter: 'highpass', ffreq: 1200, decay: 0.05, peak: 0.25 });
+    tone(k, o, t, { freq: 70 * r, freqEnd: 32 * r, decay: 0.5, peak: 0.55 });
+    noise(k, o, t, { color: 'brown', filter: 'lowpass', ffreq: 380 * r, ffreqEnd: 900 * r, attack: 0.25, hold: 0.9, decay: 0.85, peak: 0.6 });
+    tone(k, o, t + 0.05, { type: 'sawtooth', freq: 42 * r, freqEnd: 58 * r, glide: 1.6, attack: 0.3, hold: 0.8, decay: 0.85, peak: 0.1, filter: 'lowpass', ffreq: 240, vibRate: 23, vibDepth: 6 });
+    noise(k, o, t + 0.1, { filter: 'bandpass', ffreq: 700 * r, ffreqEnd: 3200 * r, fq: 0.9, attack: 0.5, hold: 0.6, decay: 0.8, peak: 0.12 });
+    return noise(k, o, t + 0.2, { filter: 'highpass', ffreq: 4000, attack: 0.4, hold: 0.5, decay: 0.9, peak: 0.04 });
+  },
+  bombard_fire: (k, o, t, r) => {
+    noise(k, o, t, { filter: 'highpass', ffreq: 1000, decay: 0.04, peak: 0.4 });
+    tone(k, o, t, { freq: 52 * r, freqEnd: 21 * r, decay: 1.25, peak: 0.9 });
+    noise(k, o, t, { color: 'brown', filter: 'lowpass', ffreq: 1300 * r, ffreqEnd: 110, decay: 1.1, peak: 0.7 });
+    noise(k, o, t + 0.02, { color: 'pink', filter: 'bandpass', ffreq: 380 * r, fq: 0.8, decay: 0.35, peak: 0.25 });
+    // echoes rolling back off the hills
+    noise(k, o, t + 0.38, { color: 'pink', filter: 'bandpass', ffreq: 420 * r, fq: 0.9, attack: 0.02, decay: 0.45, peak: 0.13 });
+    tone(k, o, t + 0.38, { freq: 48 * r, freqEnd: 26 * r, decay: 0.5, peak: 0.18 });
+    noise(k, o, t + 0.8, { color: 'pink', filter: 'bandpass', ffreq: 360 * r, fq: 0.9, attack: 0.03, decay: 0.55, peak: 0.07 });
+    return noise(k, o, t + 1.25, { color: 'brown', filter: 'lowpass', ffreq: 400, attack: 0.05, decay: 0.6, peak: 0.06 });
+  },
+  big_explosion: (k, o, t, r) => {
+    noise(k, o, t, { filter: 'highpass', ffreq: 1200, decay: 0.05, peak: 0.35 });
+    tone(k, o, t, { freq: 42 * r, freqEnd: 17 * r, decay: 2.2, peak: 0.9 });
+    tone(k, o, t, { freq: 70 * r, freqEnd: 30 * r, decay: 0.9, peak: 0.45 });
+    noise(k, o, t, { color: 'brown', filter: 'lowpass', ffreq: 1000 * r, ffreqEnd: 60, decay: 2.8, peak: 0.75 });
+    noise(k, o, t + 0.1, { color: 'pink', filter: 'lowpass', ffreq: 600, ffreqEnd: 150, attack: 0.3, decay: 2.4, peak: 0.2 });
+    for (let i = 0; i < 14; i++) {
+      noise(k, o, t + 0.15 + rand(0, 1.6), { filter: 'bandpass', ffreq: rand(1200, 4200), fq: 3, decay: rand(0.015, 0.04), peak: rand(0.02, 0.08) });
+    }
+    for (let i = 0; i < 3; i++) tone(k, o, t + rand(0.4, 1.4), { freq: rand(40, 60) * r, freqEnd: 24, decay: 0.6, peak: 0.2 });
+    return t + 3.0;
+  },
+  lute: (k, o, t, r) => {
+    const f = (m: number): number => mtof(m) * r;
+    const notes: Array<[number, number, number]> = [
+      [0, 62, 0.26], [0.11, 66, 0.24], [0.22, 69, 0.26], [0.33, 74, 0.28],
+      [0.5, 71, 0.24], [0.62, 69, 0.22], [0.74, 74, 0.3],
+    ];
+    let end = t;
+    for (const [dt, m, pk] of notes) end = Math.max(end, pluck(k, o, t + dt, f(m), pk, 0.5));
+    pluck(k, o, t + 0.74, f(50), 0.2, 0.5); // bass string under the last note
+    return Math.max(end, t + 1.2);
+  },
+  bagpipe: (k, o, t, r) => {
+    const f = (m: number): number => mtof(m) * r;
+    // drones (A2 + A3), reedy and steady
+    for (const [m, pk] of [[45, 0.06], [57, 0.04]] as const) {
+      tone(k, o, t, { type: 'sawtooth', freq: f(m), attack: 0.12, hold: 1.2, decay: 0.2, peak: pk, filter: 'lowpass', ffreq: 1100, fq: 1.2, vibRate: 5, vibDepth: 0.6 });
+    }
+    // chanter: a short tune with a grace note before each beat
+    const tune: Array<[number, number]> = [[69, 0.18], [71, 0.12], [73, 0.24], [69, 0.12], [76, 0.3], [73, 0.18]];
+    let tt = t + 0.12;
+    for (const [m, d] of tune) {
+      tone(k, o, tt, { type: 'sawtooth', freq: f(81), attack: 0.005, decay: 0.03, peak: 0.03, filter: 'bandpass', ffreq: 1800, fq: 1.4 });
+      tone(k, o, tt + 0.03, { type: 'sawtooth', freq: f(m), attack: 0.01, hold: d - 0.03, decay: 0.05, peak: 0.085, filter: 'bandpass', ffreq: 1500, fq: 1.3 });
+      tt += d + 0.03;
+    }
+    return t + 1.55;
+  },
+  heal: (k, o, t, r) => {
+    bell(k, o, t, mtof(84) * r, 0.035, 0.8);
+    bell(k, o, t + 0.09, mtof(88) * r, 0.03, 0.9);
+    noise(k, o, t, { filter: 'highpass', ffreq: 6000, attack: 0.12, decay: 0.45, peak: 0.015 });
+    return t + 1.0;
+  },
+  volley: (k, o, t, r) => {
+    let end = t;
+    let tt = t;
+    for (let i = 0; i < 8; i++) {
+      end = gunshot(k, o, tt, r * rand(0.82, 1.12), 0.55 - i * 0.02, 0.1, 1.5);
+      tt += rand(0.045, 0.09);
+    }
+    // the cart and the smoke settling
+    noise(k, o, t + 0.05, { color: 'brown', filter: 'lowpass', ffreq: 700, attack: 0.05, decay: 0.6, peak: 0.18 });
+    return Math.max(end, t + 0.8);
+  },
+  salvo: (k, o, t, r) => {
+    for (let i = 0; i < 6; i++) {
+      const tt = t + i * rand(0.13, 0.17);
+      const rr = r * rand(0.92, 1.08);
+      noise(k, o, tt, { color: 'brown', filter: 'lowpass', ffreq: 800, decay: 0.08, peak: 0.3 });
+      tone(k, o, tt, { freq: 120 * rr, freqEnd: 60 * rr, decay: 0.08, peak: 0.15 });
+      noise(k, o, tt + 0.01, { filter: 'bandpass', ffreq: 450 * rr, ffreqEnd: 2600 * rr, fq: 1.3, attack: 0.04, decay: 0.38, peak: 0.13 });
+    }
+    return noise(k, o, t, { filter: 'highpass', ffreq: 3000, attack: 0.1, hold: 0.6, decay: 0.5, peak: 0.04 });
+  },
 };
 
 /** Per-sound mixing / throttle settings. */
@@ -586,6 +743,17 @@ const META: Partial<Record<SfxName, Omit<SfxDef, 'fn'>>> = {
   bugle: { ui: true, max: 1, vary: 0, send: 0.4, gain: 0.8 },
   radio_chatter: { ui: true, max: 1, vary: 0.05, gain: 0.9 },
   ricochet: { max: 3, vary: 0.12, gain: 0.7 },
+  flame: { max: 2, vary: 0.08, gain: 0.7 },
+  firepot_smash: { max: 3, vary: 0.1, gain: 0.7 },
+  siren: { ui: true, max: 1, vary: 0, send: 0.4, gain: 0.7 },
+  missile_launch: { max: 1, vary: 0.04, gain: 0.8, send: 0.3 },
+  bombard_fire: { max: 2, vary: 0.05, gain: 0.65, send: 0.4 },
+  big_explosion: { max: 1, vary: 0.05, gain: 0.62, send: 0.4 },
+  lute: { max: 1, vary: 0.02, gain: 0.8, send: 0.2 },
+  bagpipe: { max: 1, vary: 0.01, gain: 0.7, send: 0.25 },
+  heal: { max: 2, vary: 0.05, gain: 0.7, send: 0.3 },
+  volley: { max: 2, vary: 0.06, gain: 0.6, send: 0.2 },
+  salvo: { max: 1, vary: 0.05, gain: 0.7, send: 0.25 },
 };
 
 export const SFX: Record<SfxName, SfxDef> = Object.fromEntries(
