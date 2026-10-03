@@ -2,7 +2,7 @@ import { UNITS, type UnitDef, type UnitLook } from '../../data/units';
 import { NEUTRAL_COLOR } from '../../data/factions';
 import { art } from './ArtRegistry';
 import { PixelCanvas, shade } from './PixelCanvas';
-import { OUTLINE, RAMP } from './palette';
+import { MIL, OUTLINE, RAMP } from './palette';
 import { buildUnitSheet, sheetFrame } from './unitArt';
 
 /** Ambient life: animals, birds, butterflies, villagers, carts and boats (render-only). */
@@ -237,9 +237,12 @@ export function buildAmbientArt() {
       add(`amb/villager_${name}/${f}`, children.has(name) ? shrink(pc, 0.72, sheet.ax, sheet.ay) : pc, sheet.ax, sheet.ay);
     }
   }
+  buildModernAmbient(add);
 }
 
 export const VILLAGER_KINDS = ['man', 'woman', 'gatherer', 'elder', 'water', 'boy', 'maid', 'woodsman', 'woman', 'girl', 'peddler', 'man'];
+/** modern-era townsfolk (frames 'amb/villager_<kind>/<0..5>', same idle/walk layout as VILLAGER_KINDS) */
+export const MODERN_VILLAGER_KINDS = ['m_man', 'm_woman', 'm_worker', 'm_shopper', 'm_kid', 'm_elder', 'm_woman', 'm_man', 'm_kid', 'm_shopper'];
 
 /** nearest-neighbour scale toward the feet anchor (children) */
 function shrink(src: PixelCanvas, k: number, ax: number, ay: number): PixelCanvas {
@@ -252,4 +255,122 @@ function shrink(src: PixelCanvas, k: number, ax: number, ay: number): PixelCanva
       out.data[y * src.w + x] = src.data[sy * src.w + sx];
     }
   return out;
+}
+
+// ---------------------------------------------------------------------------------------------
+// modern era: townsfolk in jackets and jeans, a guard, delivery truck, hatchback and motorboat
+function buildModernAmbient(add: (name: string, pc: PixelCanvas, ax: number, ay: number) => void) {
+  const N = { body: 'peasant', weapon: 'none', shield: 'none' } as const;
+  const looks: [string, UnitLook][] = [
+    ['m_man', { ...N, helmet: 'none', armor: 'jacket', cloth: '#56687c' }],
+    ['m_woman', { ...N, helmet: 'none', armor: 'robe', cloth: '#b04a5a' }],
+    ['m_worker', { ...N, helmet: 'hardhat', armor: 'jacket', cloth: '#d07a28' }],
+    ['m_shopper', { ...N, helmet: 'none', armor: 'robe', cloth: '#3a6a5a', carry: 'basket' }],
+    ['m_kid', { ...N, helmet: 'cap', armor: 'jacket', cloth: '#3a7ac0' }],
+    ['m_elder', { ...N, helmet: 'none', armor: 'jacket', cloth: '#6a5a4a', beard: true }],
+    ['m_guard', { body: 'soldier', helmet: 'combat', armor: 'fatigues', weapon: 'rifle', shield: 'none' }],
+  ];
+  for (const [name, look] of looks) {
+    const def: UnitDef = { ...UNITS.militia, id: 'civ_' + name, look };
+    // civilians wear their clothing colour where soldiers carry team colour (armband, cap)
+    const c = look.cloth ?? '#8a7a5a';
+    const kc = look.body === 'soldier' ? { ...NEUTRAL_COLOR, main: '#8a7a5a', light: '#a89a7a', dark: '#5a4a3a' } : { ...NEUTRAL_COLOR, main: c, light: shade(c, 0.18), dark: shade(c, -0.2) };
+    const sheet = buildUnitSheet(def, kc, name.length);
+    for (let f = 0; f < 6; f++) {
+      const pc = sheetFrame(sheet, f);
+      add(`amb/villager_${name}/${f}`, name === 'm_kid' ? shrink(pc, 0.72, sheet.ax, sheet.ay) : pc, sheet.ax, sheet.ay);
+    }
+  }
+  const tyre = (pc: PixelCanvas, x: number, y: number, f: number) => {
+    pc.ellipse(x + 0.5, y + 0.5, 2.5, 2.5, MIL.rubber[1]);
+    pc.ellipse(x + 0.5, y + 0.5, 1.2, 1.2, MIL.grey[4]);
+    pc.px(x, y, MIL.grey[2]);
+    const a = f * (Math.PI / 4) + 0.4;
+    pc.px(x + Math.round(Math.cos(a) * 2), y + Math.round(Math.sin(a) * 2), MIL.rubber[3]);
+    pc.px(x - Math.round(Math.cos(a) * 2), y - Math.round(Math.sin(a) * 2), MIL.rubber[3]);
+  };
+  // ---- delivery truck (cab-over, box body), 28×16 like the cart
+  for (let f = 0; f < 2; f++) {
+    const pc = new PixelCanvas(28, 16);
+    const Bx = ['#264a7a', '#3a6aa8', '#5a8ac4', '#8ab0dc'];
+    pc.rect(2, 1, 17, 10, Bx[1]);
+    pc.hline(2, 18, 1, Bx[3]);
+    pc.vline(2, 1, 10, Bx[0]);
+    pc.hline(3, 17, 6, '#f0ece0'); // livery stripe
+    pc.px(14, 4, '#f0ece0');
+    pc.px(15, 3, '#f0ece0');
+    pc.px(16, 4, '#f0ece0');
+    for (const x of [7, 12]) pc.vline(x, 2, 10, Bx[2]);
+    const W = ['#9a968e', '#c8c4ba', '#e8e4dc', '#faf8f2'];
+    pc.rect(20, 4, 6, 7, W[2]);
+    pc.hline(20, 24, 3, W[3]);
+    pc.rect(23, 5, 3, 2, MIL.glass[1]);
+    pc.px(25, 5, MIL.glass[2]);
+    pc.px(23, 5, RAMP.skin[3]);
+    pc.vline(26, 4, 10, W[1]);
+    pc.px(26, 9, '#f0e8a0');
+    pc.vline(20, 5, 10, W[1]);
+    pc.hline(2, 26, 11, MIL.steel[1]);
+    tyre(pc, 6, 11, f);
+    tyre(pc, 11, 11, f);
+    tyre(pc, 22, 11, f);
+    pc.outline(OUTLINE, 0.6);
+    pc.shadow(14, 14, 12, 1.5, 0.25);
+    add(`amb/truck/${f}`, pc, 14, 14);
+  }
+  // ---- hatchback, 24×16
+  for (let f = 0; f < 2; f++) {
+    const pc = new PixelCanvas(24, 16);
+    const R = ['#6a1e1c', '#9a2e28', '#c04038', '#dc6a5a'];
+    pc.rect(2, 7, 20, 4, R[2]);
+    pc.hline(3, 21, 7, R[3]);
+    pc.hline(2, 21, 10, R[1]);
+    pc.rect(5, 4, 10, 3, R[2]); // cabin
+    pc.hline(6, 13, 3, R[3]);
+    pc.line(15, 4, 17, 6, R[2]); // windscreen rake
+    pc.px(16, 6, R[2]);
+    pc.px(4, 5, R[2]);
+    pc.px(4, 6, R[2]);
+    pc.rect(6, 4, 4, 3, MIL.glass[1]);
+    pc.rect(11, 4, 4, 3, MIL.glass[1]);
+    pc.px(15, 5, MIL.glass[2]);
+    pc.px(12, 4, RAMP.skin[3]);
+    pc.px(12, 5, RAMP.skin[2]);
+    pc.vline(10, 4, 9, R[1]); // door line
+    pc.px(21, 8, '#f0e8a0');
+    pc.px(2, 8, '#e04030');
+    pc.hline(2, 21, 11, MIL.steel[1]);
+    tyre(pc, 6, 11, f);
+    tyre(pc, 17, 11, f);
+    pc.outline(OUTLINE, 0.6);
+    pc.shadow(12, 14, 10, 1.5, 0.25);
+    add(`amb/car/${f}`, pc, 12, 14);
+  }
+  // ---- motorboat with an outboard and a foam wake
+  for (let f = 0; f < 2; f++) {
+    const pc = new PixelCanvas(20, 9);
+    const H = ['#8a8a88', '#c8c8c4', '#ecebe6'];
+    pc.rect(3, 4, 13, 2, H[2]);
+    pc.hline(3, 15, 6, H[0]);
+    pc.px(16, 4, H[2]);
+    pc.px(17, 4, H[1]);
+    pc.px(16, 5, H[1]);
+    pc.hline(3, 15, 5, '#3a5a8a'); // boot stripe
+    pc.rect(8, 2, 3, 2, MIL.glass[1]); // windscreen
+    pc.px(10, 2, MIL.glass[2]);
+    pc.rect(6, 2, 2, 2, '#c8503a'); // driver
+    pc.px(6, 1, RAMP.skin[3]);
+    pc.rect(1, 3, 2, 3, MIL.grey[2]); // outboard
+    pc.px(1, 3, MIL.grey[4]);
+    pc.outline(OUTLINE, 0.5);
+    // wake (no outline)
+    const foam = '#e4f2f6';
+    pc.blend(0, 6 + f, foam, 0.9);
+    pc.blend(1, 7, foam, 0.8);
+    pc.blend(0, 7 - f, foam, 0.6);
+    pc.blend(4 + f, 7, foam, 0.55);
+    pc.blend(17, 6, foam, 0.7);
+    pc.blend(18, 6 - f, foam, 0.5);
+    add(`amb/motorboat/${f}`, pc, 10, 6);
+  }
 }

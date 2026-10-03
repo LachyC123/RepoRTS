@@ -37,6 +37,20 @@ export const RAMP = {
   hay: ['#8a6a24', '#a8862f', '#c4a23e', '#dcbd58'],
   fire: ['#5a1a10', '#a2301a', '#e0581e', '#f8902a', '#ffc548', '#fff0a0'],
   smoke: ['#3a3640', '#55505a', '#77727c', '#9a95a0', '#bdb8c2'],
+  // ---- modern era (appended)
+  /** poured concrete, faintly warm so it sits with the earthy terrain */
+  concrete: ['#3e3c40', '#504e50', '#646160', '#7a7672', '#908b84', '#a7a198', '#bdb7ac', '#d3cdc0'],
+  /** galvanised corrugated sheet */
+  corrugated: ['#363c46', '#4a525c', '#5f6872', '#77808a', '#909aa2', '#aab3b8', '#c6ccce'],
+  rust: ['#3a1c14', '#55291a', '#723820', '#8e4a26', '#aa602e', '#c27a3c'],
+  brick: ['#3a1a18', '#52221c', '#6c2c22', '#843828', '#9c4630', '#b2583a', '#c46e4c'],
+  asphalt: ['#232226', '#2c2a2f', '#353339', '#3f3c43', '#4a474e', '#57535a'],
+  olive: ['#22261a', '#2f3520', '#3e4528', '#4e5630', '#5f683a', '#737c46', '#899255'],
+  camo: ['#2a3420', '#3a4628', '#4c5830', '#5e6a38', '#6e7444'],
+  tarp: ['#1c3226', '#24402e', '#2e5038', '#3a6244', '#487452'],
+  sandbag: ['#4e4230', '#665640', '#7e6c50', '#968462', '#ac9a74', '#c2b08a'],
+  white: ['#6c7078', '#8a8e94', '#a8acae', '#c4c6c4', '#dcdcd6', '#eeece4'],
+  hazard: ['#1c1a1e', '#e0b028'],
 };
 
 export function ramp(name: keyof typeof RAMP): string[] {
@@ -54,3 +68,18 @@ export function pickRamp(r: string[], v: number, x: number, y: number, dither = 
   if (i >= n) i = n - 1;
   return r[i];
 }
+
+/** Modern-era military ramps (dark → light): uniforms, vehicles, brass. */
+export const MIL = {
+  olive: ['#262a1a', '#353a22', '#454b2c', '#576036', '#6b7442', '#838c54'],
+  drab: ['#2e2a1e', '#3e3826', '#524a32', '#675d3e', '#7e724e', '#978a62'],
+  khaki: ['#5a4e36', '#706244', '#887856', '#a08f68', '#b8a67e', '#cebe96'],
+  camo: ['#2a2a1c', '#3c3e26', '#545a34', '#6a5a3a', '#7a7e4a'],
+  grey: ['#25282c', '#33373c', '#454a50', '#5a6067', '#737a82', '#9097a0'],
+  steel: ['#1e2024', '#2c2f34', '#3c4046', '#50555c'],
+  rubber: ['#141418', '#1e1e24', '#2a2a32', '#3a3a44'],
+  brass: ['#7a5418', '#a8781e', '#d0a438', '#f0d070'],
+  denim: ['#1e2a44', '#2a3a5a', '#3a4e74', '#50668e'],
+  char: ['#140f12', '#1e1719', '#2a2124', '#3a2e2e'],
+  glass: ['#4a6a7a', '#7aa0b4', '#b4d4e4'],
+};

@@ -1,5 +1,5 @@
 import { PixelCanvas } from './PixelCanvas';
-import { OUTLINE, RAMP } from './palette';
+import { MIL, OUTLINE, RAMP } from './palette';
 import { blob } from './propArt';
 import { art } from './ArtRegistry';
 
@@ -237,6 +237,7 @@ export function buildFxArt() {
     sh.ellipse(2.5, 1.5, 2.5, 1.2, '#1a1020');
     add('fx/shadow', sh);
   }
+  buildModernFx(add);
   // ---- resource icons (also used by the HUD via data URLs)
   for (const [name, pc] of Object.entries(resourceIcons())) add(`icon/${name}`, pc);
   // ---- rally flag / capture banner
@@ -312,7 +313,7 @@ export function resourceIcons(): Record<string, PixelCanvas> {
   crown.px(3, 5, '#c83a3a');
   crown.px(6, 5, '#3a63c8');
   crown.outline(OUTLINE, 0.7);
-  iconCache = { gold, wood, food, stone, pop, sword, crown };
+  iconCache = { gold, wood, food, stone, pop, sword, crown, ...modernIcons() };
   return iconCache;
 }
 
@@ -321,4 +322,226 @@ export function iconDataUrl(name: string): string {
   const pc = resourceIcons()[name];
   if (!pc) return '';
   return pc.flush().toDataURL();
+}
+
+// ---------------------------------------------------------------------------------------------
+// modern era: tracers, rockets, shells, muzzle flashes, explosions, brass, scorch decals
+type AddFn = (name: string, pc: PixelCanvas, ax?: number, ay?: number) => void;
+
+function hashf(x: number, y: number, s: number): number {
+  const r = Math.sin(x * 127.1 + y * 311.7 + s * 74.7) * 43758.5453;
+  return r - Math.floor(r);
+}
+
+function buildModernFx(add: AddFn) {
+  const F = RAMP.fire;
+  const SM = RAMP.smoke;
+  // ---- projectiles (pointing right)
+  {
+    const b = new PixelCanvas(4, 1);
+    b.px(3, 0, '#ffffff');
+    b.px(2, 0, '#fff4b0');
+    b.blend(1, 0, '#ffd860', 0.85);
+    b.blend(0, 0, '#f0a030', 0.5);
+    add('fx/bullet', b, 2, 0.5);
+    const r = new PixelCanvas(7, 3);
+    r.hline(2, 5, 1, MIL.olive[3]);
+    r.px(3, 0, MIL.olive[4]);
+    r.px(6, 1, MIL.olive[1]);
+    r.px(5, 1, MIL.olive[2]);
+    r.px(2, 0, MIL.olive[1]);
+    r.px(2, 2, MIL.olive[1]);
+    r.px(1, 1, '#ffd860');
+    r.blend(0, 1, '#f08a28', 0.7);
+    add('fx/rocket', r, 3.5, 1.5);
+    const g = new PixelCanvas(3, 3);
+    g.px(1, 0, MIL.olive[3]);
+    g.rect(0, 1, 3, 2, MIL.olive[2]);
+    g.px(0, 1, MIL.olive[4]);
+    g.px(2, 2, MIL.olive[0]);
+    g.px(1, 0, '#8a8a80');
+    add('fx/grenade', g);
+    const sh = new PixelCanvas(3, 2);
+    sh.hline(0, 1, 0, MIL.grey[4]);
+    sh.hline(0, 1, 1, MIL.grey[2]);
+    sh.px(2, 0, MIL.grey[5]);
+    sh.px(2, 1, MIL.grey[3]);
+    add('fx/shell', sh);
+    const ts = new PixelCanvas(5, 2);
+    ts.hline(2, 4, 0, '#fff8d8');
+    ts.hline(2, 4, 1, '#ffd860');
+    ts.px(4, 0, '#ffffff');
+    ts.blend(1, 0, '#ffc040', 0.75);
+    ts.blend(1, 1, '#f08a28', 0.65);
+    ts.blend(0, 0, '#f08a28', 0.35);
+    add('fx/tankshell', ts, 2.5, 1);
+    const cs = new PixelCanvas(2, 1);
+    cs.px(0, 0, MIL.brass[2]);
+    cs.px(1, 0, MIL.brass[3]);
+    add('fx/casing', cs);
+  }
+  // ---- muzzle flashes (additive-friendly, anchored at the muzzle, pointing right)
+  {
+    const m0 = new PixelCanvas(7, 7);
+    m0.hline(1, 6, 3, '#ffe27a');
+    m0.vline(3, 1, 5, '#ffe27a');
+    m0.hline(2, 4, 3, '#ffffff');
+    m0.vline(3, 2, 4, '#ffffff');
+    m0.px(6, 3, '#ffc040');
+    m0.px(5, 2, '#ffc040');
+    m0.px(5, 4, '#ffc040');
+    m0.blend(2, 2, '#fff2a8', 0.6);
+    m0.blend(2, 4, '#fff2a8', 0.6);
+    add('fx/muzzle0', m0, 1, 3);
+    const m1 = new PixelCanvas(7, 7);
+    m1.line(1, 1, 5, 5, '#ffe27a');
+    m1.line(1, 5, 5, 1, '#ffe27a');
+    m1.hline(2, 6, 3, '#fff2a8');
+    m1.rect(2, 2, 3, 3, '#ffffff');
+    m1.px(6, 3, '#ffc040');
+    add('fx/muzzle1', m1, 1, 3);
+  }
+  // ---- explosion: flash → fireball → rolling fire under smoke → dark smoke → wisps (24×24, centred)
+  for (let k = 0; k < 6; k++) {
+    const pc = new PixelCanvas(24, 24);
+    const c = 11.5;
+    for (let y = 0; y < 24; y++)
+      for (let x = 0; x < 24; x++) {
+        const n = hashf(x, y, k + 3);
+        const dx = x - c;
+        const dy = (y - c) * (k >= 3 ? 1.1 : 1);
+        const d = Math.sqrt(dx * dx + dy * dy) + (n - 0.5) * 2.2;
+        switch (k) {
+          case 0: {
+            if (d < 3.2) pc.px(x, y, '#ffffff');
+            else if (d < 5.2) pc.px(x, y, F[5]);
+            else if (d < 6.6) pc.blend(x, y, F[4], 0.8);
+            else if (d < 8 && (Math.abs(dx) < 1 || Math.abs(dy) < 1 || Math.abs(Math.abs(dx) - Math.abs(dy)) < 1)) pc.blend(x, y, F[4], 0.7);
+            break;
+          }
+          case 1: {
+            const R = 8;
+            if (d > R) break;
+            const t = d / R;
+            pc.px(x, y, t < 0.35 ? F[5] : t < 0.6 ? F[4] : t < 0.82 ? F[3] : F[2]);
+            break;
+          }
+          case 2: {
+            const R = 10;
+            if (d > R) break;
+            const t = d / R;
+            const up = dy < -2 && n > 0.45;
+            pc.px(x, y, up && t > 0.6 ? SM[1] : t < 0.25 ? F[4] : t < 0.55 ? F[3] : t < 0.8 ? F[2] : F[1]);
+            break;
+          }
+          case 3: {
+            const R = 10.5;
+            if (d > R) break;
+            const t = d / R;
+            const core = Math.sqrt(dx * dx + (y - 15) * (y - 15)) < 4 + n * 1.5;
+            pc.px(x, y, core ? (n > 0.5 ? F[3] : F[2]) : t < 0.6 ? (n > 0.6 ? SM[2] : SM[1]) : SM[0]);
+            break;
+          }
+          case 4: {
+            const R = 11;
+            if (d > R) break;
+            const t = d / R;
+            pc.blend(x, y, t < 0.5 ? (n > 0.55 ? SM[2] : SM[1]) : n > 0.5 ? SM[1] : SM[0], 0.9);
+            if (n > 0.975 && t < 0.7) pc.px(x, y, F[2]);
+            break;
+          }
+          default: {
+            const R = 11.5;
+            if (d > R || n < 0.35) break;
+            pc.blend(x, y, n > 0.7 ? SM[3] : SM[2], 0.45 * (1 - d / R) + 0.1);
+          }
+        }
+      }
+    if (k >= 1 && k <= 4) pc.outline(OUTLINE, k <= 2 ? 0.35 : 0.55);
+    add(`fx/blast${k}`, pc, 12, 12);
+  }
+  // ---- scorch decal (dark, soft edges)
+  {
+    const pc = new PixelCanvas(18, 8);
+    for (let y = 0; y < 8; y++)
+      for (let x = 0; x < 18; x++) {
+        const dx = (x + 0.5 - 9) / 9;
+        const dy = (y + 0.5 - 4) / 4;
+        const d = Math.sqrt(dx * dx + dy * dy) + (hashf(x, y, 11) - 0.5) * 0.35;
+        if (d > 1) continue;
+        const a = d < 0.45 ? 0.8 : d < 0.75 ? 0.6 : 0.3;
+        pc.blend(x, y, d < 0.45 ? '#120c0c' : '#241a16', a);
+      }
+    add('fx/scorch', pc, 9, 4);
+  }
+  // ---- spark burst for bullet hits on armour
+  {
+    const pc = new PixelCanvas(5, 5);
+    pc.px(2, 2, '#ffffff');
+    pc.px(1, 1, '#ffe27a');
+    pc.px(3, 1, '#ffe27a');
+    pc.px(0, 0, '#ffc040');
+    pc.px(4, 0, '#ffc040');
+    pc.px(2, 3, '#ffc040');
+    pc.px(4, 3, '#f08a28');
+    add('fx/sparkhit', pc);
+  }
+}
+
+/** modern resource icons: cash, lumber, rations, steel, soldier */
+function modernIcons(): Record<string, PixelCanvas> {
+  const cash = new PixelCanvas(10, 10);
+  const B = ['#2e5a32', '#4a7e48', '#6a9e60', '#9ac88a'];
+  cash.rect(1, 4, 8, 4, B[1]);
+  cash.rect(2, 2, 7, 4, B[2]);
+  cash.hline(2, 8, 2, B[3]);
+  cash.px(5, 4, B[0]);
+  cash.px(5, 3, B[3]);
+  cash.hline(1, 8, 7, B[0]);
+  cash.vline(4, 2, 7, '#e0d4a8'); // paper band
+  cash.vline(5, 2, 7, '#c8b888');
+  cash.outline(OUTLINE, 0.7);
+  const lumber = new PixelCanvas(10, 10);
+  const P = ['#8a6a3a', '#b08a50', '#d4ae6e', '#ecd09a'];
+  for (let k = 0; k < 3; k++) {
+    lumber.rect(1, 2 + k * 2, 8, 2, k % 2 ? P[1] : P[2]);
+    lumber.hline(1, 8, 2 + k * 2, P[3]);
+    lumber.px(8, 3 + k * 2, P[0]);
+  }
+  lumber.vline(3, 2, 7, MIL.steel[2]); // strapping
+  lumber.vline(6, 2, 7, MIL.steel[2]);
+  lumber.outline(OUTLINE, 0.7);
+  const ration = new PixelCanvas(10, 10);
+  const O = MIL.olive;
+  ration.rect(2, 3, 6, 6, O[3]);
+  ration.ellipse(5, 3, 3, 1.3, MIL.grey[5]);
+  ration.ellipse(5, 3, 2, 0.8, MIL.grey[4]);
+  ration.rect(2, 5, 6, 2, '#d8c8a0'); // label
+  ration.px(3, 5, '#a83a2a');
+  ration.px(4, 5, '#a83a2a');
+  ration.vline(7, 3, 8, O[1]);
+  ration.hline(2, 7, 8, O[1]);
+  ration.outline(OUTLINE, 0.7);
+  const steel = new PixelCanvas(10, 10);
+  const S = ['#3a4450', '#56626e', '#7a8794', '#a8b4c0', '#d0d8e0'];
+  // I-beam end-on over a short length
+  steel.rect(1, 2, 8, 2, S[3]);
+  steel.hline(1, 8, 2, S[4]);
+  steel.rect(4, 4, 2, 3, S[2]);
+  steel.rect(1, 7, 8, 2, S[2]);
+  steel.hline(1, 8, 8, S[1]);
+  steel.px(5, 4, S[1]);
+  steel.px(8, 3, S[2]);
+  steel.outline(OUTLINE, 0.7);
+  const trooper = new PixelCanvas(10, 10);
+  trooper.rect(3, 3, 4, 3, RAMP.skin[3]);
+  trooper.px(5, 4, '#201820');
+  trooper.hline(3, 6, 1, O[4]);
+  trooper.hline(2, 7, 2, O[3]);
+  trooper.px(4, 1, O[5]);
+  trooper.rect(2, 6, 6, 3, O[3]);
+  trooper.hline(2, 7, 6, O[4]);
+  trooper.px(2, 7, '#c23a32');
+  trooper.outline(OUTLINE, 0.7);
+  return { m_gold: cash, m_wood: lumber, m_food: ration, m_stone: steel, m_pop: trooper };
 }
