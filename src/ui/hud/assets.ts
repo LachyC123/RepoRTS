@@ -43,7 +43,10 @@ export function buildingPreviewUrl(type: string, color: KingdomColor | null): st
   return u;
 }
 
-export function icon(name: string): string {
+const MODERN_ICONS = new Set(['gold', 'wood', 'food', 'stone', 'pop']);
+export function icon(name0: string): string {
+  // resources and population have their own modern icons
+  const name = isModern() && MODERN_ICONS.has(name0) ? 'm_' + name0 : name0;
   let u = icons.get(name);
   if (!u) {
     u = iconDataUrl(name);

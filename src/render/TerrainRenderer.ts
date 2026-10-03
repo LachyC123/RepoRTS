@@ -2,6 +2,7 @@ import Phaser from 'phaser';
 import { canvasTexture } from './texUtil';
 import { TILE } from '../data/constants';
 import { CHUNK, type GameMap } from '../sim/map/GameMap';
+import { isModern } from '../data/era';
 import { buildFields, minimapColor, paintChunk, type TerrainFields } from './art/terrainArt';
 // bundled inline so the game also runs as one self-contained HTML file (no separate worker URL)
 import TerrainWorker from './terrainWorker.ts?worker&inline';
@@ -78,6 +79,7 @@ export class TerrainRenderer {
       crop: m.crop,
       crossings: m.crossings,
       roads: m.roads,
+      asphalt: isModern(),
     };
     try {
       for (let i = 0; i < n; i++) {
@@ -104,6 +106,7 @@ export class TerrainRenderer {
     this.fallbackMode = true;
     for (const w of this.workers) w.terminate();
     this.workers = [];
+    (this.map as typeof this.map & { asphalt?: boolean }).asphalt = isModern();
     this.fields = buildFields(this.map);
     for (const c of this.inflight) this.queue.unshift(c);
     this.inflight.clear();

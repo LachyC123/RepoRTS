@@ -5,7 +5,8 @@ import { T } from '../sim/map/GameMap';
 import type { Settlement } from '../sim/territory/Settlement';
 import type { World } from '../sim/World';
 import { art } from './art/ArtRegistry';
-import { VILLAGER_KINDS } from './art/animalArt';
+import { MODERN_VILLAGER_KINDS, VILLAGER_KINDS } from './art/animalArt';
+import { isModern } from '../data/era';
 import type { SortObj, YSortLayer } from './YSortLayer';
 import type { Particles } from './Particles';
 
@@ -103,7 +104,8 @@ export class Ambient {
     }
     const nVill = Math.round((s.isCapital ? 8 + (s.tier - 3) * 4 : s.tier >= 4 ? 9 : s.tier === 3 ? 6 : s.tier === 2 ? 4 : 1) * q);
     for (let k = 0; k < nVill; k++) {
-      const sub = VILLAGER_KINDS[(s.id + k) % VILLAGER_KINDS.length];
+      const kinds = isModern() ? MODERN_VILLAGER_KINDS : VILLAGER_KINDS;
+      const sub = kinds[(s.id + k) % kinds.length];
       const [x, y] = this.randomSpot(s, 7);
       const a = this.addAgent('villager', sub, `amb/villager_${sub}/0`, x, y, s.id, 16 + Math.random() * 6);
       a.wait = Math.random() * 4;
@@ -112,7 +114,8 @@ export class Ambient {
       const g = Math.round(2 * q);
       for (let k = 0; k < g; k++) {
         const [x, y] = this.randomSpot(s, 6);
-        this.addAgent('guard', 'guard', 'amb/villager_guard/0', x, y, s.id, 14);
+        const sub = isModern() ? 'm_guard' : 'guard';
+        this.addAgent('guard', sub, `amb/villager_${sub}/0`, x, y, s.id, 14);
       }
     }
     // livestock near farms
@@ -360,7 +363,9 @@ export class Ambient {
     const i0 = dir > 0 ? 0 : c.path.length - 1;
     const x = (c.path[i0] % m.w) * TILE + 8;
     const y = Math.floor(c.path[i0] / m.w) * TILE + 8;
-    const a = this.addAgent('cart', 'cart', 'amb/cart/0', x, y, -1, 18);
+    // modern roads carry lorries and little cars, faster than carts
+    const sub = isModern() ? (Math.random() < 0.45 ? 'truck' : 'car') : 'cart';
+    const a = this.addAgent('cart', sub, `amb/${sub}/0`, x, y, -1, sub === 'car' ? 34 : sub === 'truck' ? 26 : 18);
     a.road = { path: c.path, i: i0, dir };
   }
 
@@ -387,7 +392,7 @@ export class Ambient {
     a.img.setPosition(Math.round(a.x), Math.round(a.y));
     a.img.sy = a.y;
     a.img.setFlipX(a.facing < 0);
-    const f = art.get(`amb/cart/${Math.floor(a.t * 4) & 1}`);
+    const f = art.get(`amb/${a.sub}/${Math.floor(a.t * 4) & 1}`);
     a.img.setTexture(f.key, f.frame);
   }
 
@@ -407,7 +412,8 @@ export class Ambient {
       let wide = 0;
       for (let dy = -2; dy <= 2; dy++) for (let dx = -2; dx <= 2; dx++) if (m.terrain[(ty + dy) * m.w + tx + dx] === T.WATER) wide++;
       const kind: Kind = wide > 22 && Math.random() < 0.4 ? 'boat' : 'duck';
-      const a = this.addAgent(kind, kind, `amb/${kind}/0`, x, y, -1, kind === 'boat' ? 6 : 4);
+      const sub = kind === 'boat' && isModern() ? 'motorboat' : kind;
+      const a = this.addAgent(kind, sub, `amb/${sub}/0`, x, y, -1, kind === 'boat' ? (sub === 'motorboat' ? 12 : 6) : 4);
       a.tx = x;
       a.ty = y;
       break;
@@ -452,7 +458,7 @@ export class Ambient {
     a.img.setPosition(Math.round(a.x), Math.round(a.y + Math.sin(time * 2 + a.t) * 0.5));
     a.img.sy = a.y;
     a.img.setFlipX(a.facing < 0);
-    const f = art.get(`amb/${a.kind}/${Math.floor(time * (a.kind === 'boat' ? 1.5 : 2) + a.t) % 2}`);
+    const f = art.get(`amb/${a.sub}/${Math.floor(time * (a.kind === 'boat' ? (a.sub === 'motorboat' ? 4 : 1.5) : 2) + a.t) % 2}`);
     a.img.setTexture(f.key, f.frame);
   }
 

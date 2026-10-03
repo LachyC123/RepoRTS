@@ -21,6 +21,7 @@ interface Ramps {
   hill: PRamp;
   dirt: PRamp;
   road: PRamp;
+  asphalt: PRamp;
   sand: PRamp;
   rock: PRamp;
   snow: PRamp;
@@ -45,6 +46,7 @@ function ramps(): Ramps {
       hill: P(RAMP.hill),
       dirt: P(RAMP.dirt),
       road: P(RAMP.road),
+      asphalt: P(['#2a282e', '#35333a', '#403e46', '#4b4952', '#57555e', '#66646c']),
       sand: P(RAMP.sand),
       rock: P(RAMP.rock),
       snow: P(RAMP.snow),
@@ -232,6 +234,9 @@ function sampleField(f: Float32Array, fw: number, fh: number, x: number, y: numb
   return (a * (1 - xf) + b * xf) * (1 - yf) + (c * (1 - xf) + d * xf) * yf;
 }
 
+const PAINT_Y = toPacked('#d8c058');
+const PAINT_W = toPacked('#b8b6b8');
+const PAINT_W0 = toPacked('#8a888c');
 const M_WATER = 100;
 const M_BRIDGE = 101;
 const isW = (v: number) => v === M_WATER;
@@ -241,6 +246,8 @@ const isW = (v: number) => v === M_WATER;
  */
 export function paintChunk(map: GameMap, f: TerrainFields, cx: number, cy: number, out: Uint32Array) {
   const R = ramps();
+  // modern era: tarmac roads with painted lines (flag sent to the worker with the map)
+  const asphalt = !!(map as GameMap & { asphalt?: boolean }).asphalt;
   const S = CHUNK * TILE;
   const W = map.w;
   const H = map.h;
@@ -394,6 +401,23 @@ export function paintChunk(map: GameMap, f: TerrainFields, cx: number, cy: numbe
         }
         case T.ROAD: {
           const rd = roadD[mi];
+          if (asphalt) {
+            let v = 0.5 + (nz - 0.5) * 0.25 + (nzf - 0.5) * 0.25 + light * 0.45;
+            if (rd > ROAD_HW - 0.9) {
+              // gravel shoulder
+              c = q(R.road, 0.35 + (nzf - 0.5) * 0.5 + light * 0.4, wx, wy, 0.6);
+              break;
+            }
+            const along = wx * roadDX[mi] + wy * roadDY[mi];
+            if (rd < 0.55 && (((along / 5) | 0) & 1) === 0 && Math.abs(along) % 5 > 0.6) c = PAINT_Y;
+            else if (Math.abs(rd - (ROAD_HW - 1.6)) < 0.45) c = fine < 0.2 ? PAINT_W0 : PAINT_W;
+            else {
+              if (Math.abs(rd - 2.4) < 0.7) v -= 0.08; // worn wheel tracks
+              c = q(R.asphalt, v, wx, wy, 0.5);
+              if (fine < 0.02) c = R.asphalt[fine < 0.01 ? 0 : 4]; // cracks and chips
+            }
+            break;
+          }
           let v = 0.62 + (nz - 0.5) * 0.5 + (nzf - 0.5) * 0.2 + light * 0.5;
           if (rd > ROAD_HW - 1.6) v -= 0.28;
           else if (Math.abs(rd - 2.2) < 0.6) v -= 0.12; // cart ruts

@@ -33,7 +33,7 @@ export interface SimEvents {
   unitEngaged: { id: number; x: number; y: number; faction: FactionId; tx: number; ty: number };
   unitRouted: { id: number; x: number; y: number; faction: FactionId };
   unitRallied: { id: number; x: number; y: number; faction: FactionId };
-  projectileFired: { id: number; kind: string; x: number; y: number; tx: number; ty: number; faction: FactionId };
+  projectileFired: { id: number; kind: string; x: number; y: number; tx: number; ty: number; faction: FactionId; /** shooter unit type ('' for towers) */ by: string };
   projectileLanded: { id: number; kind: string; x: number; y: number; hit: boolean; splash: number };
   buildingHit: { id: number; x: number; y: number; dmg: number; siege: boolean };
   buildingDestroyed: { id: number; x: number; y: number; type: string; size: number; faction: FactionId };

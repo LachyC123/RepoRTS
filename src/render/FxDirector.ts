@@ -1,4 +1,5 @@
 import Phaser from 'phaser';
+import { isModern } from '../data/era';
 import { audio } from '../audio';
 import type { SfxName } from '../audio';
 import { TILE } from '../data/constants';
@@ -23,6 +24,8 @@ interface Floater {
   y: number;
 }
 
+/** projectiles of the modern era (FX handled by onGunFired) */
+const GUN_KINDS = new Set(['bullet', 'rocket', 'grenade', 'shell', 'tankshell']);
 const DUST = 0xc8b898;
 
 /**
@@ -84,6 +87,7 @@ export class FxDirector {
     e.on('projectileFired', (ev) => {
       if (!this.near(ev.x, ev.y, 260)) return;
       const k = ev.kind;
+      if (GUN_KINDS.has(k)) return this.onGunFired(ev);
       this.sfx(k === 'arrow' ? 'arrow_shoot' : k === 'bolt' ? 'bolt_shoot' : k === 'ballista' ? 'ballista_shoot' : 'catapult_launch', ev.x, ev.y, k === 'arrow' ? 0.35 : 0.7);
       if (k === 'rock' || k === 'bigrock') {
         // the engine bucks: dust kicks out from under it
@@ -288,14 +292,16 @@ export class FxDirector {
       this.fx.burst(1, { frame: 'fx/puff2', x: ev.x, y: ev.y, life: 0.4, tint: DUST, alpha: 0.6, s0: 0.8, s1: 1.3 }, 10, 0);
       this.sfx(metal && Math.random() < 0.7 ? 'sword_clash' : 'sword_hit', ev.x, ev.y, 0.55);
     } else if (ev.kind === 'pierce') {
-      if (metal) {
+      if (metal || target?.def.look.body === 'vehicle') {
         // arrowhead skips off armour
         this.fx.burst(2, { frame: 'fx/spark', x: ev.x, y: hy, life: 0.18, add: true }, 50, 10, 1.8, dir + Math.PI);
       } else {
         this.fx.emit({ frame: 'fx/dot2', x: ev.x, y: hy, life: 0.15, add: true });
         this.fx.burst(2, { frame: 'fx/dot', x: ev.x, y: hy, z: 2, life: 0.3, g: 160, tint: 0x8a2a2a, ground: 'die' }, 20, 20);
       }
-      this.sfx('arrow_hit', ev.x, ev.y, 0.4);
+      if (UNITS[ev.by]?.projectile === 'bullet') {
+        if (target?.def.look.body === 'vehicle' && Math.random() < 0.3) this.sfx('ricochet', ev.x, ev.y, 0.3);
+      } else this.sfx('arrow_hit', ev.x, ev.y, 0.4);
     } else {
       this.fx.burst(4, { frame: 'fx/puff4', x: ev.x, y: ev.y, life: 0.8, tint: DUST, alpha: 0.8, s0: 0.6, s1: 1.4, drag: 2 }, 30, 10);
     }
@@ -311,6 +317,12 @@ export class FxDirector {
     this.fx.burst(4, { frame: 'fx/puff3', x: ev.x, y: ev.y, life: 0.6, s0: 0.6, s1: 1.2, tint: DUST, alpha: 0.7, drag: 3 }, 18, 6);
     if (!def || ev.type.startsWith('worker')) return;
     const look = def.look;
+    if (look.body === 'vehicle' || (isModern() && look.body === 'engine')) {
+      // the vehicle brews up
+      this.explosion(ev.x, ev.y - 4, look.vehicle === 'tank' ? 1.7 : 1.2);
+      this.fx.burst(10, { frame: 'fx/stonechip', x: ev.x, y: ev.y - 8, z: 8, life: 1.1, g: 260, ground: 'bounce', spin: 12, tint: 0x5a5a50 }, 80, 100);
+      return;
+    }
     if (look.body === 'engine') {
       // timbers burst apart
       this.fx.burst(14, { frame: 'fx/woodchip', x: ev.x, y: ev.y - 6, z: 8, life: 1, g: 240, ground: 'bounce', spin: 10 }, 70, 90);
@@ -361,8 +373,88 @@ export class FxDirector {
     this.fx.burst(8, { frame: 'fx/dot2', x, y: y - 4, z: 2, life: 1.2, g: -40, tint, add: true, drag: 1 }, 12, 30);
   }
 
+  /** modern weapons: muzzle flash, brass, smoke and the right report */
+  private onGunFired(ev: { kind: string; x: number; y: number; tx: number; ty: number; by: string }) {
+    const k = ev.kind;
+    const look = UNITS[ev.by]?.look;
+    const dir = Math.atan2(ev.ty - ev.y, ev.tx - ev.x);
+    const right = Math.cos(dir) >= 0 ? 1 : -1;
+    // muzzle offsets (px, facing right) from the unit sheets
+    let mx = 7;
+    let my = -6;
+    if (look?.vehicle === 'tank') [mx, my] = [16, -14];
+    else if (look?.body === 'vehicle') [mx, my] = [6, -15];
+    else if (look?.engine === 'atgun') [mx, my] = [11, -8];
+    else if (look?.engine === 'howitzer') [mx, my] = [13, -17];
+    else if (look?.engine === 'mortar') [mx, my] = [4, -12];
+    else if (!look) [mx, my] = [0, 0];
+    const x = ev.x + mx * right;
+    const y = ev.y + my;
+    const big = k === 'tankshell' || k === 'shell' || look?.engine === 'atgun';
+    const near = this.cam.zoom > 1.1;
+    if (near || big) {
+      const up = look?.engine === 'mortar' || look?.engine === 'howitzer';
+      this.fx.emit({ frame: 'fx/muzzle0', frames: ['fx/muzzle0', 'fx/muzzle1'], fps: 30, x, y, life: big ? 0.12 : 0.07, rot: up ? (right > 0 ? -1 : -Math.PI + 1) : dir, flipX: false, add: true, s0: big ? 1.6 : 0.8, s1: big ? 1.2 : 0.6 });
+    }
+    if (k === 'bullet') {
+      const w = look?.weapon;
+      // brass flicks out of rifles and machine guns
+      if (near && !this.reduced && (w === 'rifle' || w === 'mg' || w === 'smg' || w === 'sniper' || look?.body === 'vehicle'))
+        this.fx.emit({ frame: 'fx/casing', x: ev.x + 2 * right, y: y + 1, z: 2, vx: -right * (20 + Math.random() * 20), vy: (Math.random() - 0.5) * 10, vz: 40, g: 300, life: 0.7, ground: 'bounce', spin: 20 });
+      const snd = !look ? 'mg_burst' : w === 'mg' || look.body === 'vehicle' ? 'mg_burst' : w === 'smg' ? 'smg_burst' : w === 'sniper' ? 'sniper_shot' : w === 'shotgun' ? 'shotgun' : 'rifle_shot';
+      this.sfx(snd, ev.x, ev.y, w === 'pistol' ? 0.25 : snd === 'sniper_shot' ? 0.6 : 0.4);
+      return;
+    }
+    // heavy weapons: a cough of smoke and a thump
+    this.fx.burst(big ? 6 : 3, { frame: 'fx/puff4', x, y, life: 0.9, s0: 0.5, s1: big ? 1.8 : 1.2, tint: 0xc8c0b0, alpha: 0.7, drag: 2.5, g: -10 }, 25, 4);
+    if (k === 'rocket') {
+      // backblast
+      this.fx.burst(4, { frame: 'fx/puff4', x: ev.x - 8 * right, y: y + 1, life: 0.8, s0: 0.6, s1: 1.6, tint: 0xe8e0d0, alpha: 0.75, drag: 3 }, 40, 4, 0.8, dir + Math.PI);
+      this.sfx('rocket_launch', ev.x, ev.y, 0.6);
+    } else if (k === 'grenade') this.sfx('mortar_launch', ev.x, ev.y, 0.3);
+    else if (k === 'shell') {
+      this.sfx(look?.engine === 'howitzer' ? 'tank_fire' : 'mortar_launch', ev.x, ev.y, 0.7);
+      // the incoming whistle, heard where it will land
+      if (!this.reduced) this.sfx('shell_whistle', ev.tx, ev.ty, 0.35);
+      if (look?.engine === 'howitzer') this.shake(1.2, ev.x, ev.y);
+    } else if (k === 'tankshell') {
+      this.sfx('tank_fire', ev.x, ev.y, 0.8);
+      this.ring(ev.x, ev.y, 22, DUST, 0.4, 0.5);
+      this.shake(0.8, ev.x, ev.y);
+    }
+  }
+
+  /** a modern explosion: flash, fireball, smoke, dirt and a scorch mark */
+  explosion(x: number, y: number, size: number) {
+    const frames = ['fx/blast0', 'fx/blast1', 'fx/blast2', 'fx/blast3', 'fx/blast4', 'fx/blast5'];
+    this.fx.emit({ frame: 'fx/blast0', frames, fps: 14, x, y: y - 6 * size, life: 6 / 14, s0: size, s1: size * 1.15 });
+    if (!this.reduced) {
+      for (let k = 0; k < Math.round(3 * size); k++)
+        this.fx.emit({ frame: 'fx/blast4', frames: ['fx/blast4', 'fx/blast5'], fps: 3, x: x + (Math.random() - 0.5) * 12 * size, y: y - 4 - Math.random() * 6, vz: 10 + Math.random() * 10, vx: (Math.random() - 0.5) * 12, life: 0.9 + Math.random() * 0.6, s0: 0.5 * size, s1: 1.1 * size, alpha: 0.8, drag: 1.5 });
+      this.addDecal('fx/scorch', x, y, size, 30);
+    }
+    this.fx.burst(Math.round(8 * size), { frame: 'fx/dirt', x, y, z: 2, life: 0.9, g: 260, ground: 'stop' }, 60 * size, 90 * size);
+    this.fx.burst(Math.round(4 * size), { frame: 'fx/spark', x, y: y - 4, life: 0.35, add: true }, 80 * size, 40);
+    this.ring(x, y, 22 * size, 0xffd8a0, 0.35, 0.7);
+    this.shake(1.6 * size, x, y);
+    this.sfx('explosion', x, y, Math.min(1, 0.55 + size * 0.2));
+  }
+
   private onLand(ev: { kind: string; x: number; y: number; hit: boolean; splash: number }) {
     if (!this.near(ev.x, ev.y, 100)) return;
+    if (ev.kind === 'rocket' || ev.kind === 'grenade' || ev.kind === 'shell' || ev.kind === 'tankshell') {
+      const size = ev.kind === 'shell' ? (ev.splash > 30 ? 1.6 : 1.2) : ev.kind === 'grenade' ? 0.7 : ev.kind === 'tankshell' ? 1.1 : 0.9;
+      this.explosion(ev.x, ev.y, size);
+      return;
+    }
+    if (ev.kind === 'bullet') {
+      if (!ev.hit && this.cam.zoom > 1.2) {
+        this.fx.emit({ frame: 'fx/dirt', x: ev.x, y: ev.y, z: 1, vz: 40, vx: (Math.random() - 0.5) * 30, g: 260, life: 0.3, ground: 'stop' });
+        this.fx.emit({ frame: 'fx/puff2', x: ev.x, y: ev.y, life: 0.35, s0: 0.4, s1: 0.8, tint: DUST, alpha: 0.6 });
+        if (Math.random() < 0.08) this.sfx('ricochet', ev.x, ev.y, 0.25);
+      }
+      return;
+    }
     if (ev.kind === 'rock' || ev.kind === 'bigrock') {
       const big = ev.kind === 'bigrock';
       for (let k = 0; k < (big ? 14 : 9); k++)
@@ -532,8 +624,13 @@ export class FxDirector {
         if (Math.random() < 0.4) this.fx.emit({ frame: 'fx/puff2', x, y, life: 0.5, tint: 0xb8a888, alpha: 0.5, s0: 0.8, s1: 1.4 });
       } else {
         r.img.setRotation(ang);
-        // faint fletching trail
-        if (trails && Math.random() < 0.4) this.fx.emit({ frame: 'fx/dot', x, y, life: 0.22, tint: 0xf8f0e0, alpha: 0.45, fadeAll: true });
+        if (p.kind === 'rocket' || p.kind === 'shell') {
+          // smoke trail
+          if (Math.random() < (p.kind === 'rocket' ? 0.9 : 0.35)) this.fx.emit({ frame: 'fx/puff2', x, y, life: 0.6, tint: 0xe0d8d0, alpha: 0.55, s0: 0.5, s1: 1.2, drag: 2 });
+        } else if (p.kind === 'bullet' || p.kind === 'tankshell') {
+          // tracer
+          if (trails && Math.random() < 0.5) this.fx.emit({ frame: 'fx/dot2', x, y, life: 0.08, tint: 0xfff0a0, add: true });
+        } else if (trails && Math.random() < 0.4) this.fx.emit({ frame: 'fx/dot', x, y, life: 0.22, tint: 0xf8f0e0, alpha: 0.45, fadeAll: true });
       }
       r.shadow.setPosition(x, yGround).setScale(p.kind === 'rock' || p.kind === 'bigrock' ? 1.4 : 0.8, 0.8);
     }

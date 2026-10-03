@@ -519,7 +519,7 @@ export class CombatSystem {
       buildingsOnly: !!s.buildingsOnly,
     };
     this.projectiles.push(p);
-    w.events.emit('projectileFired', { id: p.id, kind: p.kind, x: p.x0, y: p.y0, tx, ty, faction: p.faction });
+    w.events.emit('projectileFired', { id: p.id, kind: p.kind, x: p.x0, y: p.y0, tx, ty, faction: p.faction, by: s.shooterId ? w.unitById.get(s.shooterId)?.def.id ?? '' : '' });
   }
 
   private updateProjectiles(dt: number) {

@@ -850,7 +850,7 @@ export class HUD {
             });
           }
         }
-        if (b.def.id === 'market') acts.push({ id: 'trade', label: 'TRADE', glyph: '⚖', press: () => this.openTradeSheet(), tip: { title: 'Trade goods', desc: 'Buy and sell food, wood and stone for gold.' } });
+        if (b.def.id === 'market') acts.push({ id: 'trade', label: 'TRADE', glyph: '⚖', press: () => this.openTradeSheet(), tip: { title: 'Trade goods', desc: `Buy and sell ${resName('food').toLowerCase()}, ${resName('wood').toLowerCase()} and ${resName('stone').toLowerCase()} for ${resName('gold').toLowerCase()}.` } });
         if (w.settlementSys.allTrainableAt(b).length) acts.push({ id: 'rally', label: 'RALLY', glyph: '⚑', active: this.mode === 'rally', press: () => c.setMode(this.mode === 'rally' ? 'default' : 'rally'), tip: { title: 'Set rally point', desc: 'New recruits gather there. (Right-click on desktop)' } });
       }
       acts.push({ id: 'demolish', label: 'DEMOLISH', glyph: '⚒', long: () => c.cmdDemolish(b.id), press: () => this.toast('Hold to demolish'), tip: { title: 'Demolish', desc: 'Press and hold to tear down and free the plot.' } });
@@ -1137,18 +1137,19 @@ export class HUD {
     const c = this.client;
     const w = c.world;
     const n = w.settlementSys.marketCount(c.playerFaction as FactionId);
-    const sh = this.sheet(n ? 'Market' : 'Royal Caravans');
+    const sh = this.sheet(n ? 'Market' : isModern() ? 'Supply Convoys' : 'Royal Caravans');
+    const gold = resName('gold').toLowerCase();
     const r = tradeRates(n);
     el('div', 'sel-sub', sh, n ? `Trade lots of ${TRADE_LOT}. More markets give better rates.` : `Trade lots of ${TRADE_LOT} at poor rates. Build a Market for better ones.`);
     const grid = el('div', 'grid', sh);
     for (const res of ['food', 'wood', 'stone'] as const) {
       const sell = el('div', 'card', grid);
       (el('img', 'prev', sell) as HTMLImageElement).src = icon(res);
-      el('div', '', sell, `<div class="cn">Sell ${TRADE_LOT} ${res}</div><div class="ch">+${r.sell} gold</div>`);
+      el('div', '', sell, `<div class="cn">Sell ${TRADE_LOT} ${resName(res).toLowerCase()}</div><div class="ch">+${r.sell} ${gold}</div>`);
       onPress(sell, () => c.cmdTrade(res, false));
       const buy = el('div', 'card', grid);
       (el('img', 'prev', buy) as HTMLImageElement).src = icon(res);
-      el('div', '', buy, `<div class="cn">Buy ${TRADE_LOT} ${res}</div><div class="ch">−${r.buy} gold</div>`);
+      el('div', '', buy, `<div class="cn">Buy ${TRADE_LOT} ${resName(res).toLowerCase()}</div><div class="ch">−${r.buy} ${gold}</div>`);
       onPress(buy, () => c.cmdTrade(res, true));
     }
   }

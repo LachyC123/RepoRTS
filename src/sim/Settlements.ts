@@ -1,3 +1,4 @@
+import { isModern, resName } from '../data/era';
 import { hash2 } from '../core/Random';
 import { BUILDINGS, FORTIFY, type BuildingDef } from '../data/buildings';
 import { NEUTRAL, RES_KEYS, TILE, type Cost, type FactionId } from '../data/constants';
@@ -327,11 +328,11 @@ export class SettlementSystem {
     const f = this.w.factions[faction];
     const r = tradeRates(n);
     if (buy) {
-      if (f.res.gold < r.buy) return { ok: false, reason: 'Not enough gold' };
+      if (f.res.gold < r.buy) return { ok: false, reason: `Not enough ${resName('gold').toLowerCase()}` };
       f.res.gold -= r.buy;
       f.res[res] += TRADE_LOT;
     } else {
-      if (f.res[res] < TRADE_LOT) return { ok: false, reason: `Not enough ${res}` };
+      if (f.res[res] < TRADE_LOT) return { ok: false, reason: `Not enough ${resName(res).toLowerCase()}` };
       f.res[res] -= TRADE_LOT;
       f.res.gold += r.sell;
     }
@@ -484,7 +485,7 @@ export class SettlementSystem {
     const shots = b.def.id === 'capital_castle' ? 2 : 1;
     for (let k = 0; k < shots; k++) {
       w.combat.fireProjectile({
-        kind: 'arrow',
+        kind: isModern() ? 'bullet' : 'arrow',
         faction: b.faction,
         shooterId: 0,
         fromBuilding: b.id,

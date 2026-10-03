@@ -1,3 +1,4 @@
+import { resName } from '../../data/era';
 import { NEUTRAL, TILE, type FactionId } from '../../data/constants';
 import { REGION_YIELD } from '../../data/settlements';
 import type { World } from '../World';
@@ -106,7 +107,7 @@ export class CaptureSystem {
     }
     add.gold = (add.gold ?? 0) + s.tax.gold;
     if (s.tax.food) add.food = (add.food ?? 0) + s.tax.food;
-    for (const k of ['gold', 'wood', 'food', 'stone']) if (add[k]) yields.push(`+${add[k]} ${k[0].toUpperCase() + k.slice(1)}/min`);
+    for (const k of ['gold', 'wood', 'food', 'stone']) if (add[k]) yields.push(`+${add[k]} ${resName(k)}/min`);
     if (s.popCap) yields.push(`+${s.popCap} Population`);
     w.events.emit('regionCaptured', { regionId: s.id, from, to, x: s.px, y: s.py });
     // celebration: victorious soldiers on the square cheer
