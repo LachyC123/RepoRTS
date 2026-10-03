@@ -35,6 +35,9 @@ export class ArtRegistry {
 
   private pendingNames = new Set<string>();
   private aliases: [string, string][] = [];
+  /** every atlas page built so far, kept so a new Phaser game (next match) can re-upload them */
+  private pages: { key: string; canvas: HTMLCanvasElement; frames: { name: string; x: number; y: number; w: number; h: number }[] }[] = [];
+  private textureManager: unknown = null;
 
   add(name: string, pc: PixelCanvas, ax: number, ay: number) {
     this.pending.push({ name, pc, ax, ay });
@@ -63,6 +66,15 @@ export class ArtRegistry {
 
   /** pack pending frames into pages and upload */
   build(scene: Phaser.Scene, prefix = 'atlas') {
+    // a new game (restart, rematch, loaded save) has an empty texture manager: re-upload old pages
+    if (this.textureManager !== scene.textures) {
+      this.textureManager = scene.textures;
+      for (const pg of this.pages) {
+        if (scene.textures.exists(pg.key)) continue;
+        const tex = canvasTexture(scene, pg.key, pg.canvas);
+        for (const f of pg.frames) tex.add(f.name, 0, f.x, f.y, f.w, f.h);
+      }
+    }
     if (!this.pending.length) {
       this.resolveAliases();
       return;
@@ -80,8 +92,11 @@ export class ArtRegistry {
     const flush = () => {
       if (!page) return;
       const tex = canvasTexture(scene, key, page);
+      const rec = { key, canvas: page, frames: [] as { name: string; x: number; y: number; w: number; h: number }[] };
+      this.pages.push(rec);
       for (const it of placed) {
         tex.add(it.p.name, 0, it.x, it.y, it.p.pc.w, it.p.pc.h);
+        rec.frames.push({ name: it.p.name, x: it.x, y: it.y, w: it.p.pc.w, h: it.p.pc.h });
         this.frames.set(it.p.name, { key, frame: it.p.name, w: it.p.pc.w, h: it.p.pc.h, ox: it.p.ax / it.p.pc.w, oy: it.p.ay / it.p.pc.h });
       }
       placed = [];

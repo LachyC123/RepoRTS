@@ -10,8 +10,7 @@ import { Selection } from '../input/Selection';
 import type { CameraController } from '../render/CameraController';
 import { GameScene } from '../render/GameScene';
 import { AUTO_POLICY, type AIController, type AutoPolicy } from '../sim/ai/AIController';
-import { AIManager } from '../sim/ai/AIManager';
-import { WorldEvents } from '../sim/events/WorldEvents';
+import { createMatchWorld } from '../sim/save/SaveGame';
 import type { FormationKind } from '../sim/units/Formation';
 import type { Unit } from '../sim/units/Unit';
 import { World, type MatchSetup } from '../sim/World';
@@ -51,11 +50,10 @@ export class GameClient {
   constructor(
     setup: MatchSetup,
     private parent: HTMLElement,
+    /** a world restored from a save game */
+    loaded?: World,
   ) {
-    this.world = new World(setup);
-    this.world.initMatch();
-    this.world.ai = new AIManager(this.world);
-    this.world.events2 = new WorldEvents(this.world);
+    this.world = loaded ?? createMatchWorld(setup);
     this.playerFaction = setup.player;
     this.selection = new Selection(this.world);
     this.formation = settings.data.formation;

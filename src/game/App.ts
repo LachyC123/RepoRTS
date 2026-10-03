@@ -5,7 +5,10 @@ import { T } from '../sim/map/GameMap';
 import { HUD } from '../ui/hud/HUD';
 import { el } from '../ui/hud/dom';
 import { MenuBackground } from '../ui/menus/MenuBackground';
-import { credits, endScreen, howToPlay, loadingScreen, mainMenu, orientationGuard, pauseMenu, settingsScreen, setupScreen } from '../ui/menus/Screens';
+import { credits, endScreen, howToPlay, loadingScreen, mainMenu, orientationGuard, pauseMenu, savesScreen, settingsScreen, setupScreen } from '../ui/menus/Screens';
+import { loadWorld, saveWorld, type SaveFile } from '../sim/save/SaveGame';
+import { saveStore, SLOT_LABEL, SLOTS, type SlotId } from './SaveStore';
+import { formatTime } from '../core/math';
 import { GameClient } from './GameClient';
 import { playIntro } from './Intro';
 import { buildMatchSetup, DEFAULT_CHOICES, type PlayerChoices } from './matchSetup';
@@ -60,11 +63,21 @@ export class App {
     this.screen = null;
   }
 
-  showMenu() {
+  showMenu(saves?: Awaited<ReturnType<typeof saveStore.list>>) {
     this.clearScreen();
     music.setState('menu');
     if (!this.menuBg) this.menuBg = new MenuBackground(this.uiEl);
+    if (!saves) {
+      // list saves in the background, then offer CONTINUE / LOAD
+      void saveStore.list().then((rows) => {
+        if (rows.length && this.screen?.classList.contains('main') && !this.client) this.showMenu(rows);
+      });
+    }
+    const latest = saves?.[0];
     this.screen = mainMenu(this.uiEl, {
+      cont: latest ? () => this.loadSlot(latest.slot) : undefined,
+      contLabel: latest ? `${latest.meta.realm.replace(/^(Kingdom|Republic) of /, '')} · ${formatTime(latest.meta.time)}` : undefined,
+      load: saves?.length ? () => this.showSaves('load', () => this.showMenu(saves)) : undefined,
       play: () => this.showSetup(),
       howTo: () => {
         this.clearScreen();
@@ -94,8 +107,9 @@ export class App {
   }
 
   // ------------------------------------------------------------------ match
-  startMatch(c: PlayerChoices, skipIntro: boolean) {
+  startMatch(c: PlayerChoices, skipIntro: boolean, file?: SaveFile) {
     this.clearScreen();
+    this.autosaveT = 0;
     this.menuBg?.destroy();
     this.menuBg = null;
     this.ended = false;
@@ -103,14 +117,35 @@ export class App {
     load.set(0.05, undefined);
     // give the loading screen a frame to paint before generating the world
     setTimeout(() => {
-      const setup = buildMatchSetup(c);
-      const client = new GameClient(setup, this.gameEl);
+      let setup = buildMatchSetup(c);
+      let loaded: ReturnType<typeof loadWorld> | undefined;
+      if (file) {
+        try {
+          loaded = loadWorld(file);
+          setup = loaded.setup;
+          skipIntro = true;
+        } catch (e) {
+          console.error(e);
+          load.done();
+          this.showMenu();
+          this.toastScreen('That save could not be loaded (it may be from an older version).');
+          return;
+        }
+      }
+      const client = new GameClient(setup, this.gameEl, loaded);
       this.client = client;
       if (this.reveal) client.world.vis.revealAll = true;
       load.set(0.25);
       client.start();
       client.onReady((scene) => {
         const tr = scene.terrain;
+        const cam = file?.extra?.cam as { x: number; y: number; zoom: number } | undefined;
+        if (cam) {
+          scene.camCtl.cancelFly();
+          scene.camCtl.x = cam.x;
+          scene.camCtl.y = cam.y;
+          scene.camCtl.zoom = scene.camCtl.targetZoom = cam.zoom;
+        }
         let started = false;
         const begin = () => {
           if (started) return;
@@ -125,8 +160,9 @@ export class App {
             this.hud!.root.style.visibility = 'visible';
             music.setState('peace');
             const f = client.world.player;
-            if (f) this.hud!.banner(f.name, `${f.setup.commanderName} ${f.setup.commanderTitle}`);
-            if (c.tutorial && client.playerFaction >= 0) this.tutorial = new Tutorial(client, this.hud!);
+            if (file) this.hud!.banner('GAME LOADED', `${file.meta.realm} · ${formatTime(file.meta.time)}`);
+            else if (f) this.hud!.banner(f.name, `${f.setup.commanderName} ${f.setup.commanderTitle}`);
+            if (c.tutorial && client.playerFaction >= 0 && !file) this.tutorial = new Tutorial(client, this.hud!);
           };
           if (skipIntro || client.playerFaction < 0) afterIntro();
           else playIntro(client, this.uiEl, afterIntro);
@@ -142,6 +178,14 @@ export class App {
 
   private frame(dt: number, s: GameScene) {
     const client = this.client!;
+    // autosave every few minutes of play
+    if (!client.paused && !this.ended && !client.cinematic) {
+      this.autosaveT += dt * client.speed;
+      if (this.autosaveT > 180) {
+        this.autosaveT = 0;
+        void this.saveTo('auto', true);
+      }
+    }
     this.hud?.update(dt);
     this.tutorial?.update(dt);
     if (settings.data.debug && this.hud && !(this.hud as unknown as { debugEl: unknown }).debugEl) this.hud.toggleDebug();
@@ -216,8 +260,22 @@ export class App {
     const c = this.client;
     if (!c || this.pauseEl || this.ended) return;
     c.setPaused(true);
+    // leaving the game (tab hidden) or pausing: keep an autosave
+    if (this.client && !this.ended) void this.saveTo('auto', true);
     this.pauseEl = pauseMenu(this.uiEl, {
       resume: () => this.closePause(),
+      save: () => {
+        this.pauseEl!.style.display = 'none';
+        this.showSaves('save', () => {
+          if (this.pauseEl) this.pauseEl.style.display = '';
+        });
+      },
+      load: () => {
+        this.pauseEl!.style.display = 'none';
+        this.showSaves('load', () => {
+          if (this.pauseEl) this.pauseEl.style.display = '';
+        });
+      },
       settings: () => {
         this.pauseEl!.style.display = 'none';
         settingsScreen(this.uiEl, {
@@ -245,6 +303,77 @@ export class App {
         this.showMenu();
       },
     });
+  }
+
+  private autosaveT = 0;
+  private saving = false;
+
+  /** snapshot the running match into a slot */
+  private async saveTo(slot: SlotId, quiet = false): Promise<boolean> {
+    const c = this.client;
+    if (!c || this.saving) return false;
+    this.saving = true;
+    try {
+      const cam = c.scene?.camCtl;
+      const file = saveWorld(c.world, SLOT_LABEL[slot], cam ? { cam: { x: cam.x, y: cam.y, zoom: cam.zoom } } : undefined);
+      await saveStore.write(slot, file);
+      if (!quiet) this.hud?.toast(`Saved to ${SLOT_LABEL[slot]}`);
+      return true;
+    } catch (e) {
+      console.warn('save failed', e);
+      if (!quiet) this.hud?.toast('Could not save: browser storage is unavailable here', true);
+      return false;
+    } finally {
+      this.saving = false;
+    }
+  }
+
+  private async loadSlot(slot: SlotId) {
+    let file: SaveFile | null = null;
+    try {
+      file = await saveStore.read(slot);
+    } catch (e) {
+      console.warn(e);
+    }
+    if (!file) {
+      this.toastScreen('Could not read that save.');
+      return;
+    }
+    this.pauseEl?.remove();
+    this.pauseEl = null;
+    if (this.client) this.teardown();
+    this.clearScreen();
+    this.choices = { ...this.choices, era: file.setup.era ?? this.choices.era };
+    this.startMatch(this.choices, true, file);
+  }
+
+  /** the save/load slot list */
+  private async showSaves(mode: 'save' | 'load', back: () => void) {
+    const rows = await saveStore.list();
+    const bySlot = new Map(rows.map((r) => [r.slot, r.meta]));
+    const scr = savesScreen(
+      this.uiEl,
+      mode,
+      SLOTS.map((slot) => ({ slot, label: SLOT_LABEL[slot], meta: bySlot.get(slot) ?? null })),
+      {
+        back,
+        pick: (slot) => {
+          scr.remove();
+          if (mode === 'save') void this.saveTo(slot as SlotId).then(back);
+          else void this.loadSlot(slot as SlotId);
+        },
+        remove: (slot) => {
+          scr.remove();
+          void saveStore.remove(slot as SlotId).then(() => this.showSaves(mode, back));
+        },
+      },
+    );
+  }
+
+  /** a short message on top of whatever screen is showing */
+  private toastScreen(text: string) {
+    const t = el('div', 'screen-toast', this.uiEl, text);
+    setTimeout(() => t.remove(), 4000);
   }
 
   private closePause() {

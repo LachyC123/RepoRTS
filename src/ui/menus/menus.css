@@ -552,3 +552,58 @@
 .roll-row span {
   color: #9a8c78;
 }
+
+/* save slots */
+.save-list {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  margin: 8px 0;
+}
+.save-row {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 8px 10px;
+  cursor: pointer;
+}
+.save-row.off {
+  opacity: 0.45;
+  cursor: default;
+}
+.save-txt {
+  flex: 1;
+  min-width: 0;
+}
+.save-slot {
+  font-size: 0.7em;
+  letter-spacing: 0.1em;
+  color: #c8b890;
+}
+.save-name {
+  color: #fff0c8;
+}
+.save-sub {
+  font-size: 0.78em;
+  color: #a89a80;
+}
+.btn-sub {
+  display: block;
+  font-size: 0.6em;
+  letter-spacing: 0.04em;
+  opacity: 0.8;
+  margin-top: 2px;
+}
+.screen-toast {
+  position: fixed;
+  left: 50%;
+  bottom: 24px;
+  transform: translateX(-50%);
+  background: #2c202e;
+  color: #ffd8c8;
+  border: 2px solid #8a5a3a;
+  padding: 8px 14px;
+  z-index: 50;
+  font-size: 0.9em;
+  max-width: 90vw;
+}

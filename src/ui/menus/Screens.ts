@@ -18,14 +18,19 @@ function btn(parent: HTMLElement, label: string, fn: () => void, cls = ''): HTML
   return b;
 }
 
-export function mainMenu(root: HTMLElement, h: { play: () => void; howTo: () => void; settings: () => void; credits: () => void; quick?: () => void }): HTMLElement {
+export function mainMenu(root: HTMLElement, h: { play: () => void; howTo: () => void; settings: () => void; credits: () => void; quick?: () => void; cont?: () => void; load?: () => void; contLabel?: string }): HTMLElement {
   installFrames();
   const s = el('div', 'screen main', root);
   const tb = el('div', 'title-block', s);
   el('div', 'title', tb, 'Crownshire');
   el('div', 'subtitle', tb, 'FOUR KINGDOMS · ONE VALLEY');
   const col = el('div', 'menu-col', s);
-  btn(col, 'PLAY', h.play, 'primary');
+  if (h.cont) {
+    const b = btn(col, 'CONTINUE', h.cont, 'primary');
+    if (h.contLabel) el('span', 'btn-sub', b, h.contLabel);
+  }
+  btn(col, h.cont ? 'NEW GAME' : 'PLAY', h.play, h.cont ? '' : 'primary');
+  if (h.load) btn(col, 'LOAD GAME', h.load);
   btn(col, 'HOW TO PLAY', h.howTo);
   btn(col, 'SETTINGS', h.settings);
   btn(col, 'CREDITS', h.credits);
@@ -300,7 +305,7 @@ export function credits(root: HTMLElement, back: () => void): HTMLElement {
   return s;
 }
 
-export function pauseMenu(root: HTMLElement, h: { resume: () => void; settings: () => void; howTo: () => void; restart: () => void; quit: () => void }): HTMLElement {
+export function pauseMenu(root: HTMLElement, h: { resume: () => void; save: () => void; load: () => void; settings: () => void; howTo: () => void; restart: () => void; quit: () => void }): HTMLElement {
   const s = el('div', 'screen dim', root);
   const d = el('div', 'dialog panel', s);
   d.style.width = 'min(340px, 90vw)';
@@ -309,10 +314,52 @@ export function pauseMenu(root: HTMLElement, h: { resume: () => void; settings: 
   col.style.marginTop = '8px';
   col.style.width = '100%';
   btn(col, 'RESUME', h.resume, 'primary');
+  btn(col, 'SAVE GAME', h.save);
+  btn(col, 'LOAD GAME', h.load);
   btn(col, 'SETTINGS', h.settings);
   btn(col, 'HOW TO PLAY', h.howTo);
   btn(col, 'RESTART MATCH', h.restart);
   btn(col, 'QUIT TO MENU', h.quit);
+  return s;
+}
+
+/** save slots: pick one to save into or load from */
+export function savesScreen(
+  root: HTMLElement,
+  mode: 'save' | 'load',
+  rows: { slot: string; label: string; meta: { realm: string; era: string; time: number; territory: number; savedAt: number; spectate: boolean } | null }[],
+  h: { pick: (slot: string) => void; remove?: (slot: string) => void; back: () => void },
+): HTMLElement {
+  const s = el('div', 'screen dim', root);
+  const d = el('div', 'dialog panel', s);
+  d.style.width = 'min(520px, 94vw)';
+  el('h1', '', d, mode === 'save' ? 'Save Game' : 'Load Game');
+  const list = el('div', 'save-list', d);
+  for (const r of rows) {
+    if (mode === 'save' && r.slot === 'auto') continue;
+    const row = el('div', `save-row panel dark ${r.meta ? '' : 'empty'} ${mode === 'load' && !r.meta ? 'off' : ''}`, list);
+    const t = el('div', 'save-txt', row);
+    el('div', 'save-slot', t, r.label);
+    if (r.meta) {
+      const m = r.meta;
+      const when = new Date(m.savedAt);
+      el('div', 'save-name', t, `${m.realm.replace(/^(Kingdom|Republic) of /, '')} · ${m.era === 'modern' ? 'Modern' : 'Medieval'}${m.spectate ? ' · spectating' : ''}`);
+      el('div', 'save-sub', t, `${formatTime(m.time)} played · ${Math.round(m.territory * 100)}% land · ${when.toLocaleDateString()} ${when.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}`);
+    } else el('div', 'save-sub', t, 'Empty');
+    if (mode === 'save' || r.meta) onPress(row, () => h.pick(r.slot), { sound: click });
+    if (r.meta && h.remove && mode === 'load') {
+      const x = el('button', 'hud-btn save-del', row, '✕') as HTMLButtonElement;
+      onPress(x, () => h.remove!(r.slot), { sound: click });
+      x.addEventListener('pointerdown', (e) => e.stopPropagation());
+      x.addEventListener('pointerup', (e) => e.stopPropagation());
+    }
+  }
+  if (!rows.some((r) => r.meta) && mode === 'load') el('p', '', d, 'No saved games yet. The game autosaves every few minutes while you play.');
+  const foot = el('div', 'foot', d);
+  btn(foot, 'BACK', () => {
+    s.remove();
+    h.back();
+  });
   return s;
 }
 
