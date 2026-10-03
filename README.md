@@ -40,7 +40,8 @@ Desktop controls: left-click to select, drag to box-select, right-click to move 
 are A (attack-move), M (move), G (defend), F (formation), Ctrl+1–9 / 1–9 (armies) and Space (last alert).
 
 Mobile controls: tap to select, drag from your troops to box-select, tap the ground to move and tap
-an enemy to attack. One finger on empty ground pans the camera; two fingers pan and pinch-zoom.
+an enemy to attack. Press and hold then lift for the context action: on a soldier it selects every
+soldier of that type nearby; with troops selected it attack-moves to that spot (hold and drag box-selects). One finger on empty ground pans the camera; two fingers pan and pinch-zoom.
 
 ## Architecture
 

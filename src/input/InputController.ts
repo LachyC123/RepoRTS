@@ -49,13 +49,14 @@ const LONG_PRESS = 380;
 /**
  * Unified mouse + touch input on the game canvas.
  * Touch: tap = select / order, one-finger drag on ground = pan (never orders), drag starting on own
- * units or after a long-press (or in SELECT mode) = box select, two fingers = pan + pinch zoom.
+ * units or after a press-and-hold (or in SELECT mode) = box select, hold-and-release = context action,
+ * two fingers = pan + pinch zoom.
  * Mouse: left click/drag = select/box, right click = order, right/middle drag = pan, wheel = zoom.
  */
 export class InputController {
   mode: CommandMode = 'default';
   private ptrs = new Map<number, Ptr>();
-  private gesture: 'none' | 'pan' | 'box' | 'pinch' | 'pending' = 'none';
+  private gesture: 'none' | 'pan' | 'box' | 'pinch' | 'pending' | 'hold' = 'none';
   private pinchD = 0;
   private pinchCX = 0;
   private pinchCY = 0;
@@ -148,10 +149,10 @@ export class InputController {
       const u = this.pickUnit(x, y, true);
       if (this.mode === 'select' || (u && u.faction === this.faction)) this.boxArmed = true;
       this.longTimer = window.setTimeout(() => {
+        // press and hold: drag on for a box selection, or lift for the context action
         if (this.gesture === 'pending' && !p.moved) {
           this.boxArmed = true;
-          this.box = { x0: p.sx, y0: p.sy, x1: p.sx, y1: p.sy };
-          this.gesture = 'box';
+          this.gesture = 'hold';
           if (navigator.vibrate) navigator.vibrate(12);
         }
       }, LONG_PRESS);
@@ -192,6 +193,10 @@ export class InputController {
       this.pinchCX = cx;
       this.pinchCY = cy;
       return;
+    }
+    if (this.gesture === 'hold' && p.moved) {
+      this.gesture = 'box';
+      this.box = { x0: p.sx, y0: p.sy, x1: x, y1: y };
     }
     if (this.gesture === 'pending' && p.moved) {
       clearTimeout(this.longTimer);
@@ -246,6 +251,10 @@ export class InputController {
     }
     if (g === 'box' && this.box) {
       this.finishBox();
+      return;
+    }
+    if (g === 'hold') {
+      this.contextAction(p);
       return;
     }
     if (this.consumedAfterPinch) return;
@@ -314,6 +323,25 @@ export class InputController {
     if (this.mode === 'select') {
       this.mode = 'default';
       this.hooks.modeConsumed?.('select');
+    }
+  }
+
+  /**
+   * Touch press-and-hold released in place: on one of your soldiers, select every soldier of that
+   * type nearby; with troops selected, advance there fighting (or attack the enemy held on).
+   */
+  private contextAction(p: Ptr) {
+    const [wx, wy] = this.cam.screenToWorld(p.sx, p.sy);
+    const own = this.pickUnit(p.sx, p.sy, true);
+    const enemy = this.pickUnit(p.sx, p.sy, false, true);
+    if (this.sel.units.size > 0 && !(own && this.sel.units.has(own.id))) {
+      if (enemy) this.hooks.order('attack', enemy.x, enemy.y, enemy);
+      else this.hooks.order('attackMove', wx, wy);
+      return;
+    }
+    if (own && this.hooks.selectSameType) {
+      this.hooks.selectSameType(own);
+      this.hooks.selected();
     }
   }
 
