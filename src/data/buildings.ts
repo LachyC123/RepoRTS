@@ -173,10 +173,10 @@ export const BUILDINGS: Record<string, BuildingDef> = {
     cost: { wood: 40, gold: 10 },
     buildTime: 8,
     tier: 0,
-    produces: { wood: 30 },
+    produces: { wood: 40 },
     requires: 'forest',
     workers: 2,
-    hint: '+30 Wood/min (needs forest)',
+    hint: '+40 Wood/min (needs forest)',
   }),
   mine: BLD({
     id: 'mine',

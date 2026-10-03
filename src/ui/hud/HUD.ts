@@ -758,6 +758,8 @@ export class HUD {
         tip: { title: fz.name, desc: 'Ring the settlement with walls; gatehouses open only for your troops.', extra: chk.ok ? costHtml(fz.cost, res) : chk.reason },
       });
     }
+    if (s.isCapital && s.owner === c.playerFaction && !w.settlementSys.marketCount(c.playerFaction as FactionId))
+      acts.push({ id: 'trade', label: 'TRADE', glyph: '⚖', press: () => this.openTradeSheet(), tip: { title: 'Royal caravans', desc: 'Trade goods for gold at poor rates. Build a Market for better ones.' } });
     if (core && core.def.category === 'core' && w.settlementSys.allTrainableAt(core).length) acts.push({ id: 'rally', label: 'RALLY', glyph: '⚑', active: this.mode === 'rally', press: () => c.setMode(this.mode === 'rally' ? 'default' : 'rally'), tip: { title: 'Set rally point', desc: 'New recruits gather there.' } });
     return acts;
   }
@@ -905,10 +907,10 @@ export class HUD {
   private openTradeSheet() {
     const c = this.client;
     const w = c.world;
-    const sh = this.sheet('Market');
     const n = w.settlementSys.marketCount(c.playerFaction as FactionId);
+    const sh = this.sheet(n ? 'Market' : 'Royal Caravans');
     const r = tradeRates(n);
-    el('div', 'sel-sub', sh, `Trade lots of ${TRADE_LOT}. More markets give better rates.`);
+    el('div', 'sel-sub', sh, n ? `Trade lots of ${TRADE_LOT}. More markets give better rates.` : `Trade lots of ${TRADE_LOT} at poor rates. Build a Market for better ones.`);
     const grid = el('div', 'grid', sh);
     for (const res of ['food', 'wood', 'stone'] as const) {
       const sell = el('div', 'card', grid);

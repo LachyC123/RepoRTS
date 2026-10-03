@@ -104,8 +104,8 @@ export class VictorySystem {
   private resolveCrisis(f: FactionId) {
     const w = this.w;
     const fac = w.factions[f];
-    // promote the best surviving settlement (towns first, then villages)
-    const cands = w.settlements.filter((s) => s.owner === f && s.tier >= 2 && !(s.isCapital && w.buildingById.get(s.coreId)?.breached));
+    // promote the best surviving town (a village cannot hold a crown)
+    const cands = w.settlements.filter((s) => s.owner === f && s.tier >= 3 && !(s.isCapital && w.buildingById.get(s.coreId)?.breached));
     cands.sort((a, b) => b.tier - a.tier || b.region.value - a.region.value);
     const best = cands[0];
     const old = fac.capitalSettlement >= 0 ? w.settlements[fac.capitalSettlement] : null;

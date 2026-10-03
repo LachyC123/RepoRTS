@@ -17,8 +17,12 @@ export function aiMilitary(ai: AIController) {
   if (tmin < 2.5) {
     reserve.wood = Math.max(reserve.wood ?? 0, 60);
   }
-  const affordable = (c: Cost) => RES_KEYS.every((k) => (c[k] ?? 0) + (reserve[k] ?? 0) <= f.res[k]);
   const units = ai.myUnits();
+  // a kingdom under attack, or with an army below its floor, recruits before it saves
+  const floor = Math.min(40, 6 + tmin * 1.6);
+  const attacked = ai.owned().some((s) => w.time - s.lastAttackedT < 10);
+  const urgent = attacked || (units.length < floor && !ai.savingEcon);
+  const affordable = (c: Cost) => RES_KEYS.every((k) => (c[k] ?? 0) + (urgent ? 0 : reserve[k] ?? 0) <= f.res[k]);
   const byClass = { melee: 0, ranged: 0, cavalry: 0, siege: 0 };
   for (const u of units) byClass[unitClass(u.def)]++;
   const total = Math.max(1, units.length);

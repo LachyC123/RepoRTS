@@ -62,7 +62,7 @@ export const CAPITAL_UPGRADE = { cost: { wood: 300, stone: 300, gold: 400, food:
 
 /** income from simply owning a region with these features (per minute) */
 export const REGION_YIELD: Record<string, { gold?: number; wood?: number; food?: number; stone?: number }> = {
-  forest: { wood: 10 },
+  forest: { wood: 14 },
   farmland: { food: 8 },
   gold: { gold: 10 },
   stone: { stone: 8 },

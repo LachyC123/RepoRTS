@@ -1,6 +1,7 @@
 import { BUILDINGS, FORTIFY } from '../../data/buildings';
 import { NEUTRAL, RES_KEYS, type Cost } from '../../data/constants';
 import { UPGRADES } from '../../data/upgrades';
+import { tradeRates } from '../Settlements';
 import type { AIController } from './AIController';
 
 type Cand =
@@ -169,17 +170,21 @@ export function aiEconomy(ai: AIController) {
   }
 
   // trade: surplus gold buys the scarcest good; surplus goods are sold for gold
-  if (sys.marketCount(me) > 0) {
+  if (sys.canTrade(me)) {
     const goods = ['food', 'wood', 'stone'] as const;
     const scarce = goods.slice().sort((a, b) => f.res[a] - f.res[b])[0];
     const rich = goods.slice().sort((a, b) => f.res[b] - f.res[a])[0];
-    if (f.res.gold > 450 && f.res[scarce] < 200) sys.trade(me, scarce, true);
+    const markets = sys.marketCount(me);
+    if (f.res.gold > (markets ? 450 : 600) && f.res[scarce] < 200) sys.trade(me, scarce, true);
+    // starving for one good (lost its forests or farms): pay whatever it costs
+    else if (f.res[scarce] < 60 && f.res.gold > tradeRates(markets).buy + 60) sys.trade(me, scarce, true);
     else if (f.res.gold < 250 && f.res[rich] > 400) {
       sys.trade(me, rich, false);
       if (f.res[rich] > 700) sys.trade(me, rich, false);
       if (f.res[rich] > 1100) sys.trade(me, rich, false);
     }
   }
+  ai.savingEcon = false;
   if (!cands.length) {
     ai.savingFor = null;
     return;
@@ -219,6 +224,7 @@ export function aiEconomy(ai: AIController) {
     const cycle = (w.time - ai.saveSince) % 95;
     const patience = cycle < 70;
     ai.savingFor = choice.score >= 6 && minutes < 2.5 && patience ? JSON.stringify(choice.cost) : null;
+    ai.savingEcon = !!ai.savingFor && choice.kind === 'build' && (BUILDINGS[choice.type].category === 'economy' || choice.type === 'house');
     if (!ai.savingFor) {
       // buy the best thing we *can* afford instead
       const alt = cands.find((c) => c !== choice && c.score > 3 && RES_KEYS.every((k) => (c.cost[k] ?? 0) <= f.res[k]));

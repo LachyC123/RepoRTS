@@ -314,9 +314,16 @@ export class SettlementSystem {
     return this.w.buildings.filter((b) => b.faction === faction && b.def.id === 'market' && b.active).length;
   }
 
+  /** a market, or failing that the capital's royal caravans (poor rates) */
+  canTrade(faction: FactionId): boolean {
+    if (this.marketCount(faction) > 0) return true;
+    const cap = this.w.factions[faction]?.capitalSettlement ?? -1;
+    return cap >= 0 && this.w.settlements[cap]?.owner === faction;
+  }
+
   trade(faction: FactionId, res: 'wood' | 'food' | 'stone', buy: boolean): CheckResult {
     const n = this.marketCount(faction);
-    if (!n) return { ok: false, reason: 'Requires a Market' };
+    if (!this.canTrade(faction)) return { ok: false, reason: 'Requires a Market' };
     const f = this.w.factions[faction];
     const r = tradeRates(n);
     if (buy) {
@@ -729,9 +736,13 @@ export class SettlementSystem {
   }
 }
 
-/** Market trading: convert between gold and goods. Better rates with more markets. */
+/**
+ * Market trading: convert between gold and goods. Better rates with more markets; with none, the
+ * capital's royal caravans still trade at poor rates so a kingdom cut off from a resource can recover.
+ */
 export const TRADE_LOT = 100;
 export function tradeRates(markets: number) {
+  if (markets <= 0) return { buy: 210, sell: 38 };
   const bonus = Math.min(0.25, (markets - 1) * 0.08);
   return { buy: Math.round(150 * (1 - bonus)), sell: Math.round(55 * (1 + bonus)) };
 }

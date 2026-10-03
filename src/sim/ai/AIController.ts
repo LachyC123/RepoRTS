@@ -60,6 +60,8 @@ export class AIController {
   failed = new Map<number, number>();
   debug: AIDebug = { goal: '', econ: '', threat: {}, army: 0, power: 0, wars: [], squads: [], lastBuild: '', target: '' };
   savingFor: string | null = null;
+  /** the reserve is for a basic economy building: troops must not eat it */
+  savingEcon = false;
   saveKey = '';
   saveSince = 0;
   musterRegion = -1;

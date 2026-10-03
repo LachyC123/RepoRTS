@@ -48,4 +48,10 @@ for (let i = 0; i < steps && !w.over; i++) {
 const ms = performance.now() - t0;
 console.log(`\nsimulated ${fmt(w.time)} in ${(ms / 1000).toFixed(1)}s (${((w.time * 1000) / ms).toFixed(0)}x realtime), units ${w.units.length}, buildings ${w.buildings.length}, paths ${w.pathfinder.requests}`);
 if (w.over) console.log('MATCH OVER winner', w.winner, w.endReason);
+for (const f of w.factions) {
+  if (!f || f.id === NEUTRAL) continue;
+  const tiers: Record<string, number> = {};
+  for (const s of w.settlements) if (s.owner === f.id) tiers[s.tier] = (tiers[s.tier] ?? 0) + 1;
+  console.log(`${f.name}: ${f.alive ? 'alive' : 'dead'} tiers ${JSON.stringify(tiers)} trained ${f.stats.unitsTrained} lost ${f.stats.unitsLost}`);
+}
 console.log('\n' + notices.slice(-60).join('\n'));
