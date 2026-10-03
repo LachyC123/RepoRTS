@@ -269,6 +269,11 @@ export class LivingSystem {
       }
     }
     if (u.routing > 0) return;
+    // a soldier who has run once too often may simply walk away from the war
+    if (p.trait === 'coward' && p.routs >= 3 && u.faction !== NEUTRAL && u.def.special !== 'commander' && rng.next() < 0.02) {
+      this.desert(u);
+      return;
+    }
     const fighting = w.time - u.lastHitT < 4 || u.targetId !== 0;
     const enemies = fighting || p.state === 'berserk' ? this.enemyNear(u, u.def.vision * TILE) : this.enemyNear(u, 7 * TILE);
     const idle = !fighting && enemies === 0 && u.arrived && (u.order.kind === 'idle' || u.order.kind === 'hold');
@@ -388,6 +393,30 @@ export class LivingSystem {
       return;
     }
     if (p.idleT > 12 && rng.next() < 0.012) this.say(u, 'chatter');
+  }
+
+  /** quits the army and goes it alone in the wilds (as a neutral bandit) */
+  private desert(u: Unit) {
+    const w = this.w;
+    this.say(u, 'desert', {}, true);
+    this.log(u, 'panic', `${this.name(u, true)} deserted! Last seen heading for the hills.`);
+    if (u.faction === w.setup.player) w.notify({ kind: 'lost', text: `${this.name(u, true).toUpperCase()} DESERTED`, sub: 'Ran one time too many', factions: [u.faction], x: u.x, y: u.y, priority: 0, quiet: true });
+    const f = w.factions[u.faction];
+    f.pop -= u.def.pop;
+    u.faction = NEUTRAL;
+    u.army = 0;
+    u.squad = 0;
+    u.auto = true;
+    u.targetId = 0;
+    u.morale = 60;
+    // walk off somewhere quiet
+    const a = w.rng.next() * Math.PI * 2;
+    const x = Math.max(TILE * 2, Math.min((w.map.w - 2) * TILE, u.x + Math.cos(a) * 14 * TILE));
+    const y = Math.max(TILE * 2, Math.min((w.map.h - 2) * TILE, u.y + Math.sin(a) * 14 * TILE));
+    w.setDestination(u, x, y, 0);
+    u.order = { kind: 'move', x, y, attackMove: false };
+    u.homeX = x;
+    u.homeY = y;
   }
 
   // ------------------------------------------------------------------ rescues

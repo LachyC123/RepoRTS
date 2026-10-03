@@ -52,6 +52,10 @@ export class MoraleSystem {
       if (u.hp < u.maxHp * 0.3 && inCombat) delta -= 1.5;
       const inspired = w.inspired(u);
       if (inspired) delta += 3;
+      // personalities: the brave and the steady hold, the nervous wobble
+      const tr = u.persona?.trait;
+      if (delta < 0) delta *= tr === 'brave' ? 0.5 : tr === 'steady' ? 0.75 : tr === 'coward' ? 1.4 : 1;
+      if (u.persona?.state === 'berserk') delta = Math.max(delta, 2);
       const devotion = f.upgrades.has('devotion') ? 15 : 0;
       u.morale = Math.min(100, u.morale + delta * step);
       const floor = inspired ? 30 : 0;
@@ -63,6 +67,7 @@ export class MoraleSystem {
   rout(u: Unit) {
     const w = this.w;
     u.routing = 4 + w.rng.next() * 2;
+    if (u.persona) u.persona.routs++;
     u.targetId = 0;
     w.events.emit('unitRouted', { id: u.id, x: u.x, y: u.y, faction: u.faction });
     u.windup = 0;

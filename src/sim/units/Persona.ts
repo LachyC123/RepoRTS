@@ -29,6 +29,8 @@ export interface Persona {
   rescueTarget: number;
   rescues: number;
   wounds: number;
+  /** times this soldier has broken and run */
+  routs: number;
 }
 
 export const TRAITS: Record<Trait, { label: string; desc: string; weight: number }> = {
@@ -92,6 +94,7 @@ export function newPersona(rng: Random, era: Era, vehicle: boolean): Persona {
     rescueTarget: 0,
     rescues: 0,
     wounds: 0,
+    routs: 0,
   };
 }
 
@@ -125,7 +128,8 @@ export type LineKind =
   | 'rally'
   | 'order'
   | 'cheer'
-  | 'brave';
+  | 'brave'
+  | 'desert';
 
 const LINES: Record<Era, Record<LineKind, string[]>> = {
   medieval: {
@@ -149,6 +153,7 @@ const LINES: Record<Era, Record<LineKind, string[]>> = {
     order: ['Aye!', 'At once!', 'As you command.', 'Marching!', 'On it!'],
     cheer: ['Ours now!', 'Raise the banner!', 'Huzzah!'],
     brave: ['Hold the line!', 'Stand fast!', 'With me!'],
+    desert: ['I quit!', "I'm off to be a goatherd.", 'Find another fool!', 'Banditry pays better!'],
   },
   modern: {
     panic: ['Nope. Nope. NOPE.', 'I left the oven on!', "This wasn't in the brochure!", 'Tell my mum I was brave!', 'Tactical retreat!!', "I'm too young for this!", 'NOT TODAY!'],
@@ -171,6 +176,7 @@ const LINES: Record<Era, Record<LineKind, string[]>> = {
     order: ['Roger!', 'On it!', 'Moving out!', 'Copy that.', 'Oscar Mike!'],
     cheer: ['Ours now!', 'Raise the flag!', 'Woo!'],
     brave: ['Hold the line!', 'Stay on me!', 'Keep firing!'],
+    desert: ['I quit!', "I'm going home!", 'Not my war!', "Tell the sarge I'm sick."],
   },
 };
 
