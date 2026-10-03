@@ -65,6 +65,7 @@ export class HUD {
   private objectiveEl!: HTMLElement;
   private timerEl!: HTMLElement;
   private tooltipEl!: HTMLElement;
+  private standEls: { id: number; it: HTMLElement; val: HTMLElement; inc: HTMLElement }[] = [];
   private sheetEl: HTMLElement | null = null;
   private fpsEl!: HTMLElement;
   private debugEl: HTMLElement | null = null;
@@ -143,29 +144,32 @@ export class HUD {
     const c = this.client;
     const f = c.world.player ?? c.world.factions[0];
     const top = el('div', 'hud-top', this.root);
-    const k = el('div', 'hud-kingdom panel pe', top);
-    const img = el('img', '', k) as HTMLImageElement;
-    img.src = crestUrl(f.setup.crest, f.color);
-    const txt = el('div', 'ktext', k);
-    el('div', 'kname', txt, f.name.replace(/^Kingdom of /, ''));
-    this.terrEl = el('div', 'kterr', txt);
-    onPress(k, () => c.jumpCapital(), { sound: () => audio.play('ui_click') });
-    k.title = 'Your kingdom — tap to view the capital';
-    const resWrap = el('div', 'hud-res', top);
-    const bar = el('div', 'resbar panel pe', resWrap);
-    for (const r of RES_KEYS) {
-      const it = el('div', 'res-item', bar);
-      const ic = el('img', 'icon', it) as HTMLImageElement;
-      ic.src = icon(r);
-      const val = el('span', 'val', it);
-      const inc = el('span', 'inc', it);
-      this.resEls[r] = { val, inc, last: 0 };
-      this.tip(it, () => ({ title: r[0].toUpperCase() + r.slice(1), desc: RES_DESC[r], extra: `Income ${Math.round(c.world.player?.income[r] ?? 0)}/min` }));
+    if (c.playerFaction < 0) this.buildStandings(top);
+    else {
+      const k = el('div', 'hud-kingdom panel pe', top);
+      const img = el('img', '', k) as HTMLImageElement;
+      img.src = crestUrl(f.setup.crest, f.color);
+      const txt = el('div', 'ktext', k);
+      el('div', 'kname', txt, f.name.replace(/^Kingdom of /, ''));
+      this.terrEl = el('div', 'kterr', txt);
+      onPress(k, () => c.jumpCapital(), { sound: () => audio.play('ui_click') });
+      k.title = 'Your kingdom — tap to view the capital';
+      const resWrap = el('div', 'hud-res', top);
+      const bar = el('div', 'resbar panel pe', resWrap);
+      for (const r of RES_KEYS) {
+        const it = el('div', 'res-item', bar);
+        const ic = el('img', 'icon', it) as HTMLImageElement;
+        ic.src = icon(r);
+        const val = el('span', 'val', it);
+        const inc = el('span', 'inc', it);
+        this.resEls[r] = { val, inc, last: 0 };
+        this.tip(it, () => ({ title: r[0].toUpperCase() + r.slice(1), desc: RES_DESC[r], extra: `Income ${Math.round(c.world.player?.income[r] ?? 0)}/min` }));
+      }
+      const pop = el('div', 'res-item', bar);
+      (el('img', 'icon', pop) as HTMLImageElement).src = icon('pop');
+      this.popEl = el('span', 'val', pop);
+      this.tip(pop, () => ({ title: 'Population', desc: 'Soldiers in your service / capacity. Raise capacity with houses and settlements.' }));
     }
-    const pop = el('div', 'res-item', bar);
-    (el('img', 'icon', pop) as HTMLImageElement).src = icon('pop');
-    this.popEl = el('span', 'val', pop);
-    this.tip(pop, () => ({ title: 'Population', desc: 'Soldiers in your service / capacity. Raise capacity with houses and settlements.' }));
     const sys = el('div', 'hud-sys', top);
     if (settings.data.gameSpeedControls && !matchMedia('(pointer: coarse)').matches) {
       this.speedBtn = el('button', 'hud-btn', sys, '1×') as HTMLButtonElement;
@@ -222,7 +226,41 @@ export class HUD {
     }
   }
 
+  /** spectating: no economy of our own, so the bar shows every kingdom's standing instead */
+  private buildStandings(top: HTMLElement) {
+    const w = this.client.world;
+    const k = el('div', 'hud-kingdom panel pe', top);
+    const txt = el('div', 'ktext', k);
+    el('div', 'kname', txt, 'Spectating');
+    el('div', 'kterr', txt, 'Four AI kingdoms');
+    const wrap = el('div', 'hud-res', top);
+    const bar = el('div', 'resbar panel pe standings', wrap);
+    for (const f of w.factions) {
+      if (!f || f.id === NEUTRAL) continue;
+      const it = el('div', 'res-item', bar);
+      (el('img', 'icon crest', it) as HTMLImageElement).src = crestUrl(f.setup.crest, f.color);
+      const val = el('span', 'val', it);
+      const inc = el('span', 'inc', it);
+      inc.style.color = f.color.light;
+      this.standEls.push({ id: f.id, it, val, inc });
+      this.tip(it, () => ({ title: f.name, desc: f.alive ? `${f.regionsOwned} regions · ${Math.round(f.pop)} soldiers` : 'Eliminated' }));
+    }
+  }
+
+  private refreshStandings() {
+    const w = this.client.world;
+    for (const e of this.standEls) {
+      const f = w.factions[e.id];
+      const v = `${Math.round(f.territoryShare * 100)}%`;
+      if (e.val.textContent !== v) e.val.textContent = v;
+      const a = f.alive ? `⚔${Math.round(f.pop)}` : '✝';
+      if (e.inc.textContent !== a) e.inc.textContent = a;
+      e.it.classList.toggle('dead', !f.alive);
+    }
+  }
+
   private refreshTop() {
+    if (this.standEls.length) return this.refreshStandings();
     const f = this.client.world.player;
     if (!f) return;
     for (const r of RES_KEYS) {
@@ -771,7 +809,7 @@ export class HUD {
       const b = el('button', `act ${a.disabled ? 'disabled' : ''} ${a.active ? 'active' : ''}`, this.actEl) as HTMLButtonElement;
       if (a.img) (el('img', '', b) as HTMLImageElement).src = a.img;
       else if (a.glyph) el('span', 'glyph', b, a.glyph);
-      el('span', '', b, a.label);
+      el('span', a.label.length > 7 ? 'al long' : 'al', b, a.label);
       if (a.badge) el('span', 'badge', b, a.badge);
       if (a.key && !matchMedia('(pointer: coarse)').matches) el('span', 'key', b, a.key);
       onPress(b, () => a.press(), { long: a.long ?? (a.tip ? () => this.showTipFor(b, a.tip!) : undefined), sound: () => audio.play('ui_click') });

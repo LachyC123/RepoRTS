@@ -151,8 +151,8 @@ export class WorldObjects {
         const gust = Math.sin(time * 1.1 - o.x * 0.006 - o.y * 0.003 + t.phase * 0.15);
         let s = gust * this.wind > 0.55 ? 1 : 0;
         if (o.shake && o.shake > 0) {
-          o.shake -= dt;
-          s = Math.floor(o.shake * 30) % 2;
+          o.shake = Math.max(0, o.shake - dt);
+          s = Math.floor(o.shake * 30) & 1;
         }
         const fr = art.get(`tree/${t.sp}/${t.v}/${s}`);
         if (o.frame.name !== fr.frame) o.setFrame(fr.frame);

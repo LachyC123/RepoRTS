@@ -52,6 +52,43 @@
   margin-top: 18vh;
   width: min(300px, 80vw);
 }
+/* main menu flows title → buttons so they can never overlap on short screens */
+.screen.main {
+  flex-direction: column;
+  justify-content: flex-start;
+  padding-top: 8vh;
+  gap: 14vh;
+}
+.screen.main .title-block {
+  position: static;
+}
+.screen.main .menu-col {
+  margin-top: 0;
+}
+@media (max-height: 520px) {
+  .screen.main {
+    padding-top: 5vh;
+    gap: 6vh;
+  }
+  .screen.main .title {
+    font-size: clamp(44px, 17vh, 90px);
+  }
+  .screen.main .menu-col {
+    display: grid;
+    grid-template-columns: repeat(3, 1fr);
+    width: min(600px, 90vw);
+  }
+  .screen.main .mbtn {
+    height: calc(44px * var(--ui-scale));
+    font-size: calc(12px * var(--ui-scale));
+    letter-spacing: 0.1em;
+  }
+  .screen.main .mbtn.primary {
+    grid-column: 1 / -1;
+    height: calc(52px * var(--ui-scale));
+    font-size: calc(17px * var(--ui-scale));
+  }
+}
 .mbtn {
   height: calc(50px * var(--ui-scale));
   border: 6px solid transparent;
@@ -126,6 +163,13 @@
   justify-content: center;
   margin-top: 14px;
   flex-wrap: wrap;
+  /* long dialogs scroll on phones: keep the way out (BACK / BEGIN) always in reach */
+  position: sticky;
+  bottom: -12px;
+  margin-bottom: -12px;
+  padding: 14px 0 12px;
+  background: linear-gradient(to bottom, rgba(44, 32, 46, 0), #2c202e 34%);
+  z-index: 2;
 }
 .dialog .foot .mbtn {
   min-width: 150px;
@@ -436,4 +480,17 @@
   color: #c8b890;
   max-width: 80vw;
   text-align: center;
+}
+@media (max-height: 520px) {
+  .dialog h1 {
+    font-size: calc(30px * var(--ui-scale));
+  }
+  .dialog .foot {
+    padding: 8px 0 10px;
+  }
+  .dialog .foot .mbtn {
+    height: calc(40px * var(--ui-scale));
+    min-width: 120px;
+    font-size: calc(13px * var(--ui-scale));
+  }
 }

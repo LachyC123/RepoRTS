@@ -20,7 +20,7 @@ function btn(parent: HTMLElement, label: string, fn: () => void, cls = ''): HTML
 
 export function mainMenu(root: HTMLElement, h: { play: () => void; howTo: () => void; settings: () => void; credits: () => void; quick?: () => void }): HTMLElement {
   installFrames();
-  const s = el('div', 'screen', root);
+  const s = el('div', 'screen main', root);
   const tb = el('div', 'title-block', s);
   el('div', 'title', tb, 'Crownshire');
   el('div', 'subtitle', tb, 'FOUR KINGDOMS · ONE VALLEY');

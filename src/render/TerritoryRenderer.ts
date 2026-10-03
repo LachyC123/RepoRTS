@@ -10,6 +10,7 @@ import { T } from '../sim/map/GameMap';
 import type { SortObj, YSortLayer } from './YSortLayer';
 
 const PX = 8; // canvas pixels per tile
+const SUB = 4; // smoothed membership cells per tile (each 2×2 canvas pixels)
 
 /**
  * Territory shown the way the brief asks: a faint wash of the owner's colour plus a fine dashed
@@ -34,6 +35,13 @@ export class TerritoryRenderer {
   private posts = new Map<number, { obj: SortObj; color: string; pop: number }[]>();
   ylayer: YSortLayer | null = null;
   private postT = 0;
+  private sub!: Uint16Array;
+  private subW = 0;
+  private subH = 0;
+  /** per-region canvas-pixel bounding boxes [x0, y0, x1, y1] */
+  private bbox: number[][] = [];
+  private img32: ImageData;
+  private px32: Uint32Array;
 
   constructor(
     private scene: Phaser.Scene,
@@ -45,6 +53,8 @@ export class TerritoryRenderer {
     this.canvas.width = m.w * PX;
     this.canvas.height = m.h * PX;
     this.ctx = this.canvas.getContext('2d')!;
+    this.img32 = this.ctx.createImageData(this.canvas.width, this.canvas.height);
+    this.px32 = new Uint32Array(this.img32.data.buffer);
     if (scene.textures.exists(this.key)) scene.textures.remove(this.key);
     canvasTexture(scene, this.key, this.canvas);
     this.img = scene.make.image({ x: 0, y: 0, key: this.key }, false).setOrigin(0, 0).setScale(TILE / PX);
@@ -60,6 +70,7 @@ export class TerritoryRenderer {
     layer.add(this.pulseGfx);
     for (let r = 0; r < m.regions.length; r++) this.regionTiles.push([]);
     for (let i = 0; i < m.w * m.h; i++) this.regionTiles[m.region[i]].push(i);
+    this.buildSubRegions();
     this.redrawAll();
     world.events.on('regionCaptured', (e) => {
       const f = world.factions[e.to];
@@ -77,8 +88,9 @@ export class TerritoryRenderer {
   }
 
   redrawAll() {
-    this.ctx.clearRect(0, 0, this.canvas.width, this.canvas.height);
-    for (const s of this.world.settlements) this.redrawRegion(s.id, false);
+    for (const st of this.world.settlements) this.owners[st.id] = st.owner;
+    for (const st of this.world.settlements) this.paintRegion(st.id);
+    this.ctx.putImageData(this.img32, 0, 0);
     this.refresh();
   }
 
@@ -105,55 +117,148 @@ export class TerritoryRenderer {
   redrawRegion(rid: number, refresh: boolean) {
     const w = this.world;
     const m = w.map;
-    const ctx = this.ctx;
-    const owner = w.settlements[rid].owner;
-    this.owners[rid] = owner;
-    const r = m.regions[rid];
-    // clear region bbox tiles belonging to this region (+ neighbours' borders get redrawn below)
-    const toRedraw = new Set<number>([rid, ...r.neighbors]);
-    for (const id of toRedraw) {
-      for (const i of this.regionTiles[id]) ctx.clearRect((i % m.w) * PX, Math.floor(i / m.w) * PX, PX, PX);
+    this.owners[rid] = w.settlements[rid].owner;
+    // the region and its neighbours (their border lines depend on who owns this one)
+    const ids = [rid, ...m.regions[rid].neighbors];
+    let x0 = Infinity;
+    let y0 = Infinity;
+    let x1 = -Infinity;
+    let y1 = -Infinity;
+    for (const id of ids) {
+      this.paintRegion(id);
+      const b = this.bbox[id];
+      x0 = Math.min(x0, b[0]);
+      y0 = Math.min(y0, b[1]);
+      x1 = Math.max(x1, b[2]);
+      y1 = Math.max(y1, b[3]);
     }
-    for (const id of toRedraw) this.paintRegion(id);
+    this.ctx.putImageData(this.img32, 0, 0, x0, y0, x1 - x0, y1 - y0);
     if (refresh) this.refresh();
   }
 
-  private paintRegion(rid: number) {
-    const w = this.world;
-    const m = w.map;
-    const ctx = this.ctx;
-    const owner = w.settlements[rid].owner;
-    const col = this.colorOf(owner);
-    if (!col) {
-      // neutral: just a faint dotted boundary
-      ctx.fillStyle = 'rgba(30,24,30,0.28)';
-      for (const i of this.regionTiles[rid]) {
-        const tx = i % m.w;
-        const ty = Math.floor(i / m.w);
-        const edges = this.edges(tx, ty, rid, false);
-        if (!edges) continue;
-        this.drawEdges(tx, ty, edges, true);
+  /**
+   * Region membership at sub-tile resolution: each cell takes the region with the most weight
+   * among nearby tile centres, so borders follow smooth diagonals and curves instead of tile
+   * staircases. Computed once; regions never change shape.
+   */
+  private buildSubRegions() {
+    const m = this.world.map;
+    const W = m.w * SUB;
+    const H = m.h * SUB;
+    const sub = new Uint16Array(W * H);
+    const wts = new Float32Array(m.regions.length);
+    const touched: number[] = [];
+    const R = 1.25; // vote radius in tiles
+    for (let y = 0; y < H; y++) {
+      const v = (y + 0.5) / SUB;
+      const ty = Math.floor(v);
+      for (let x = 0; x < W; x++) {
+        const u = (x + 0.5) / SUB;
+        const tx = Math.floor(u);
+        const home = m.region[ty * m.w + tx];
+        let best = home;
+        let uniform = true;
+        for (let oy = -1; oy <= 1 && uniform; oy++)
+          for (let ox = -1; ox <= 1; ox++) {
+            const nx = tx + ox;
+            const ny = ty + oy;
+            if (nx < 0 || ny < 0 || nx >= m.w || ny >= m.h) continue;
+            if (m.region[ny * m.w + nx] !== home) {
+              uniform = false;
+              break;
+            }
+          }
+        if (!uniform) {
+          for (let oy = -1; oy <= 1; oy++)
+            for (let ox = -1; ox <= 1; ox++) {
+              const nx = tx + ox;
+              const ny = ty + oy;
+              if (nx < 0 || ny < 0 || nx >= m.w || ny >= m.h) continue;
+              const d = Math.hypot(nx + 0.5 - u, ny + 0.5 - v);
+              if (d >= R) continue;
+              const r = m.region[ny * m.w + nx];
+              if (wts[r] === 0) touched.push(r);
+              const k = 1 - d / R;
+              wts[r] += k * k;
+            }
+          let bw = wts[home] + 1e-4; // ties keep the tile's own region
+          for (const r of touched) if (wts[r] > bw) {
+            bw = wts[r];
+            best = r;
+          }
+          for (const r of touched) wts[r] = 0;
+          touched.length = 0;
+        }
+        sub[y * W + x] = best;
       }
-      return;
     }
-    const [r, g, b] = rgb(col.main);
-    const [dr, dg, db] = rgb(col.dark);
-    ctx.fillStyle = `rgba(${r},${g},${b},0.11)`;
-    for (const i of this.regionTiles[rid]) ctx.fillRect((i % m.w) * PX, Math.floor(i / m.w) * PX, PX, PX);
-    // border dashes against other owners (owner side), dark edge for depth
-    for (const i of this.regionTiles[rid]) {
-      const tx = i % m.w;
-      const ty = Math.floor(i / m.w);
-      const edges = this.edges(tx, ty, rid, true);
-      if (!edges) continue;
-      ctx.fillStyle = `rgba(${dr},${dg},${db},0.55)`;
-      this.drawEdges(tx, ty, edges, false, 1);
-      ctx.fillStyle = `rgba(${r},${g},${b},0.85)`;
-      this.drawEdges(tx, ty, edges, true, 0);
-      // inner glow band
-      ctx.fillStyle = `rgba(${r},${g},${b},0.12)`;
-      this.drawEdges(tx, ty, edges, false, 2, 2);
-    }
+    this.sub = sub;
+    this.subW = W;
+    this.subH = H;
+    for (let r = 0; r < m.regions.length; r++) this.bbox.push([Infinity, Infinity, -Infinity, -Infinity]);
+    for (let y = 0; y < H; y++)
+      for (let x = 0; x < W; x++) {
+        const b = this.bbox[sub[y * W + x]];
+        if (x < b[0]) b[0] = x;
+        if (y < b[1]) b[1] = y;
+        if (x + 1 > b[2]) b[2] = x + 1;
+        if (y + 1 > b[3]) b[3] = y + 1;
+      }
+    // bboxes in canvas pixels
+    for (const b of this.bbox) for (let k = 0; k < 4; k++) b[k] *= PX / SUB;
+  }
+
+  private paintRegion(rid: number) {
+    const own = this.owners;
+    const sub = this.sub;
+    const W = this.subW;
+    const H = this.subH;
+    const px = this.px32;
+    const CW = this.canvas.width;
+    const owner = own[rid];
+    const col = this.colorOf(owner);
+    const pack = (c: [number, number, number], a: number) => ((Math.round(a * 255) << 24) | (c[2] << 16) | (c[1] << 8) | c[0]) >>> 0;
+    let wash = 0;
+    let line = 0;
+    let dark = 0;
+    let glow = 0;
+    let faint = 0;
+    if (col) {
+      const main = rgb(col.main) as [number, number, number];
+      const dk = rgb(col.dark) as [number, number, number];
+      wash = pack(main, 0.11);
+      line = pack(main, 0.85);
+      dark = pack(dk, 0.55);
+      glow = pack(main, 0.23);
+    } else faint = pack([30, 24, 30], 0.3);
+    // a cell differs if its region has another owner (owned) or is another region (neutral lines)
+    const differs = (x: number, y: number) => {
+      if (x < 0 || y < 0 || x >= W || y >= H) return false;
+      const r = sub[y * W + x];
+      if (r === rid) return false;
+      return col ? own[r] !== owner : true;
+    };
+    const b = this.bbox[rid];
+    const S = PX / SUB;
+    const sx0 = b[0] / S;
+    const sy0 = b[1] / S;
+    const sx1 = b[2] / S;
+    const sy1 = b[3] / S;
+    for (let y = sy0; y < sy1; y++)
+      for (let x = sx0; x < sx1; x++) {
+        if (sub[y * W + x] !== rid) continue;
+        let c = 0;
+        if (col) {
+          // distance to the nearest foreign cell picks line → dark rim → glow → plain wash
+          if (differs(x + 1, y) || differs(x - 1, y) || differs(x, y + 1) || differs(x, y - 1)) c = line;
+          else if (differs(x + 1, y + 1) || differs(x - 1, y - 1) || differs(x + 1, y - 1) || differs(x - 1, y + 1) || differs(x + 2, y) || differs(x - 2, y) || differs(x, y + 2) || differs(x, y - 2)) c = dark;
+          else if (differs(x + 3, y) || differs(x - 3, y) || differs(x, y + 3) || differs(x, y - 3) || differs(x + 2, y + 2) || differs(x - 2, y - 2) || differs(x + 2, y - 2) || differs(x - 2, y + 2)) c = glow;
+          else c = wash;
+        } else if (((x + y) >> 1) % 2 === 0 && (differs(x + 1, y) || differs(x, y + 1))) c = faint;
+        // each sub cell covers S×S canvas pixels
+        const o = y * S * CW + x * S;
+        for (let yy = 0; yy < S; yy++) for (let xx = 0; xx < S; xx++) px[o + yy * CW + xx] = c;
+      }
   }
 
   /** bitmask of edges where the neighbour belongs to another owner (or region when !ownerOnly) */
@@ -174,19 +279,6 @@ export class TerritoryRenderer {
     check(tx, ty + 1, 4);
     check(tx - 1, ty, 8);
     return e;
-  }
-
-  private drawEdges(tx: number, ty: number, e: number, dashed: boolean, inset = 0, thick = 1) {
-    const ctx = this.ctx;
-    const x = tx * PX;
-    const y = ty * PX;
-    for (let k = 0; k < PX; k++) {
-      if (dashed && ((tx * PX + ty * PX + k) >> 1) % 2 === 1) continue;
-      if (e & 1) ctx.fillRect(x + k, y + inset, 1, thick);
-      if (e & 4) ctx.fillRect(x + k, y + PX - 1 - inset - (thick - 1), 1, thick);
-      if (e & 8) ctx.fillRect(x + inset, y + k, thick, 1);
-      if (e & 2) ctx.fillRect(x + PX - 1 - inset - (thick - 1), y + k, thick, 1);
-    }
   }
 
   /** small banner posts along borders between different owners, on the owner's side */

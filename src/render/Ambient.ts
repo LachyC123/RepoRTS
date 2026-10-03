@@ -295,10 +295,10 @@ export class Ambient {
     switch (a.kind) {
       case 'villager':
       case 'guard':
-        name = `amb/villager_${a.sub}/${moving ? 2 + (Math.floor(time * 8 + a.t) % 4) : Math.floor(time * 1.5 + a.t) % 2}`;
+        name = `amb/villager_${a.sub}/${moving ? 2 + (Math.floor(time * 8 + a.t) & 3) : Math.floor(time * 1.5 + a.t) & 1}`;
         break;
       case 'chicken':
-        name = `amb/chicken/${moving ? 0 : Math.floor(time * 3 + a.t) % 2}`;
+        name = `amb/chicken/${moving ? 0 : Math.floor(time * 3 + a.t) & 1}`;
         break;
       case 'sheep':
       case 'cow':
@@ -370,7 +370,7 @@ export class Ambient {
     a.img.setPosition(Math.round(a.x), Math.round(a.y));
     a.img.sy = a.y;
     a.img.setFlipX(a.facing < 0);
-    const f = art.get(`amb/cart/${Math.floor(a.t * 4) % 2}`);
+    const f = art.get(`amb/cart/${Math.floor(a.t * 4) & 1}`);
     a.img.setTexture(f.key, f.frame);
   }
 
@@ -486,7 +486,7 @@ export class Ambient {
         b.x += b.vx * dt;
         b.y += b.vy * dt;
         if (b.crow) b.vy -= 6 * dt;
-        const f = art.get(`amb/${b.crow ? 'crow' : 'bird'}/${Math.floor(b.t * 7) % 2}`);
+        const f = art.get(`amb/${b.crow ? 'crow' : 'bird'}/${Math.floor(b.t * 7) & 1}`);
         b.img.setTexture(f.key, f.frame);
       }
       b.img.setPosition(Math.round(b.x), Math.round(b.y));
@@ -528,7 +528,7 @@ export class Ambient {
       f.x = f.bx + Math.sin(f.t * 1.3 + f.k) * 14 + Math.sin(f.t * 3.1) * 4;
       f.y = f.by + Math.cos(f.t * 0.9 + f.k) * 8 - 6 + Math.sin(f.t * 5) * 2;
       f.bx += Math.sin(f.t * 0.3) * 6 * dt * this.wind;
-      const fr = art.get(`amb/fly${f.k}/${Math.floor(f.t * 9) % 2}`);
+      const fr = art.get(`amb/fly${f.k}/${Math.floor(f.t * 9) & 1}`);
       f.img.setTexture(fr.key, fr.frame).setPosition(Math.round(f.x), Math.round(f.y));
       if (f.t > 25 || !detail) {
         f.img.destroy();

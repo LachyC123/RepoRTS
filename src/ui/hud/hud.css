@@ -574,6 +574,11 @@
   text-shadow: 0 1px 0 #1b1420;
   line-height: 1.05;
 }
+.act .al.long {
+  /* Silkscreen is wide: long labels (PALISADE, UPGRADE…) tighten to keep clear of the frame */
+  font-size: 0.86em;
+  letter-spacing: -0.03em;
+}
 .act img {
   width: calc(28px * var(--ui-scale));
   height: calc(28px * var(--ui-scale));

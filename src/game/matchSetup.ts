@@ -29,7 +29,7 @@ export function buildMatchSetup(c: PlayerChoices): MatchSetup {
   const factions: FactionSetup[] = [];
   factions.push({
     id: 0,
-    name: c.kingdomName,
+    name: c.kingdomName.replace(/^Kingdom of /i, ''), // short form, like the AI kingdoms (Varnmark, Eldmoor…)
     house: 'House ' + c.kingdomName.replace(/^Kingdom of /, ''),
     commanderName: c.commanderName,
     commanderTitle: 'The Crown Commander',
