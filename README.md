@@ -68,6 +68,13 @@ tools/      headless match runner and art preview tools (PNG contact sheets)
 tests/      vitest simulation tests
 ```
 
+Units are procedural paper dolls with a 36-frame animation set (render/art/unitArt.ts `FR`): idle,
+walk, two weapon-specific attacks (cuts and thrusts, overhead cleaves and sweeps, shield bashes,
+lofted volleys, kneeling crossbow shots, lance couches), two deaths per body type, flinch, shield
+block, cheer, charge-run, rout and tool work cycles; engines roll, wind up and wreck. FxDirector
+turns sim events into weapon-specific impacts, speech bubbles, shockwaves, light beams, craters,
+footfall dust and ford splashes.
+
 The simulation runs at a fixed 30 Hz with interpolated rendering. AI kingdoms see only what their
 own fog of war shows them and pay the same costs as the player. Only Warlord difficulty gets a
 documented +15% income bonus; Casual AIs get −15%. They trade through the same markets and royal

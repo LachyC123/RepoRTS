@@ -33,12 +33,22 @@ export class ArtRegistry {
   private frames = new Map<string, FrameRef>();
   private pageCount = 0;
 
+  private pendingNames = new Set<string>();
+  private aliases: [string, string][] = [];
+
   add(name: string, pc: PixelCanvas, ax: number, ay: number) {
     this.pending.push({ name, pc, ax, ay });
+    this.pendingNames.add(name);
+  }
+
+  /** `name` shows the same pixels as `target` (resolved when the atlas is built) */
+  alias(name: string, target: string) {
+    this.aliases.push([name, target]);
+    this.pendingNames.add(name);
   }
 
   has(name: string) {
-    return this.frames.has(name) || this.pending.some((p) => p.name === name);
+    return this.frames.has(name) || this.pendingNames.has(name);
   }
 
   get(name: string): FrameRef {
@@ -53,7 +63,10 @@ export class ArtRegistry {
 
   /** pack pending frames into pages and upload */
   build(scene: Phaser.Scene, prefix = 'atlas') {
-    if (!this.pending.length) return;
+    if (!this.pending.length) {
+      this.resolveAliases();
+      return;
+    }
     // tallest first for better shelf packing
     const list = this.pending.sort((a, b) => b.pc.h - a.pc.h || b.pc.w - a.pc.w);
     this.pending = [];
@@ -100,6 +113,16 @@ export class ArtRegistry {
       if (h > shelfH) shelfH = h;
     }
     flush();
+    this.resolveAliases();
+  }
+
+  private resolveAliases() {
+    for (const [name, target] of this.aliases) {
+      const f = this.frames.get(target);
+      if (f) this.frames.set(name, f);
+    }
+    this.aliases = [];
+    this.pendingNames.clear();
   }
 
   /**

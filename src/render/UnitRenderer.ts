@@ -3,6 +3,7 @@ import type { Unit } from '../sim/units/Unit';
 import type { World } from '../sim/World';
 import { art } from './art/ArtRegistry';
 import { unitFrameName } from './art/buildArt';
+import { FR } from './art/unitArt';
 import type { SortObj, YSortLayer } from './YSortLayer';
 
 type USprite = Phaser.GameObjects.Image & { sy: number; uid: number; lastFrame: string };
@@ -44,26 +45,43 @@ export class UnitRenderer {
     this.pool.push(s);
   }
 
+  /**
+   * Picks the animation frame from sim state. Priority: death → deploy → attack (two variants) →
+   * shield block → flinch → cheer → work → rout / charge / walk by speed → idle.
+   */
   frameFor(u: Unit): number {
     const t = this.world.time;
     if (!u.alive) {
       const d = t - u.deathT;
-      return d < 0.12 ? 9 : d < 0.3 ? 10 : 11;
+      const seq = (u.id & 1) === 0 ? FR.dieA : FR.dieB;
+      return seq[d < 0.14 ? 0 : d < 0.34 ? 1 : 2];
     }
-    if (u.def.deploy && u.deploy < 1) return u.deploy > 0.5 ? 13 : 12;
-    if (u.windup > 0) return 6;
+    if (u.def.deploy && u.deploy < 1) return u.deploy > 0.5 ? FR.deploy[1] : FR.deploy[0];
+    const atk = u.atkVar ? FR.atkB : FR.atkA;
+    if (u.windup > 0) return atk[0];
     if (u.anim === 'attack') {
-      if (u.animT < 0.16) return 7;
-      if (u.animT < 0.34) return 8;
+      if (u.animT < 0.16) return atk[1];
+      if (u.animT < 0.34) return atk[2];
     }
-    if (u.anim === 'cheer') return Math.floor(u.animT * 6) % 2 ? 6 : 0;
+    if (u.blockT > 0) return FR.block;
+    if (u.hitFlash > 0) return FR.flinch;
+    if (u.anim === 'cheer') return FR.cheer[Math.floor(u.animT * 6) & 1];
+    if (u.anim === 'work') {
+      const k = u.animT;
+      if (u.def.look.weapon === 'none') return FR.work[Math.floor(k * 3) & 3];
+      return FR.work[k < 0.2 ? 0 : k < 0.35 ? 1 : k < 0.55 ? 2 : k < 0.8 ? 3 : 0];
+    }
     const spd = Math.hypot(u.vx, u.vy);
     if (spd > 6) {
-      const rate = u.def.tags.includes('cavalry') ? 0.055 : 0.07;
-      const phase = (t * spd * rate + u.id * 0.37) % 4;
-      return 2 + Math.floor(phase);
+      const cav = u.def.tags.includes('cavalry');
+      const rate = cav ? 0.055 : 0.07;
+      const phase = Math.floor((t * spd * rate + u.id * 0.37) % 4) & 3;
+      if (u.routing > 0) return FR.flee[phase];
+      // closing on an enemy (or a cavalry charge building up): charge-run
+      if ((u.targetId && !u.isRanged) || (cav && u.chargeRun > 50)) return FR.run[phase];
+      return FR.walk[phase];
     }
-    return 0 + (Math.floor(t * 1.4 + u.id * 0.31) % 2);
+    return FR.idle[Math.floor(t * 1.4 + u.id * 0.31) & 1];
   }
 
   update(alpha: number, view: { x0: number; y0: number; x1: number; y1: number }) {

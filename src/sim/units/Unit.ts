@@ -54,6 +54,11 @@ export class Unit {
 
   anim: Anim = 'idle';
   animT = 0;
+  /** which attack animation the current swing uses (0 = A, 1 = B) */
+  atkVar = 0;
+  swings = 0;
+  /** shield raised against a blocked missile (seconds left) */
+  blockT = 0;
   hitFlash = 0;
   knockX = 0;
   knockY = 0;

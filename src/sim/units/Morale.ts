@@ -21,6 +21,7 @@ export class MoraleSystem {
       if (u.routing <= 0) {
         u.routing = 0;
         u.morale = 45;
+        w.events.emit('unitRallied', { id: u.id, x: u.x, y: u.y, faction: u.faction });
         u.order = { kind: 'idle' };
         u.homeX = u.x;
         u.homeY = u.y;
@@ -63,6 +64,7 @@ export class MoraleSystem {
     const w = this.w;
     u.routing = 4 + w.rng.next() * 2;
     u.targetId = 0;
+    w.events.emit('unitRouted', { id: u.id, x: u.x, y: u.y, faction: u.faction });
     u.windup = 0;
     // flee toward the nearest friendly settlement, else directly away from enemies
     let tx = u.x;

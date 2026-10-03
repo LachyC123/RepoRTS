@@ -496,5 +496,27 @@ export class GameScene extends Phaser.Scene {
       g.lineStyle(1.5 * d, 0xf8f0a0, 0.9);
       g.strokeRect(x, y, w, h);
     }
+    // the capital is under attack: the screen edge pulses red
+    const w = this.client.world;
+    const pf = this.client.playerFaction;
+    const cap = pf >= 0 ? w.settlements[w.factions[pf]?.capitalSettlement ?? -1] : undefined;
+    const since = cap && cap.owner === pf ? w.time - cap.lastAttackedT : 99;
+    if (since < 4 && !this.client.cinematic) {
+      const pulse = 0.5 + 0.5 * Math.sin(w.time * 6);
+      const fade = Math.min(1, (4 - since) / 1.5);
+      const W = this.scale.width;
+      const H = this.scale.height;
+      const band = Math.max(10, Math.min(W, H) * 0.035);
+      for (let k = 0; k < 5; k++) {
+        const a = (0.16 - k * 0.03) * fade * (0.6 + 0.4 * pulse);
+        const t = band * (k / 5);
+        const th = band / 5 + 0.5;
+        g.fillStyle(0xd02018, a);
+        g.fillRect(0, t, W, th);
+        g.fillRect(0, H - t - th, W, th);
+        g.fillRect(t, 0, th, H);
+        g.fillRect(W - t - th, 0, th, H);
+      }
+    }
   }
 }

@@ -417,7 +417,7 @@ export class SettlementSystem {
           b.research = null;
           w.factions[b.faction].upgrades.add(id);
           w.applyUpgrades(b.faction);
-          w.events.emit('research', { faction: b.faction, id });
+          w.events.emit('research', { faction: b.faction, id, x: b.x, y: b.y });
           w.notify({ kind: 'build', text: `${UPGRADES[id].name.toUpperCase()} RESEARCHED`, factions: [b.faction], x: b.x, y: b.y, priority: 1 });
         }
       }

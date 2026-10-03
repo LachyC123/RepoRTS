@@ -410,6 +410,7 @@ export class World {
     for (const u of this.units) {
       u.animT += dt;
       if (u.hitFlash > 0) u.hitFlash -= dt;
+      if (u.blockT > 0) u.blockT -= dt;
       if (u.cheerT > 0) {
         u.cheerT -= dt;
         if (u.cheerT <= 0 && u.anim === 'cheer') u.anim = 'idle';

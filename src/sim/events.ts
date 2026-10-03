@@ -26,9 +26,13 @@ export interface Notice {
 export interface SimEvents {
   unitSpawned: { id: number; x: number; y: number; faction: FactionId; type: string; fromBuilding?: number };
   unitDied: { id: number; x: number; y: number; faction: FactionId; type: string; killerFaction: FactionId | -1 };
-  unitHit: { id: number; x: number; y: number; dmg: number; kind: 'melee' | 'pierce' | 'siege'; blocked: boolean; fromX: number; fromY: number; heavy: boolean };
+  unitHit: { id: number; x: number; y: number; dmg: number; kind: 'melee' | 'pierce' | 'siege'; blocked: boolean; fromX: number; fromY: number; heavy: boolean; /** attacker unit type ('' for towers) */ by: string };
   unitAttack: { id: number; x: number; y: number; type: string; targetX: number; targetY: number };
   charge: { id: number; x: number; y: number };
+  /** a unit picks an enemy soldier to fight after having none */
+  unitEngaged: { id: number; x: number; y: number; faction: FactionId; tx: number; ty: number };
+  unitRouted: { id: number; x: number; y: number; faction: FactionId };
+  unitRallied: { id: number; x: number; y: number; faction: FactionId };
   projectileFired: { id: number; kind: string; x: number; y: number; tx: number; ty: number; faction: FactionId };
   projectileLanded: { id: number; kind: string; x: number; y: number; hit: boolean; splash: number };
   buildingHit: { id: number; x: number; y: number; dmg: number; siege: boolean };
@@ -51,7 +55,7 @@ export interface SimEvents {
   matchOver: { winner: FactionId; reason: 'domination' | 'elimination' | 'defeat' };
   worldEvent: { kind: string; x: number; y: number; regionId?: number };
   workerAction: { id: number; x: number; y: number; action: string };
-  research: { faction: FactionId; id: string };
+  research: { faction: FactionId; id: string; x: number; y: number };
   mapChanged: { tx: number; ty: number; w: number; h: number };
   ceasefireOffer: { from: FactionId; against: FactionId; duration: number; id: number };
 }

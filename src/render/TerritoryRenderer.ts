@@ -231,33 +231,31 @@ export class TerritoryRenderer {
       dark = pack(dk, 0.55);
       glow = pack(main, 0.23);
     } else faint = pack([30, 24, 30], 0.3);
-    // a cell differs if its region has another owner (owned) or is another region (neutral lines)
+    // canvas pixels map onto membership cells (S×S pixels each); borders are measured in pixels so
+    // the line stays one canvas pixel thin even though membership is coarser
+    const S = PX / SUB;
+    const CH = this.canvas.height;
+    const regionAt = (x: number, y: number) => sub[Math.floor(y / S) * W + Math.floor(x / S)];
     const differs = (x: number, y: number) => {
-      if (x < 0 || y < 0 || x >= W || y >= H) return false;
-      const r = sub[y * W + x];
+      if (x < 0 || y < 0 || x >= CW || y >= CH) return false;
+      const r = regionAt(x, y);
       if (r === rid) return false;
       return col ? own[r] !== owner : true;
     };
+    void H;
     const b = this.bbox[rid];
-    const S = PX / SUB;
-    const sx0 = b[0] / S;
-    const sy0 = b[1] / S;
-    const sx1 = b[2] / S;
-    const sy1 = b[3] / S;
-    for (let y = sy0; y < sy1; y++)
-      for (let x = sx0; x < sx1; x++) {
-        if (sub[y * W + x] !== rid) continue;
+    for (let y = b[1]; y < b[3]; y++)
+      for (let x = b[0]; x < b[2]; x++) {
+        if (regionAt(x, y) !== rid) continue;
         let c = 0;
         if (col) {
-          // distance to the nearest foreign cell picks line → dark rim → glow → plain wash
+          // distance to the nearest foreign pixel picks line → dark rim → glow → plain wash
           if (differs(x + 1, y) || differs(x - 1, y) || differs(x, y + 1) || differs(x, y - 1)) c = line;
           else if (differs(x + 1, y + 1) || differs(x - 1, y - 1) || differs(x + 1, y - 1) || differs(x - 1, y + 1) || differs(x + 2, y) || differs(x - 2, y) || differs(x, y + 2) || differs(x, y - 2)) c = dark;
           else if (differs(x + 3, y) || differs(x - 3, y) || differs(x, y + 3) || differs(x, y - 3) || differs(x + 2, y + 2) || differs(x - 2, y - 2) || differs(x + 2, y - 2) || differs(x - 2, y + 2)) c = glow;
           else c = wash;
         } else if (((x + y) >> 1) % 2 === 0 && (differs(x + 1, y) || differs(x, y + 1))) c = faint;
-        // each sub cell covers S×S canvas pixels
-        const o = y * S * CW + x * S;
-        for (let yy = 0; yy < S; yy++) for (let xx = 0; xx < S; xx++) px[o + yy * CW + xx] = c;
+        px[y * CW + x] = c;
       }
   }
 

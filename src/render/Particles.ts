@@ -20,6 +20,10 @@ interface P {
   frames?: string[];
   fps?: number;
   ground: 'stop' | 'die' | 'bounce' | 'none';
+  /** vertical scale relative to horizontal (rings lie flat in perspective) */
+  sy: number;
+  /** alpha fades from the start instead of only at the end */
+  fadeIn: boolean;
 }
 
 export interface Emit {
@@ -42,6 +46,13 @@ export interface Emit {
   fps?: number;
   ground?: P['ground'];
   add?: boolean;
+  /** initial rotation (rad) */
+  rot?: number;
+  /** vertical scale factor (default 1) */
+  sy?: number;
+  flipX?: boolean;
+  /** fade out across the whole life (flashes, rings) */
+  fadeAll?: boolean;
 }
 
 /**
@@ -76,7 +87,8 @@ export class Particles {
     img.setBlendMode(e.add ? 1 : 0);
     if (e.tint !== undefined) img.setTint(e.tint);
     else img.clearTint();
-    img.setRotation(0);
+    img.setRotation(e.rot ?? 0);
+    img.setFlipX(!!e.flipX);
     const p: P = {
       img,
       x: e.x,
@@ -96,6 +108,8 @@ export class Particles {
       frames: e.frames,
       fps: e.fps,
       ground: e.ground ?? 'none',
+      sy: e.sy ?? 1,
+      fadeIn: !!e.fadeAll,
     };
     this.live.push(p);
   }
@@ -147,8 +161,8 @@ export class Particles {
       }
       p.img.setPosition(Math.round(p.x), Math.round(p.y - p.z));
       const sc = p.s0 + (p.s1 - p.s0) * t;
-      p.img.setScale(sc);
-      p.img.setAlpha(p.a0 * (t > 0.6 ? 1 - (t - 0.6) / 0.4 : 1));
+      p.img.setScale(sc, sc * p.sy);
+      p.img.setAlpha(p.a0 * (p.fadeIn ? 1 - t : t > 0.6 ? 1 - (t - 0.6) / 0.4 : 1));
       if (p.spin) p.img.rotation += p.spin * dt;
       if (p.frames && p.fps) {
         const fr = art.get(p.frames[Math.floor(p.life * p.fps) % p.frames.length]);

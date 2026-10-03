@@ -304,6 +304,7 @@ export class WorkerSystem {
       w.events.emit('workerAction', { id: u.id, x: u.x, y: u.y, action: 'flee' });
       return;
     }
+    if (st.phase !== 'work' && u.anim === 'work') u.anim = 'idle';
     switch (st.phase) {
       case 'go': {
         if (!b || b.destroyed || b.faction !== u.faction) {
@@ -326,20 +327,15 @@ export class WorkerSystem {
           this.sendHome(u, st);
           return;
         }
-        // swing animation
+        // tool cycle: the renderer reads anim 'work' + animT; the blow lands at 0.35 s
         const swing = st.job !== 'trade';
-        if (swing) {
-          const cyc = st.t % 1.1;
-          if (cyc < 0.35) {
-            u.windup = 0.01;
-          } else if (cyc < 0.4 && u.anim !== 'attack') {
-            u.anim = 'attack';
-            u.animT = 0;
-            u.windup = 0;
-            if (st.job === 'lumber' && st.treeIdx >= 0) {
-              w.events.emit('workerAction', { id: u.id, x: u.x, y: u.y, action: 'chop:' + st.treeIdx });
-            } else w.events.emit('workerAction', { id: u.id, x: u.x, y: u.y, action: st.job });
-          }
+        const period = 1.1;
+        const prev = u.anim === 'work' ? u.animT : -1;
+        u.anim = 'work';
+        u.animT = st.t % period;
+        if (swing && prev >= 0 && prev < 0.35 && u.animT >= 0.35) {
+          if (st.job === 'lumber' && st.treeIdx >= 0) w.events.emit('workerAction', { id: u.id, x: u.x, y: u.y, action: 'chop:' + st.treeIdx });
+          else w.events.emit('workerAction', { id: u.id, x: u.x, y: u.y, action: st.job });
         }
         const dur = st.job === 'build' ? 2 : st.job === 'trade' ? 2.5 : 4.4;
         if (st.job === 'build') {

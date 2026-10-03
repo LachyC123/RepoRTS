@@ -22,12 +22,14 @@ export interface UnitLook {
   body: 'peasant' | 'soldier' | 'heavy' | 'beast' | 'engine';
   helmet: 'none' | 'hood' | 'cap' | 'kettle' | 'nasal' | 'great' | 'crown' | 'feather';
   armor: 'tunic' | 'gambeson' | 'mail' | 'plate' | 'robe' | 'leather';
-  weapon: 'none' | 'club' | 'spear' | 'sword' | 'axe' | 'bow' | 'crossbow' | 'pike' | 'longbow' | 'lance' | 'greatsword' | 'pitchfork';
+  weapon: 'none' | 'club' | 'spear' | 'sword' | 'axe' | 'bow' | 'crossbow' | 'pike' | 'longbow' | 'lance' | 'greatsword' | 'pitchfork' | 'pick' | 'hammer' | 'hoe';
   shield: 'none' | 'round' | 'kite' | 'tower' | 'buckler';
   mount?: 'horse' | 'warhorse' | 'pony';
   engine?: 'ram' | 'catapult' | 'ballista' | 'trebuchet';
   cape?: boolean;
   beard?: boolean;
+  /** carries a trade pack on the back */
+  sack?: boolean;
   /** skin/cloth tint hints */
   cloth?: string;
 }
@@ -713,7 +715,7 @@ export const UNITS: Record<string, UnitDef> = {
     tier: 0,
     power: 0,
     special: 'worker',
-    look: { body: 'peasant', helmet: 'hood', armor: 'tunic', weapon: 'pitchfork', shield: 'none', cloth: '#8a7a4a' },
+    look: { body: 'peasant', helmet: 'hood', armor: 'tunic', weapon: 'hoe', shield: 'none', cloth: '#8a7a4a' },
   },
   worker_mine: {
     id: 'worker_mine',
@@ -739,7 +741,7 @@ export const UNITS: Record<string, UnitDef> = {
     tier: 0,
     power: 0,
     special: 'worker',
-    look: { body: 'peasant', helmet: 'cap', armor: 'leather', weapon: 'axe', shield: 'none', cloth: '#5a4a3a', beard: true },
+    look: { body: 'peasant', helmet: 'cap', armor: 'leather', weapon: 'pick', shield: 'none', cloth: '#5a4a3a', beard: true },
   },
   worker_build: {
     id: 'worker_build',
@@ -765,7 +767,7 @@ export const UNITS: Record<string, UnitDef> = {
     tier: 0,
     power: 0,
     special: 'worker',
-    look: { body: 'peasant', helmet: 'cap', armor: 'gambeson', weapon: 'club', shield: 'none', cloth: '#7a6a4a' },
+    look: { body: 'peasant', helmet: 'cap', armor: 'gambeson', weapon: 'hammer', shield: 'none', cloth: '#7a6a4a' },
   },
   worker_trade: {
     id: 'worker_trade',
@@ -791,7 +793,7 @@ export const UNITS: Record<string, UnitDef> = {
     tier: 0,
     power: 0,
     special: 'worker',
-    look: { body: 'peasant', helmet: 'feather', armor: 'robe', weapon: 'none', shield: 'none', cloth: '#6a3a5a' },
+    look: { body: 'peasant', helmet: 'feather', armor: 'robe', weapon: 'none', shield: 'none', cloth: '#6a3a5a', sack: true },
   },
   // ---- Neutral threats ----
   bandit: {

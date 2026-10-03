@@ -52,7 +52,11 @@ export function buildFactionArt(world: World) {
       const name0 = `u/${def.id}/${f.color.id}/0`;
       if (art.has(name0)) continue;
       const sheet = buildUnitSheet(def, f.color, f.id);
-      sheet.frames.forEach((pc, i) => art.add(`u/${def.id}/${f.color.id}/${i}`, pc, sheet.ax, sheet.ay));
+      sheet.frames.forEach((pc, i) => {
+        const name = `u/${def.id}/${f.color.id}/${i}`;
+        if (typeof pc === 'number') art.alias(name, `u/${def.id}/${f.color.id}/${pc}`);
+        else art.add(name, pc, sheet.ax, sheet.ay);
+      });
     }
   }
 }

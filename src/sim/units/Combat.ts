@@ -134,7 +134,9 @@ export class CombatSystem {
         const found = this.acquire(u, tgt);
         if (found) tgt = found;
       }
-      u.targetId = tgt ? (tgt as { id: number }).id : 0;
+      const newId = tgt ? (tgt as { id: number }).id : 0;
+      if (newId && !u.targetId && isUnit(tgt!)) w.events.emit('unitEngaged', { id: u.id, x: u.x, y: u.y, faction: u.faction, tx: tgt!.x, ty: tgt!.y });
+      u.targetId = newId;
       if (!tgt) {
         this.idleBehaviour(u);
         continue;
@@ -254,6 +256,12 @@ export class CombatSystem {
       }
       if (u.attackCd <= 0) {
         u.windup = u.def.windup;
+        // vary the animation: archers loft long shots, crossbows kneel when holding, melee alternates
+        const wc = u.def.look.weapon;
+        if (wc === 'bow' || wc === 'longbow') u.atkVar = d > u.range * 0.55 ? 1 : 0;
+        else if (wc === 'crossbow') u.atkVar = u.order.kind === 'hold' ? 1 : 0;
+        else u.atkVar = (u.swings + u.id) & 1;
+        u.swings++;
         w.events.emit('unitAttack', { id: u.id, x: u.x, y: u.y, type: u.def.id, targetX: t.x, targetY: t.y });
       }
       return;
@@ -398,6 +406,7 @@ export class CombatSystem {
       if (facingShot && w.rng.next() < chance) {
         dmg *= 0.2;
         blocked = true;
+        t.blockT = 0.35;
       }
     }
     if (t.def.special === 'worker' && faction !== NEUTRAL) dmg *= 1.2;
@@ -419,7 +428,7 @@ export class CombatSystem {
       t.targetId = attacker.id;
       t.retargetT = 0.6;
     }
-    w.events.emit('unitHit', { id: t.id, x: t.x, y: t.y, dmg, kind: type, blocked, fromX, fromY, heavy });
+    w.events.emit('unitHit', { id: t.id, x: t.x, y: t.y, dmg, kind: type, blocked, fromX, fromY, heavy, by: attacker ? attacker.def.id : '' });
     if (t.hp <= 0) this.kill(t, faction, attacker);
   }
 

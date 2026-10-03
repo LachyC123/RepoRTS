@@ -17,6 +17,9 @@ interface Rec {
   flag?: BObj;
   flagLift: number;
   owner: number;
+  /** hit shudder: seconds left and strength (px) */
+  wob?: number;
+  wobMag?: number;
 }
 
 /**
@@ -42,7 +45,12 @@ export class BuildingRenderer {
   ) {
     world.events.on('buildingHit', (e) => {
       const r = this.recs.get(e.id);
-      if (r) r.img.flash = 0.08;
+      if (r) {
+        r.img.flash = 0.08;
+        // the structure shudders; siege blows rock it hard
+        r.wob = e.siege ? 0.4 : 0.14;
+        r.wobMag = e.siege ? 2 : 0.8;
+      }
     });
     world.events.on('regionCaptured', (e) => {
       const s = world.settlements[e.regionId];
@@ -148,7 +156,12 @@ export class BuildingRenderer {
         r.img.bkey = k.key;
         r.img.sy = (b.ty + b.size) * TILE - (b.destroyed ? 14 : 2);
       }
-      r.img.setPosition(Math.round(b.x), (b.ty + b.size) * TILE);
+      let wx = 0;
+      if (r.wob && r.wob > 0) {
+        r.wob -= dt;
+        wx = Math.round(Math.sin(time * 70) * (r.wobMag ?? 1) * Math.min(1, r.wob * 5));
+      }
+      r.img.setPosition(Math.round(b.x) + wx, (b.ty + b.size) * TILE);
       if (r.img.flash && r.img.flash > 0) {
         r.img.flash -= dt;
         r.img.setTintFill(0xffe8d0);

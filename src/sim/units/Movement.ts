@@ -125,7 +125,8 @@ export class Movement {
       if (spd > u.def.speed * 0.7) u.chargeRun += spd * dt;
       else u.chargeRun = Math.max(0, u.chargeRun - 60 * dt);
       // anim state (combat system overrides with attack)
-      if (u.windup <= 0 && u.anim !== 'attack' && u.anim !== 'cheer') u.anim = spd > 6 ? 'walk' : 'idle';
+      if (u.anim === 'work' && spd > 6) u.anim = 'walk';
+      if (u.windup <= 0 && u.anim !== 'attack' && u.anim !== 'cheer' && u.anim !== 'work') u.anim = spd > 6 ? 'walk' : 'idle';
       // stuck detection
       if (!u.arrived && u.path) {
         u.stuckT += dt;

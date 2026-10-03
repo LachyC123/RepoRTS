@@ -37,6 +37,105 @@ export function buildFxArt() {
     st.px(4, 2, '#fff0a0');
     add('fx/star', st);
   }
+  // ---- weapon trails: a curved slash in three beats (flash, full arc, fading tips)
+  for (let k = 0; k < 3; k++) {
+    const pc = new PixelCanvas(13, 13);
+    const a0 = -1.1;
+    const a1 = 1.1;
+    for (let i = 0; i <= 24; i++) {
+      const a = a0 + ((a1 - a0) * i) / 24;
+      const edge = i < 4 || i > 20;
+      if (k === 2 && !edge && i % 3 !== 0) continue;
+      const r = 5 + (k === 1 ? 0.5 : 0);
+      const x = 6 + Math.cos(a) * r;
+      const y = 6 + Math.sin(a) * r;
+      pc.px(x, y, edge ? '#fff0a0' : '#ffffff');
+      if (k === 1 && !edge) pc.px(6 + Math.cos(a) * (r - 1), 6 + Math.sin(a) * (r - 1), '#fff8d8');
+    }
+    add(`fx/slash${k}`, pc);
+  }
+  // ---- shockwave ring (drawn round, squashed into perspective at runtime)
+  {
+    const pc = new PixelCanvas(25, 25);
+    for (let i = 0; i < 96; i++) {
+      const a = (i / 96) * Math.PI * 2;
+      pc.px(12 + Math.cos(a) * 11.5, 12 + Math.sin(a) * 11.5, '#ffffff');
+      if (i % 2 === 0) pc.px(12 + Math.cos(a) * 10.5, 12 + Math.sin(a) * 10.5, '#e8e0f0');
+    }
+    add('fx/ring', pc);
+  }
+  // ---- light beam (capture / upgrade / research): soft vertical column, anchored at its foot
+  {
+    const pc = new PixelCanvas(7, 48);
+    for (let y = 0; y < 48; y++) {
+      const fade = y / 47;
+      for (let x = 0; x < 7; x++) {
+        const edge = Math.abs(x - 3) / 3.5;
+        const a = Math.max(0, (1 - edge * edge) * (0.25 + 0.75 * fade));
+        if (a < 0.08) continue;
+        const v = Math.round(255 * a);
+        pc.data[y * 7 + x] = ((v & 255) << 24) | (0xff << 16) | (0xff << 8) | 0xff;
+      }
+    }
+    add('fx/beam', pc, 3.5, 47);
+  }
+  // ---- impact crater / scorch decal
+  {
+    const pc = new PixelCanvas(20, 9);
+    pc.ellipse(10, 4.5, 9, 4, '#3a2c22');
+    pc.ellipse(10, 4.5, 6.5, 2.8, '#2a1e18');
+    pc.ellipse(9, 4, 3.5, 1.5, '#1e1612');
+    for (let i = 0; i < 9; i++) {
+      const a = (i / 9) * Math.PI * 2 + 0.3;
+      pc.px(10 + Math.cos(a) * 9.5, 4.5 + Math.sin(a) * 4.3, '#5a4632');
+    }
+    add('fx/crater', pc, 10, 4.5);
+  }
+  // ---- gear knocked loose (helmet), spins off a fallen soldier
+  {
+    const pc = new PixelCanvas(5, 4);
+    pc.rect(1, 0, 3, 2, RAMP.metal[4]);
+    pc.hline(0, 4, 2, RAMP.metal[2]);
+    pc.px(1, 0, RAMP.metal[6]);
+    pc.outline(OUTLINE, 0.8);
+    add('fx/helm', pc);
+  }
+  // ---- speech bubbles: fight (crossed swords), flee (white flag), cheer (note), alert (!)
+  for (const kind of ['fight', 'flee', 'cheer', 'alert'] as const) {
+    const pc = new PixelCanvas(11, 12);
+    pc.rect(1, 0, 9, 9, '#fff8e8');
+    pc.hline(0, 10, 1, '#fff8e8');
+    pc.hline(0, 10, 7, '#fff8e8');
+    pc.rect(0, 1, 11, 7, '#fff8e8');
+    pc.px(3, 9, '#fff8e8');
+    pc.px(4, 9, '#fff8e8');
+    pc.px(3, 10, '#fff8e8');
+    const ink = '#2a2028';
+    if (kind === 'fight') {
+      pc.line(2, 1, 8, 7, '#7a8090');
+      pc.line(8, 1, 2, 7, '#9aa0b0');
+      pc.px(2, 7, '#8a5a2a');
+      pc.px(8, 7, '#8a5a2a');
+      pc.px(5, 4, '#ffffff');
+    } else if (kind === 'flee') {
+      pc.vline(3, 1, 7, '#6a4a2a');
+      pc.rect(4, 1, 4, 3, '#f8f8f8');
+      pc.hline(4, 7, 4, '#c8c8d0');
+      pc.px(7, 1, '#d8d8e0');
+    } else if (kind === 'cheer') {
+      pc.vline(6, 1, 6, ink);
+      pc.hline(6, 8, 1, ink);
+      pc.px(8, 2, ink);
+      pc.rect(4, 6, 2, 2, ink);
+      pc.px(6, 6, ink);
+    } else {
+      pc.vline(5, 1, 5, '#c82828');
+      pc.vline(4, 2, 4, '#e83838');
+      pc.px(5, 7, '#c82828');
+    }
+    pc.outline(OUTLINE, 0.9);
+    add(`fx/bub_${kind}`, pc, 5.5, 11);
+  }
   // ---- flames
   for (let k = 0; k < 4; k++) {
     const pc = new PixelCanvas(9, 13);

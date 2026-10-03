@@ -3,7 +3,7 @@ import { NEUTRAL_COLOR } from '../../data/factions';
 import { art } from './ArtRegistry';
 import { PixelCanvas, shade } from './PixelCanvas';
 import { OUTLINE, RAMP } from './palette';
-import { buildUnitSheet } from './unitArt';
+import { buildUnitSheet, sheetFrame } from './unitArt';
 
 /** Ambient life: animals, birds, butterflies, villagers, carts and boats (render-only). */
 export function buildAmbientArt() {
@@ -225,7 +225,7 @@ export function buildAmbientArt() {
     const def: UnitDef = { ...UNITS.militia, id: 'civ_' + name, look };
     const sheet = buildUnitSheet(def, { ...NEUTRAL_COLOR, main: '#8a7a5a', light: '#a89a7a', dark: '#5a4a3a' }, name.length);
     // idle 0,1 / walk 2..5
-    for (let f = 0; f < 6; f++) add(`amb/villager_${name}/${f}`, sheet.frames[f], sheet.ax, sheet.ay);
+    for (let f = 0; f < 6; f++) add(`amb/villager_${name}/${f}`, sheetFrame(sheet, f), sheet.ax, sheet.ay);
   }
 }
 

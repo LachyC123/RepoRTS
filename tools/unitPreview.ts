@@ -1,16 +1,18 @@
 import { UNITS } from '../src/data/units';
 import { KINGDOM_COLORS } from '../src/data/factions';
-import { buildUnitSheet } from '../src/render/art/unitArt';
+import { buildUnitSheet, sheetFrame } from '../src/render/art/unitArt';
 import { writePng } from './png';
 
 const types = (process.argv[2] ? process.argv[2].split(',') : Object.keys(UNITS));
-const SC = 3;
+const SC = Number(process.env.SC ?? 3);
 const rows: { frames: Uint32Array[]; w: number; h: number }[] = [];
 let maxW = 0;
 for (const t of types) {
   const sheet = buildUnitSheet(UNITS[t], KINGDOM_COLORS[t.length % 4], 0);
-  rows.push({ frames: sheet.frames.map((f) => f.data), w: sheet.w, h: sheet.h });
-  maxW = Math.max(maxW, sheet.w * sheet.frames.length);
+    const from = Number(process.env.FROM ?? 0);
+  const to = Number(process.env.TO ?? sheet.frames.length);
+  rows.push({ frames: sheet.frames.slice(from, to).map((_, i) => sheetFrame(sheet, i + from).data), w: sheet.w, h: sheet.h });
+  maxW = Math.max(maxW, sheet.w * rows[rows.length - 1].frames.length);
 }
 const W = maxW * SC;
 const H = rows.reduce((a, r) => a + r.h, 0) * SC;
@@ -38,5 +40,5 @@ for (const r of rows) {
   });
   oy += r.h;
 }
-writePng('screenshots/units.png', W, H, new Uint8Array(out.buffer));
+writePng(process.env.OUT ?? 'screenshots/units.png', W, H, new Uint8Array(out.buffer));
 console.log(W, H);

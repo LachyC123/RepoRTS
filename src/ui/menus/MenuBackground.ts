@@ -4,7 +4,7 @@ import { UNITS } from '../../data/units';
 import { PixelCanvas, mix } from '../../render/art/PixelCanvas';
 import { BAYER4, RAMP } from '../../render/art/palette';
 import { drawTree, drawWindmillBlades } from '../../render/art/propArt';
-import { buildUnitSheet } from '../../render/art/unitArt';
+import { buildUnitSheet, sheetFrame } from '../../render/art/unitArt';
 
 /**
  * Animated pixel-art title backdrop rendered on a tiny canvas and scaled up crisp: dawn sky,
@@ -59,7 +59,7 @@ export class MenuBackground {
     for (const c of columns) {
       c.types.forEach((type, i) => {
         const sheet = buildUnitSheet(UNITS[type], c.color, i);
-        const frames = sheet.frames.slice(2, 6).map((f) => f.flush());
+        const frames = [2, 3, 4, 5].map((i) => sheetFrame(sheet, i).flush());
         const flipped = c.dir < 0 ? frames.map((f) => flip(f)) : frames;
         this.soldiers.push({ frames: flipped, x: 0, y: 0, speed: UNITS[type].speed * 0.35, dir: c.dir, t: c.offset - i * 0.035 });
       });

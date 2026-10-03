@@ -4,7 +4,7 @@ import { UNITS } from '../../data/units';
 import { drawBuilding } from '../../render/art/buildingArt';
 import { iconDataUrl } from '../../render/art/fxArt';
 import { PixelCanvas } from '../../render/art/PixelCanvas';
-import { buildUnitSheet } from '../../render/art/unitArt';
+import { buildUnitSheet, sheetFrame } from '../../render/art/unitArt';
 import { frameUrl } from '../uiArt';
 
 const portraits = new Map<string, string>();
@@ -19,7 +19,7 @@ export function portraitUrl(type: string, color: KingdomColor): string {
     const def = UNITS[type];
     if (!def) return '';
     const sheet = buildUnitSheet(def, color, 0);
-    u = crop(sheet.frames[0]).flush().toDataURL();
+    u = crop(sheetFrame(sheet, 0)).flush().toDataURL();
     portraits.set(key, u);
   }
   return u;
