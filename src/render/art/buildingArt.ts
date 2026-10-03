@@ -32,6 +32,8 @@ export interface BuildingOpts {
   variant?: number;
   landmark?: LandmarkKind | null;
   deposit?: 'gold' | 'stone' | null;
+  /** silo: weapon loaded / armed (lit fuse, open hatch). Other buildings ignore it. */
+  ready?: boolean;
 }
 
 export type RoofMat = 'thatch' | 'tile' | 'slate' | 'shingle' | 'lead';
@@ -137,6 +139,8 @@ export interface Ctx {
   G: number;
   con: number;
   dmg: number;
+  /** optional overlay drawn onto the composited sprite after outline + shadow (smoke, glows) */
+  post?: (c: Ctx) => void;
 }
 
 export function makeCtx(size: number, top: number, team: Team | null, state: BuildingState, variant = 0, tier = 3, salt = 0): Ctx {
@@ -230,6 +234,7 @@ export function finish(c: Ctx, opt: { noShadow?: boolean } = {}): BuildingSprite
     }
   }
   base.draw(pc, 0, 0);
+  if (c.post) c.post(c);
   // crop transparent rows on top
   let top = 0;
   outer: for (; top < h; top++) for (let x = 0; x < w; x++) if (base.data[top * w + x] >>> 24) break outer;
@@ -2924,6 +2929,401 @@ function drawLandmark(c: Ctx, o: BuildingOpts) {
   if (c.team && c.con === 0) smallFlag(c, R - 3, G - 2, c.team);
 }
 
+// ---------------------------------------------------------------------------- great bombard
+const BRONZE = ['#3a2412', '#563619', '#764c22', '#96652e', '#b4823e', '#cea056', '#e6c47e'];
+const BRONZE_BURNT = BRONZE.map((col, i) => mix(col, CHAR[Math.min(4, i)], 0.4));
+const IRON = ['#18181e', '#24262e', '#34383f', '#4a4f58', '#646a74'];
+
+export interface TubeAxis {
+  ux: number;
+  uy: number;
+  /** unit normal toward the lit (upper-left) side */
+  nx: number;
+  ny: number;
+  len: number;
+}
+/** frame of the line A→B (A = breech end, B = muzzle end) */
+export function tubeAxis(ax: number, ay: number, bx: number, by: number): TubeAxis {
+  const len = Math.max(1, Math.hypot(bx - ax, by - ay));
+  const ux = (bx - ax) / len;
+  const uy = (by - ay) / len;
+  return { ux, uy, nx: uy, ny: -ux, len };
+}
+
+/**
+ * Heavy gun barrel as a lit cylinder from breech centre A to muzzle centre B. `rad(t)` gives the
+ * radius along the tube (t = 0 breech → 1 muzzle); `hoops` are raised iron bands at those t.
+ * Pixels before `t0` are skipped (burst / missing chamber); otherwise the breech gets a round cap.
+ */
+export function gunTube(c: Ctx, ax: number, ay: number, bx: number, by: number, rad: (t: number) => number, R0: readonly string[], hoops: number[] = [], o: { t0?: number; hoopR?: readonly string[] } = {}): TubeAxis {
+  const p = c.pc;
+  const a = tubeAxis(ax, ay, bx, by);
+  const rm = Math.max(rad(0), rad(0.5), rad(1)) + 1.5;
+  const t0 = o.t0 ?? -1;
+  const HR = o.hoopR ?? IRON;
+  for (let py = Math.floor(Math.min(ay, by) - rm); py <= Math.ceil(Math.max(ay, by) + rm); py++)
+    for (let px = Math.floor(Math.min(ax, bx) - rm); px <= Math.ceil(Math.max(ax, bx) + rm); px++) {
+      const qx = px + 0.5 - ax;
+      const qy = py + 0.5 - ay;
+      const along = qx * a.ux + qy * a.uy;
+      const t = along / a.len;
+      if (t > 1 || t < t0) continue;
+      const s = qx * a.nx + qy * a.ny;
+      let onHoop = false;
+      for (const h of hoops) if (Math.abs(along - h * a.len) < 0.9) onHoop = true;
+      const r = rad(clamp(t, 0, 1)) + (onHoop ? 0.7 : 0);
+      if (t < 0 ? Math.hypot(along, s) > r : Math.abs(s) > r) continue;
+      const k = s / r;
+      let v = 0.4 + k * 0.34;
+      if (k > 0.3 && k < 0.62) v += 0.2;
+      if (k < -0.72) v -= 0.08;
+      if (t < 0) v -= 0.12 * Math.min(1, -along / r);
+      p.px(px, py, onHoop ? rv(HR, v - 0.08) : rv(R0, v, px, py, 0.35));
+    }
+  return a;
+}
+
+/** muzzle face of a tube (ellipse across the axis); bore shows empty / a loaded ball / a swab head */
+function muzzleFace(c: Ctx, bx: number, by: number, a: TubeAxis, r: number, R0: readonly string[], bore: 'empty' | 'ball' | 'swab' | 'burst') {
+  const p = c.pc;
+  const ra = r * 0.42;
+  for (let py = Math.floor(by - r - 1); py <= by + r + 1; py++)
+    for (let px = Math.floor(bx - r - 1); px <= bx + r + 1; px++) {
+      const qx = px + 0.5 - bx;
+      const qy = py + 0.5 - by;
+      const u = (qx * a.ux + qy * a.uy) / ra;
+      const n = (qx * a.nx + qy * a.ny) / r;
+      let d = u * u + n * n;
+      if (bore === 'burst') d += (hash2(px, py, c.seed + 61) - 0.5) * 0.5;
+      if (d > 1) continue;
+      let col: string;
+      if (d > 0.42) col = rv(R0, 0.62 + n * 0.3 - (bore === 'burst' ? 0.3 : 0));
+      else if (bore === 'ball' && d < 0.3) col = rv(S, 0.5 + n * 0.3 - u * 0.15);
+      else if (bore === 'swab' && d < 0.32) col = n > 0.1 ? '#d8ccae' : '#a89a7c';
+      else col = n < -0.35 && d > 0.25 ? R0[1] : '#140c10';
+      p.px(px, py, col);
+    }
+}
+
+/** rising curl of semi-transparent smoke, laid over the finished sprite (no outline / shadow) */
+export function smokeWisp(c: Ctx, x: number, y: number, h = 12) {
+  const SM = RAMP.smoke;
+  const prev = c.post;
+  c.post = (cc) => {
+    prev?.(cc);
+    for (let k = 1; k <= h; k++) {
+      const dx = Math.round(Math.sin(k * 0.55 + 0.6) * 1.4);
+      const a = 0.85 * (1 - k / (h + 2));
+      const col = k < h * 0.4 ? SM[3] : SM[4];
+      cc.base.blend(x + dx, y - k, col, a);
+      if (k > 2) cc.base.blend(x + dx + (k & 1 ? 1 : -1), y - k, SM[4], a * 0.45);
+    }
+  };
+}
+
+/** heavy stone shot */
+function stoneBall(c: Ctx, cx: number, cy: number, r = 2.7) {
+  c.pc.ellipse(cx + 0.3, cy + 0.3, r + 0.9, r + 0.9, '#2a2430');
+  blob(c.pc, cx, cy, r, r, S.slice(1), c.seed + Math.round(cx * 7 + cy), 0.05);
+}
+
+/** Great Bombard: a monstrous hooped bronze cannon on a timber bed atop a raised stone platform */
+const drawBombard: Drawer = (c, o) => {
+  const p = c.pc;
+  const { L, R, F, G } = c;
+  const ruined = c.dmg === 2;
+  const ready = !!o.ready && c.con === 0 && !ruined;
+  yardFront(c, 'dirt', F + 7);
+  // ---- raised stone platform: flagged top + ashlar front face
+  const px0 = L + 3;
+  const pw = R - L - 6;
+  const pg = G - 8;
+  const fh = 5;
+  const top0 = F + 13;
+  const top1 = pg - fh;
+  const td = top1 - top0;
+  if (c.con === 1) foundation(c, px0, pg, pw, pg - top0);
+  else
+    for (let y = top0; y <= top1; y++)
+      for (let x = px0; x < px0 + pw; x++) {
+        const lx = x - px0;
+        const ly = y - top0;
+        const row = Math.floor(ly / 4);
+        const xo = lx + (row & 1) * 3 + Math.floor(hash2(row, 2, c.seed) * 2);
+        const q = Math.floor(xo / 6);
+        let v = 0.5 + (hash2(q, row, c.seed + 3) - 0.5) * 0.16 + (0.5 - lx / pw) * 0.1;
+        if (ly % 4 === 3 || xo % 6 === 5) v -= 0.18;
+        if (ly === 0) v = 0.3;
+        else if (ly === td) v = 0.84;
+        else if (ly === td - 1) v = 0.68;
+        if (lx === 0) v += 0.12;
+        else if (lx === pw - 1) v -= 0.22;
+        let col = rv(S, v, x, y, 0.3);
+        if (c.con === 2 && ly > 0 && ly < td - 1 && hash2(q, row, c.seed + 9) < 0.45) col = rv(DIRT, 0.35 + vnoise2(x, y, 4, c.seed) * 0.4, x, y, 0.5);
+        if (ruined) {
+          const e = Math.min(lx, pw - 1 - lx, ly, td - ly) / (td / 2);
+          const thr = 0.22 + vnoise2(x, y, 3, c.seed + 4) * 0.4;
+          if (e > thr) col = ruinFloor(x, y, c.seed);
+          else if (e > thr - 0.1) col = rv(S, 0.8);
+        }
+        p.px(x, y, col);
+      }
+  wall(c, px0, pg - fh + 1, pw, fh, 'stone');
+  if (c.dmg === 1)
+    for (const [cx0, cy0] of [
+      [px0 + 33, top0 + 3],
+      [px0 + 4, top1 - 7],
+    ]) {
+      let cx = cx0;
+      for (let k = 0; k < 5; k++) {
+        p.px(cx, cy0 + k, '#2a2228');
+        if (hash2(k, cx0, c.seed) < 0.5) cx += 1;
+      }
+    }
+
+  // ---- gunners' lean-to at the back-left of the platform (open front)
+  const sx = L + 4;
+  const sw = 14;
+  const sgb = top0 + 9;
+  const swh = 7;
+  const sy = sgb - swh + 1;
+  wall(c, sx, sy, sw, swh, 'planks');
+  if (c.con === 0 && !ruined) {
+    p.rect(sx + 1, sy + 1, sw - 2, swh - 1, INTERIOR);
+    p.hline(sx + 1, sx + sw - 2, sy + 1, DARK);
+    post(c, sx + 6, sy, sgb);
+    // powder kegs + a spare rammer inside
+    for (const kx of [sx + 1, sx + 3]) {
+      p.rect(kx, sgb - 2, 2, 3, W[3]);
+      p.px(kx, sgb - 2, W[5]);
+      p.px(kx + 1, sgb - 1, M[2]);
+    }
+    p.line(sx + 9, sgb, sx + 11, sy + 2, W[4]);
+    p.rect(sx + 11, sy + 1, 2, 2, '#d8ccae');
+  }
+  roofEW(c, sx - 1, sy - 7, sw + 2, 8, 'shingle', { ridge: 0.1 });
+  construct(c, sx, sgb, sw, swh, 4);
+  if (ruined) ruinDebris(c, px0 + 18, top0 + 2, pw - 20, td - 4);
+
+  // ---- the gun: breech A (lower-left) → muzzle B (upper-right)
+  const bg = pg - 9;
+  let A: [number, number] = [L + 18, bg - 9];
+  let B: [number, number] = [L + 39, bg - 23];
+  const rad = (t: number) => (t < 0.28 ? 4.6 : t > 0.9 ? 6.6 : 5.8);
+  if (c.con === 1) {
+    // barrel delivered on log rollers, bed timbers stacked beside
+    A = [L + 15, pg - 10];
+    B = [L + 38, pg - 10];
+    for (const rx of [L + 18, L + 27, L + 35]) {
+      p.rect(rx - 1, pg - 4, 3, 3, ENDG[1]);
+      p.px(rx, pg - 3, ENDG[2]);
+      p.px(rx + 1, pg - 2, W[1]);
+    }
+    const a1 = gunTube(c, A[0], A[1], B[0], B[1], rad, BRONZE, []);
+    muzzleFace(c, B[0], B[1], a1, 6.6, BRONZE, 'empty');
+    logPile(c, R - 12, top0 + 9, 3, 2, 3);
+    return;
+  }
+  if (ruined) {
+    // tipped off its bed and burst at the chamber
+    A = [L + 13, bg - 4];
+    B = [L + 40, bg - 11];
+  }
+  const ax0 = tubeAxis(A[0], A[1], B[0], B[1]);
+  // recoil backstop: short stakes + a cross beam behind the breech
+  if (!ruined) {
+    for (const kx of [L + 6, L + 9]) {
+      p.vline(kx, bg - 7, bg + 1, W[4]);
+      p.vline(kx + 1, bg - 7, bg + 1, W[2]);
+      p.px(kx, bg - 8, W[5]);
+    }
+    p.hline(L + 5, L + 13, bg - 4, W[4]);
+    p.hline(L + 5, L + 13, bg - 3, W[1]);
+    p.px(L + 13, bg - 4, ENDG[2]);
+    p.px(L + 13, bg - 3, ENDG[1]);
+  }
+  // timber bed under the barrel: a long trough + a stepped crib lifting the front
+  const sTop = -4.6;
+  const sBot = -9.6;
+  if (!ruined) {
+    const tb0 = -0.24;
+    const tb1 = 0.72;
+    for (let py = Math.floor(Math.min(A[1], B[1]) - 12); py <= bg + 2; py++)
+      for (let px = A[0] - 12; px <= B[0] + 8; px++) {
+        const qx = px + 0.5 - A[0];
+        const qy = py + 0.5 - A[1];
+        const along = qx * ax0.ux + qy * ax0.uy;
+        const t = along / ax0.len;
+        const s = qx * ax0.nx + qy * ax0.ny;
+        if (t < tb0 || t > tb1 || s > sTop || s < sBot) continue;
+        const k = (s - sBot) / (sTop - sBot);
+        let col = rv(W, 0.3 + k * 0.5);
+        if (k > 0.8) col = W[5];
+        if (t < tb0 + 0.05) col = rv(ENDG, 0.4 + k * 0.5);
+        // iron straps across the bed
+        if (Math.abs(t - 0.04) < 0.025 || Math.abs(t - 0.44) < 0.025) col = rv(IRON, 0.3 + k * 0.6);
+        p.px(px, py, col);
+      }
+    const bx0 = A[0] - ax0.nx * -sBot;
+    const by0 = A[1] - ax0.ny * -sBot;
+    const slope = ax0.uy / ax0.ux;
+    const xEnd = Math.round(bx0 + tb1 * ax0.len * ax0.ux) - 1;
+    for (let x = Math.round(bx0) - 1; x <= xEnd; x++) {
+      const yb = Math.round(by0 + (x - bx0) * slope);
+      for (let y = yb; y <= bg; y++) {
+        const layer = Math.floor((bg - y) / 4);
+        const r = (bg - y) % 4;
+        let col = r === 3 ? W[5] : r === 0 ? W[1] : W[3];
+        if (layer & 1 && md(x, 6) === 0) col = r === 3 ? ENDG[2] : ENDG[1];
+        if (md(x + layer * 3, 9) === 0 && r > 0) col = W[1];
+        if (x === Math.round(bx0) - 1) col = shade(col, 0.12);
+        if (x === xEnd) col = shade(col, -0.28);
+        p.px(x, y, col);
+      }
+    }
+    if (c.dmg === 1) {
+      // splintered bed end
+      const ex = Math.round(A[0] + ax0.ux * tb1 * ax0.len - ax0.nx * 6);
+      const ey = Math.round(A[1] + ax0.uy * tb1 * ax0.len - ax0.ny * 6);
+      p.px(ex + 1, ey, W[6]);
+      p.px(ex + 2, ey - 1, W[5]);
+      p.px(ex + 1, ey + 2, W[6]);
+      p.px(ex, ey + 1, '#1e1418');
+    }
+  } else {
+    // collapsed, charred bed timbers
+    p.line(L + 8, bg + 1, L + 30, bg - 2, CHAR[3]);
+    p.line(L + 8, bg + 2, L + 30, bg - 1, CHAR[1]);
+    p.line(L + 26, bg + 2, L + 44, bg - 6, CHAR[2]);
+    p.line(L + 27, bg + 3, L + 44, bg - 5, CHAR[0]);
+    p.vline(L + 7, bg - 3, bg + 1, CHAR[3]);
+  }
+  // the barrel itself
+  if (ruined) {
+    const t0 = 0.3;
+    gunTube(c, A[0], A[1], B[0], B[1], rad, BRONZE_BURNT, [0.5, 0.7, 0.92], { t0 });
+    const kx = A[0] + ax0.ux * t0 * ax0.len;
+    const ky = A[1] + ax0.uy * t0 * ax0.len;
+    muzzleFace(c, kx, ky, ax0, 5.8, BRONZE_BURNT, 'burst');
+    // peeled staves splaying back from the burst
+    for (const [dx, dy] of [
+      [-5, -6],
+      [-7, -1],
+      [-4, 5],
+    ] as const) {
+      p.line(kx + dx * 0.3, ky + dy * 0.6, kx + dx, ky + dy, BRONZE_BURNT[4]);
+      p.px(kx + dx, ky + dy, BRONZE_BURNT[2]);
+    }
+    muzzleFace(c, B[0], B[1], ax0, 6.6, BRONZE_BURNT, 'empty');
+    // the blown-off chamber lying on the platform
+    const a2 = gunTube(c, L + 5, top1 - 5, L + 12, top1 - 3, () => 3.6, BRONZE_BURNT, [0.45]);
+    muzzleFace(c, L + 12, top1 - 3, a2, 3.6, BRONZE_BURNT, 'burst');
+  } else {
+    const hoops = c.con === 2 ? [0.28, 0.9] : c.dmg === 1 ? [0.06, 0.28, 0.48, 0.9] : [0.06, 0.28, 0.48, 0.69, 0.9];
+    gunTube(c, A[0], A[1], B[0], B[1], rad, BRONZE, hoops);
+    if (c.dmg === 1) {
+      // sprung hoop hanging loose + a dent
+      const hx = A[0] + ax0.ux * 0.69 * ax0.len;
+      const hy = A[1] + ax0.uy * 0.69 * ax0.len;
+      p.line(hx - ax0.nx * 6.4, hy - ax0.ny * 6.4, hx - ax0.nx * 6.4 + 1, hy - ax0.ny * 6.4 + 4, IRON[2]);
+      p.px(hx + ax0.nx * 6.2, hy + ax0.ny * 6.2, IRON[3]);
+      p.px(hx + 3, hy - 4, '#241810');
+      p.px(hx + 4, hy - 4, BRONZE[2]);
+    }
+    muzzleFace(c, B[0], B[1], ax0, 6.6, BRONZE, ready ? 'ball' : c.con === 2 ? 'empty' : 'swab');
+    // touch-hole on top of the chamber
+    const vx = Math.round(A[0] + ax0.ux * 0.14 * ax0.len + ax0.nx * 4.2);
+    const vy = Math.round(A[1] + ax0.uy * 0.14 * ax0.len + ax0.ny * 4.2);
+    if (c.con === 0) p.px(vx, vy, '#140c10');
+    if (c.con === 0 && !ready) {
+      // swabbing out: sponge rammer pushed into the bore
+      const ex = B[0] + ax0.ux * 8;
+      const ey = B[1] + ax0.uy * 8;
+      p.line(B[0], B[1], ex, ey, W[4]);
+      p.line(B[0] + 1, B[1] + 1, ex + 1, ey + 1, W[2]);
+      p.px(ex, ey, W[5]);
+    }
+    if (ready) {
+      // lit linstock at the touch-hole: glowing match + a curl of smoke
+      p.line(vx - 6, bg + 1, vx - 1, vy - 2, W[4]);
+      p.line(vx - 5, bg + 1, vx, vy - 2, W[2]);
+      p.px(vx - 1, vy - 3, IRON[3]);
+      p.px(vx, vy - 1, FI[3]);
+      p.px(vx, vy, FI[5]);
+      p.px(vx + 1, vy, FI[4]);
+      p.px(vx, vy + 1, FI[3]);
+      p.px(vx + 1, vy - 1, FI[5]);
+      for (const [dx, dy] of [
+        [-1, 0],
+        [2, 0],
+        [-1, 1],
+        [1, 1],
+        [2, -1],
+        [0, 2],
+      ] as const)
+        if (p.get(vx + dx, vy + dy) >>> 24) p.blend(vx + dx, vy + dy, FI[4], 0.45);
+      smokeWisp(c, vx, vy - 1, 13);
+    }
+    if (c.con === 2) {
+      // shear-legs that lowered the barrel onto its bed
+      const hx = Math.round(A[0] + ax0.ux * 0.62 * ax0.len);
+      const hy = Math.round(A[1] + ax0.uy * 0.62 * ax0.len);
+      const tx = hx;
+      const ty = hy - 19;
+      p.line(hx - 9, bg + 1, tx, ty, W[4]);
+      p.line(hx + 9, bg - 4, tx, ty, W[2]);
+      p.line(tx, ty + 1, tx, hy - 9, CREAM);
+      p.rect(tx - 1, hy - 10, 3, 2, W[1]);
+      p.line(tx, hy - 8, hx - 3, hy - 6, CREAM);
+      p.line(tx, hy - 8, hx + 3, hy - 6, CREAM);
+    }
+  }
+
+  // ---- team pennant at the platform corner
+  poleFlag(c, px0 + 2, top1 - 1, 22, c.tc, { w: 6, fh: 4, sym: true });
+
+  // ---- shot, powder and tools in front of the platform
+  if (c.con === 0) {
+    const balls: [number, number][] = ruined
+      ? [
+          [R - 16, G - 4],
+          [R - 7, G - 3],
+          [c.ax + 4, top1 - 3],
+        ]
+      : [
+          [R - 11, G - 14.6],
+          [R - 14, G - 9.4],
+          [R - 8, G - 9.4],
+          [R - 17, G - 4.2],
+          [R - 11, G - 4.2],
+          [R - 5, G - 4.2],
+        ];
+    if (c.dmg === 1) balls[0] = [c.ax - 1, G - 3.4];
+    for (const [bx, by] of balls) stoneBall(c, bx, by);
+    barrel(c, L + 3, G - 2);
+    barrel(c, L + 7, G - 1);
+    if (!ruined) barrel(c, L + 5, G - 6);
+    if (ready) {
+      // the swab rammer laid down while the fuse burns
+      p.line(c.ax - 12, G - 2, c.ax + 1, G - 4, W[4]);
+      p.line(c.ax - 12, G - 1, c.ax + 1, G - 3, W[2]);
+      p.rect(c.ax + 1, G - 5, 3, 2, '#d8ccae');
+      p.px(c.ax + 3, G - 4, '#a89a7c');
+    } else if (!ruined) {
+      // water bucket for the swab
+      p.rect(c.ax - 8, G - 4, 4, 3, W[3]);
+      p.vline(c.ax - 8, G - 4, G - 2, W[4]);
+      p.hline(c.ax - 8, c.ax - 5, G - 4, '#3a5a80');
+      p.px(c.ax - 7, G - 4, '#5d90c2');
+      p.hline(c.ax - 8, c.ax - 5, G - 2, IRON[2]);
+    }
+  } else {
+    // con2: shot being stockpiled
+    stoneBall(c, R - 14, G - 4.2);
+    stoneBall(c, R - 8, G - 4.2);
+  }
+};
+
 const DRAWERS: Record<string, Drawer> = {
   capital_castle: drawCastle,
   keep: drawKeep,
@@ -2944,6 +3344,7 @@ const DRAWERS: Record<string, Drawer> = {
   chapel: drawChapel,
   watchtower: drawWatchtower,
   merc_camp: drawMercCamp,
+  silo: drawBombard,
 };
 
 const TOP: Record<string, number> = {
@@ -2955,6 +3356,7 @@ const TOP: Record<string, number> = {
   outpost_tower: 40,
   siege_workshop: 40,
   landmark: 40,
+  silo: 44,
 };
 
 // ======================================================================================== API

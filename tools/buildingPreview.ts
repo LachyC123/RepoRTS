@@ -3,6 +3,7 @@
  *   npx tsx tools/buildingPreview.ts [groups] [out.png] [scale]
  * groups: comma list of core,castle,eco,land,misc (default: all) → screenshots/buildings.png
  *         modern = every modern-era sprite (or a subset: mcastle,mcore,meco,mmisc)
+ *         silo = Great Bombard / Missile Silo in both eras: every state, idle + ready, beside barracks/siege/keep
  */
 import { mkdirSync } from 'node:fs';
 import { KINGDOM_COLORS } from '../src/data/factions';
@@ -39,13 +40,15 @@ const b = (type: string, size: number, team = BLUE as (typeof KINGDOM_COLORS)[nu
 });
 
 // ad-hoc rows: type/size/state/variant/landmark  e.g. watchtower/2/built  landmark/2/built/0/abbey
-// prefix with m: for the modern era, e.g. m:barracks/3/damaged
+// prefix with m: for the modern era, e.g. m:barracks/3/damaged; add a /ready segment for opts.ready, e.g. m:silo/3/built/ready
 const adhoc: Row = [];
 for (const g of groups)
   if (g.includes('/')) {
     const modern = g.startsWith('m:');
-    const [t, sz, st, v, lm] = g.replace(/^m:/, '').split('/');
-    const o = { variant: Number(v ?? 0), landmark: (lm as LandmarkKind) ?? null, tier: 4, deposit: 'gold' as const };
+    const segs = g.replace(/^m:/, '').split('/');
+    const ready = segs.includes('ready');
+    const [t, sz, st, v, lm] = segs.filter((x) => x !== 'ready');
+    const o = { variant: Number(v ?? 0), landmark: (lm as LandmarkKind) ?? null, tier: 4, deposit: 'gold' as const, ...(ready ? { ready } : {}) };
     if (modern) adhoc.push({ s: drawModernBuilding(t, Number(sz ?? 2), RED, (st as BuildingState) ?? 'built', o), size: Number(sz ?? 2) });
     else adhoc.push(b(t, Number(sz ?? 2), RED, (st as BuildingState) ?? 'built', o));
   }
@@ -76,12 +79,14 @@ if (groups.includes('eco')) {
     ['stable', 3],
     ['siege_workshop', 3],
     ['merc_camp', 3],
+    ['silo', 3],
   ];
   const teams = [BLUE, RED, GREEN, YELLOW, PURPLE];
   types.forEach(([t, s], i) => {
     const row: Row = STATES.map((st) => b(t, s, teams[i % 5], st, { deposit: 'gold' }));
     if (t === 'house') for (let v = 1; v < 4; v++) row.push(b(t, s, BLUE, 'built', { variant: v }));
     if (t === 'mine') row.push(b(t, s, RED, 'built', { deposit: 'stone' }));
+    if (t === 'silo') row.push(b(t, s, RED, 'built', { ready: true }));
     if (s === 2 && t !== 'house') row.push(b(t, s, null, 'built', { variant: 1, deposit: 'stone' }));
     rows.push(row);
   });
@@ -150,12 +155,14 @@ if (mg('meco')) {
     ['stable', 3],
     ['siege_workshop', 3],
     ['merc_camp', 3],
+    ['silo', 3],
   ];
   const teams = [BLUE, RED, GREEN, YELLOW, PURPLE];
   types.forEach(([t, s], i) => {
     const row: Row = STATES.map((st) => mb(t, s, teams[i % 5], st, { deposit: 'gold' }));
     if (t === 'house') for (let v = 1; v < 4; v++) row.push(mb(t, s, BLUE, 'built', { variant: v }));
     if (t === 'mine') row.push(mb(t, s, RED, 'built', { deposit: 'stone' }));
+    if (t === 'silo') row.push(mb(t, s, RED, 'built', { ready: true }));
     if (s === 2 && t !== 'house') row.push(mb(t, s, null, 'built', { variant: 1, deposit: 'stone' }));
     rows.push(row);
   });
@@ -173,6 +180,18 @@ if (mg('mmisc')) {
   }
   rows.push(walls);
   rows.push([1, 2, 3, 4].flatMap((s) => [0, 1].map((v) => ({ s: drawModernRubble(s, v + s), size: s }))).concat([mb('wall', 1, RED), mb('gatehouse', 1, RED), mb('gatehouse', 1, GREEN, 'damaged')]));
+}
+
+// ---------------------------------------------------------------- superweapon (silo): both eras
+if (groups.includes('silo')) {
+  for (const [draw, teamA, teamB] of [
+    [b, BLUE, RED],
+    [mb, GREEN, YELLOW],
+  ] as const) {
+    rows.push(STATES.map((st) => draw('silo', 3, teamA, st)));
+    rows.push(STATES.map((st) => draw('silo', 3, teamB, st, { ready: true })));
+    rows.push([draw('barracks', 3, teamA), draw('siege_workshop', 3, teamA), draw('silo', 3, teamA), draw('silo', 3, null, 'built', { ready: true }), draw('keep', 4, teamA)]);
+  }
 }
 
 // ---------------------------------------------------------------- wall ring demo (composited on the grid)

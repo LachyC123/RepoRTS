@@ -54,6 +54,7 @@ import {
   rv,
   sack,
   scorch,
+  smokeWisp,
   symbolAt,
   teamOf,
   tent,
@@ -2633,6 +2634,226 @@ const mContractor: MDrawer = (c) => {
   if (c.con) msupplies(c);
 };
 
+/** tall floodlight mast: twin lamp head aimed down-left at the pad */
+function floodlight(c: Ctx, x: number, gb: number, h: number) {
+  if (!built(c)) return;
+  const p = c.pc;
+  if (c.dmg === 2) {
+    p.vline(x, gb - Math.round(h * 0.4), gb, M[2]);
+    p.line(x, gb - Math.round(h * 0.4), x - 3, gb - Math.round(h * 0.4) + 3, M[3]);
+    return;
+  }
+  p.vline(x, gb - h, gb, M[4]);
+  p.vline(x + 1, gb - h + 2, gb, M[2]);
+  p.hline(x - 1, x + 2, gb, CON[3]);
+  const hy = gb - h - 2;
+  p.rect(x - 3, hy, 7, 3, M[2]);
+  p.hline(x - 3, x + 3, hy, M[4]);
+  for (const lx of [x - 2, x + 1]) {
+    const lit = !(c.dmg && lx > x);
+    p.rect(lx, hy + 1, 2, 2, lit ? '#fff0c0' : '#3a3440');
+    if (lit) p.px(lx, hy + 2, LIT[2]);
+  }
+  if (!c.dmg) glow(c, x - 10, gb - 6, 9, 5, 0.22);
+}
+
+/** Missile Silo: fenced launch pad with a sliding blast door, control bunker, radar and floodlight */
+const mSilo: MDrawer = (c, o) => {
+  const { L, R, F, G } = c;
+  const fw = c.size * TILE;
+  const p = c.pc;
+  const ruined = c.dmg === 2;
+  const ready = !!o.ready && c.con === 0 && !ruined;
+  pad(c, 'concrete', L + 1, F + 7, fw - 2, fw - 8, 2);
+  // painted safety box around the launch area
+  if (c.con === 0) {
+    paintLine(c, L + 5, R - 4, F + 22, YEL[4], 2);
+    paintLine(c, L + 5, R - 4, G - 4, YEL[4], 2);
+    paintLineV(c, L + 5, F + 22, G - 4, YEL[4]);
+  }
+  chainFence(c, L + 1, R - 2, F + 9, 6);
+  chainFenceV(c, L + 1, F + 10, G - 2, 6);
+  chainFenceV(c, R - 2, F + 10, G - 2, 6);
+
+  // ---- control bunker (back-left) + radar mast (back-right)
+  const bx = L + 4;
+  const bw = 17;
+  const bgb = F + 21;
+  const by = box(c, { x: bx, gb: bgb, w: bw, wh: 8, d: 7, mat: 'bunker', field: 'gravel', seams: 0 });
+  mdoor(c, bx + 2, bgb - 5, 4, 6, 'blast');
+  mwin(c, bx + 9, by + 2, 6, 1, 'slit');
+  stripe(c, bx, by + 1, bw, c.tc.main);
+  if (intact(c)) {
+    vent(c, bx + 3, by - 5);
+    aerial(c, bx + 13, by - 3, 6);
+    p.px(bx + 8, by - 1, ready ? WARN : '#7a2a20');
+    p.px(bx + 8, by - 2, ready ? '#ffb090' : M[3]);
+  }
+  mast(c, R - 8, F + 20, 20, { bw: 2, dish: true });
+  if (intact(c)) {
+    // rotating radar bar on the mast head
+    const ry = F + 20 - 20 - 6;
+    p.hline(R - 13, R - 3, ry, M[5]);
+    p.hline(R - 13, R - 3, ry + 1, M[2]);
+    for (let i = R - 12; i <= R - 4; i += 2) p.px(i, ry + 1, M[4]);
+  }
+
+  // ---- launch collar: raised concrete ring around the shaft
+  const cx = L + 19;
+  const cy = G - 15;
+  const cw = 21;
+  const cx0 = cx - 10;
+  const ct = cy - 8;
+  const cb = cy + 5;
+  const rx = 6.5;
+  const ry = 5;
+  if (c.con === 1) {
+    mfoundation(c, cx0 - 1, cb + 3, cw + 2, cb - ct + 2);
+    // excavated shaft ringed with rebar
+    for (let y = Math.floor(cy - ry - 1); y <= cy + ry + 1; y++)
+      for (let x = Math.floor(cx - rx - 1); x <= cx + rx + 1; x++) {
+        const d = ((x + 0.5 - cx) / rx) ** 2 + ((y + 0.5 - cy) / ry) ** 2;
+        if (d > 1.35) continue;
+        c.base.px(x, y, d > 1 ? (md(x + y, 2) ? RU[3] : CON[4]) : y < cy - ry * 0.4 ? CON[2] : '#120c14');
+      }
+    for (const rxx of [cx - 7, cx - 2, cx + 3, cx + 7]) {
+      p.vline(rxx, cy - 9, cy - ry, RU[3]);
+      p.px(rxx, cy - 10, RU[2]);
+    }
+    mscaffold(c, bx, bgb, bw, 6);
+    msupplies(c);
+    towerCrane(c, R - 7, G - 3, 30, 17, 4);
+    return;
+  }
+  const shaft = (x: number, y: number) => ((x + 0.5 - cx) / rx) ** 2 + ((y + 0.5 - cy) / ry) ** 2;
+  for (let y = ct; y <= cb + 3; y++)
+    for (let x = cx0; x < cx0 + cw; x++) {
+      const lx = x - cx0;
+      const ly = y - ct;
+      let col: string;
+      if (y > cb) {
+        // front face
+        col = rv(CON, (y === cb + 1 ? 0.62 : 0.48) + (lx === 0 ? 0.12 : lx === cw - 1 ? -0.18 : 0) + (md(lx, 7) === 6 ? -0.12 : 0), x, y, 0.3);
+      } else {
+        const d = shaft(x, y);
+        let v = 0.62 + (vnoise2(x, y, 4, c.seed + 7) - 0.5) * 0.1;
+        if (ly === 0) v = 0.46;
+        if (y === cb) v = 0.86;
+        if (lx === 0) v += 0.1;
+        else if (lx === cw - 1) v -= 0.2;
+        col = rv(CON, v, x, y, 0.35);
+        if (d <= 1) col = y < cy - ry * 0.45 ? rv(CON, 0.3 - (cy - y) * 0.02) : d > 0.8 && y > cy ? '#22181e' : '#120c14';
+        else if (d < 1.55 && !ruined) {
+          // hazard ring around the opening
+          const ang = Math.atan2(y + 0.5 - cy, (x + 0.5 - cx) * (ry / rx));
+          col = md(Math.floor((ang + Math.PI) / (Math.PI / 6)), 2) ? HZ[1] : HZ[0];
+          if (c.dmg && hash2(x, y, c.seed) < 0.3) col = shade(col, -0.4);
+        }
+      }
+      if (ruined) {
+        const e = Math.min(lx, cw - 1 - lx, y - ct) / 5;
+        if (y <= cb && shaft(x, y) > 1 && e > 0.4 + vnoise2(x, y, 3, c.seed + 4) * 0.8) col = ruinFloor(x, y, c.seed);
+        if (y > cb && vnoise(x, 3, c.seed + 9) < 0.35 && y === cb + 1) continue;
+      }
+      p.px(x, y, col);
+    }
+  if (c.dmg >= 1) mwall(c, cx0, cb + 1, cw, 3, 'concrete', { seams: 7 });
+  if (ruined) mdebris(c, cx0 + 1, ct + 1, cw - 2, cb - ct - 1);
+  // rails for the sliding blast door
+  const rail0 = cx - 10;
+  const rail1 = cx + 26;
+  for (const ry0 of [cy - 6, cy + 3])
+    for (let x = rail0; x <= rail1; x++) {
+      if (ruined && hash2(x >> 2, ry0, c.seed) < 0.4) continue;
+      if (x >= cx0 && x < cx0 + cw && shaft(x, ry0) <= 1.55) continue;
+      p.px(x, ry0, M[5]);
+      p.px(x, ry0 + 1, M[2]);
+    }
+  if (c.con === 0 || c.con === 2) {
+    // rail end stops
+    for (const ry0 of [cy - 6, cy + 3]) {
+      p.rect(rail1, ry0 - 1, 2, 3, HZ[1]);
+      p.px(rail1 + 1, ry0 + 1, HZ[0]);
+    }
+  }
+
+  // ---- the missile (ready: hatch rolled back, nose cone raised out of the shaft)
+  if (ready) {
+    const mt = cy - 16;
+    for (let y = mt - 8; y <= cy; y++) {
+      const nose = y < mt;
+      const hw = nose ? Math.max(0, Math.round(3.2 * Math.sqrt((y - (mt - 9)) / 9))) : 3;
+      for (let dx = -hw; dx <= hw; dx++) {
+        const v = 0.92 - ((dx + 3) / 6) * 0.62;
+        let col = rv(WH, v);
+        if (y < mt - 6) col = rv(M, 0.4 - dx * 0.15);
+        else if (y === cy - 5 || y === cy - 4) col = rv(M, 0.2 - dx * 0.05);
+        else if (y >= mt + 3 && y <= mt + 6 && (dx < 0) !== y < mt + 5) col = rv(['#141018', '#2a2630', '#3e3a44'], 0.6 - dx * 0.1);
+        p.px(cx + dx, y, col);
+      }
+    }
+    // shaft rim shadow around the missile + venting vapour
+    p.hline(cx - 4, cx + 4, cy + 1, '#120c14');
+    smokeWisp(c, cx - 6, cy - 1, 7);
+    smokeWisp(c, cx + 6, cy, 6);
+  }
+
+  // ---- blast door slab: closed over the shaft, or rolled back along the rails
+  const dw = 17;
+  const dx0 = ready ? cx + 9 : cx - 8;
+  const dt = cy - 8;
+  const dd = 12;
+  if (c.con === 0) {
+    for (let y = dt; y <= dt + dd + 2; y++)
+      for (let x = dx0; x < dx0 + dw; x++) {
+        const lx = x - dx0;
+        const ly = y - dt;
+        let col: string;
+        if (ly >= dd) col = rv(M, (ly === dd ? 0.55 : 0.3) + (lx === 0 ? 0.15 : lx === dw - 1 ? -0.2 : 0));
+        else {
+          let v = 0.66 + (vnoise2(x, y, 4, c.seed + 3) - 0.5) * 0.12;
+          if (ly === 0) v = 0.5;
+          if (ly === dd - 1) v = 0.82;
+          if (lx === 0) v += 0.1;
+          else if (lx === dw - 1) v -= 0.2;
+          col = rv(CON, v, x, y, 0.35);
+          // steel edge frame + hazard chevrons on the ends
+          if (lx === 1 || lx === dw - 2 || ly === 1) col = rv(M, 0.6 - (lx === dw - 2 ? 0.2 : 0));
+          else if ((lx >= 2 && lx <= 3) || (lx >= dw - 4 && lx <= dw - 3)) col = md(ly + lx, 4) < 2 ? HZ[1] : HZ[0];
+          if (lx === 8 && ly > 1) col = rv(CON, 0.42);
+        }
+        if (ruined) {
+          // cracked and slumped into the shaft on one side
+          if (lx === 9 + (ly >> 2)) col = '#120c14';
+          else if (lx > 9 + (ly >> 2)) col = shade(col, -0.3);
+          if (hash2(x, y, c.seed + 2) < 0.08) col = CHAR[2];
+        }
+        p.px(x, y + (ruined && lx > 9 + (ly >> 2) ? 2 : 0), col);
+      }
+    if (!ruined) {
+      // lifting lugs
+      p.px(dx0 + 5, dt + 4, M[6]);
+      p.px(dx0 + 11, dt + 4, M[6]);
+      p.px(dx0 + 5, dt + 5, M[2]);
+      p.px(dx0 + 11, dt + 5, M[2]);
+    }
+    if (c.dmg === 1) roofHoles(c, dx0 + 2, dt + 3, dw - 4, 6, 1);
+  } else {
+    // con2: slab hanging off a tower crane, about to be set on its rails
+    towerCrane(c, R - 7, G - 3, 34, 17, 4);
+  }
+
+  // ---- floodlight, flag, sundries
+  floodlight(c, bx + bw + 3, bgb - 1, 15);
+  mflag(c, L + 4, G - 3, 21, c.tc, { w: 6, fh: 4, sym: true });
+  drums(c, L + 6, G - 2, 2, OL);
+  generator(c, R - 13, G - 2);
+  if (c.con) {
+    mscaffold(c, bx, bgb, bw, 10);
+    msupplies(c);
+  }
+};
+
 const MDRAWERS: Record<string, MDrawer> = {
   capital_castle: mCapital,
   keep: mKeep,
@@ -2652,6 +2873,7 @@ const MDRAWERS: Record<string, MDrawer> = {
   chapel: mHospital,
   watchtower: mWatchtower,
   merc_camp: mContractor,
+  silo: mSilo,
 };
 
 const MTOP: Record<string, number> = {
@@ -2666,6 +2888,7 @@ const MTOP: Record<string, number> = {
   chapel: 40,
   village_hall: 40,
   market: 44,
+  silo: 48,
 };
 
 // ======================================================================================== API
