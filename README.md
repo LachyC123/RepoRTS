@@ -20,15 +20,19 @@ npm run sim -- 3 25 ai   # headless AI-vs-AI match: seed, minutes
 ```
 
 URL options for development: `?quick` skips the menu and intro, `?spectate` watches four AIs
-play, `?reveal` lifts the fog of war, and `?seed=123` fixes the map variation.
+play (the top bar shows every kingdom's standing), `?reveal` lifts the fog of war, `?seed=123`
+fixes the map variation, `?tutorial` forces the tutorial and `?intro` plays the intro after `?quick`.
 
 ## How to play
 
 - **Win** by *Domination* (hold 70% of the regions for 90 s) or *Elimination* (destroy every rival
-  Capital Castle). A kingdom that loses its capital has 60 s to crown a new one.
+  Capital Castle). A kingdom that loses its capital has 60 s to crown a new one in a surviving town;
+  without a town it falls.
 - **Capture** regions by standing troops on their capture point. Towns and castles must be breached first.
 - **Build** on the plots of your settlements. **Upgrade** villages into towns and castle towns to
   unlock more plots, buildings and elite troops.
+- **Trade** at a Market to turn surplus goods into gold or the reverse. With no market, your
+  capital's royal caravans still trade, at poor rates.
 - **Counters:** spears beat cavalry, cavalry beats archers, archers beat slow infantry, shields beat
   archers, siege beats walls, and fast units beat siege.
 
@@ -65,4 +69,6 @@ tests/      vitest simulation tests
 
 The simulation runs at a fixed 30 Hz with interpolated rendering. AI kingdoms see only what their
 own fog of war shows them and pay the same costs as the player. Only Warlord difficulty gets a
-documented +15% income bonus; Casual AIs get −15%.
+documented +15% income bonus; Casual AIs get −15%. They trade through the same markets and royal
+caravans as the player. AI-only matches typically resolve in about 25–35 minutes; with a human
+pressing the pace, a match runs about 15–25.
