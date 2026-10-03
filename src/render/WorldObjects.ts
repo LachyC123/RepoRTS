@@ -1,10 +1,15 @@
 import Phaser from 'phaser';
+import { isModern } from '../data/era';
+
 import { hash2 } from '../core/Random';
 import { TILE } from '../data/constants';
 import { CHUNK } from '../sim/map/GameMap';
 import type { World } from '../sim/World';
 import { art } from './art/ArtRegistry';
 import type { SortObj, YSortLayer } from './YSortLayer';
+
+/** battlefield junk that would look out of place in the modern valley */
+const MODERN_PROP: Record<string, string> = { shield: 'crates', spear: 'log', helmet: 'rock_small', banner_torn: 'barrel', plague_cross: 'grave', broken_cart: 'crates' };
 
 interface Chunk {
   built: boolean;
@@ -92,7 +97,7 @@ export class WorldObjects {
         c.anims.push({ obj: blades, kind: 'windmill', t: hash2(tx, ty, 3) * 4 });
         continue;
       }
-      const name = `prop/${d.kind}/${d.v % 4}`;
+      const name = `prop/${isModern() ? MODERN_PROP[d.kind] ?? d.kind : d.kind}/${d.v % 4}`;
       if (!art.tryGet(name)) continue;
       const o = this.img(name, d.x, d.y);
       // flat ground decals sort beneath everything standing on them
