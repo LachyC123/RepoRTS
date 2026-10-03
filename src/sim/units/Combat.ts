@@ -44,8 +44,8 @@ export interface FireSpec {
   buildingsOnly?: boolean;
 }
 
-const SPEED: Record<ProjectileKind, number> = { arrow: 230, bolt: 330, rock: 130, bigrock: 120, ballista: 300 };
-const ARC: Record<ProjectileKind, number> = { arrow: 0.22, bolt: 0.06, rock: 0.4, bigrock: 0.5, ballista: 0.05 };
+const SPEED: Record<ProjectileKind, number> = { arrow: 230, bolt: 330, rock: 130, bigrock: 120, ballista: 300, bullet: 620, rocket: 210, grenade: 150, shell: 150, tankshell: 520 };
+const ARC: Record<ProjectileKind, number> = { arrow: 0.22, bolt: 0.06, rock: 0.4, bigrock: 0.5, ballista: 0.05, bullet: 0.01, rocket: 0.04, grenade: 0.35, shell: 0.55, tankshell: 0.02 };
 
 function isUnit(t: Unit | Building): t is Unit {
   return (t as Unit).def !== undefined && (t as Unit).radius !== undefined;

@@ -14,18 +14,59 @@ export type UnitTag =
   | 'light';
 
 export type AttackType = 'melee' | 'pierce' | 'siege';
-export type ProjectileKind = 'arrow' | 'bolt' | 'rock' | 'bigrock' | 'ballista';
+export type ProjectileKind =
+  | 'arrow'
+  | 'bolt'
+  | 'rock'
+  | 'bigrock'
+  | 'ballista'
+  // modern era
+  | 'bullet'
+  | 'rocket'
+  | 'grenade'
+  | 'shell'
+  | 'tankshell';
 
 /** Visual description of a soldier. Consumed by the procedural sprite generator (render/art/unitArt.ts).
  *  Swapping in real art means replacing the generator output; gameplay never reads these. */
 export interface UnitLook {
-  body: 'peasant' | 'soldier' | 'heavy' | 'beast' | 'engine';
-  helmet: 'none' | 'hood' | 'cap' | 'kettle' | 'nasal' | 'great' | 'crown' | 'feather';
-  armor: 'tunic' | 'gambeson' | 'mail' | 'plate' | 'robe' | 'leather';
-  weapon: 'none' | 'club' | 'spear' | 'sword' | 'axe' | 'bow' | 'crossbow' | 'pike' | 'longbow' | 'lance' | 'greatsword' | 'pitchfork' | 'pick' | 'hammer' | 'hoe';
-  shield: 'none' | 'round' | 'kite' | 'tower' | 'buckler';
+  body: 'peasant' | 'soldier' | 'heavy' | 'beast' | 'engine' | 'vehicle';
+  helmet: 'none' | 'hood' | 'cap' | 'kettle' | 'nasal' | 'great' | 'crown' | 'feather' | 'combat' | 'patrol' | 'boonie' | 'beret' | 'officer' | 'hardhat' | 'bandana';
+  armor: 'tunic' | 'gambeson' | 'mail' | 'plate' | 'robe' | 'leather' | 'fatigues' | 'vest' | 'jacket' | 'ghillie';
+  weapon:
+    | 'none'
+    | 'club'
+    | 'spear'
+    | 'sword'
+    | 'axe'
+    | 'bow'
+    | 'crossbow'
+    | 'pike'
+    | 'longbow'
+    | 'lance'
+    | 'greatsword'
+    | 'pitchfork'
+    | 'pick'
+    | 'hammer'
+    | 'hoe'
+    // modern era
+    | 'rifle'
+    | 'smg'
+    | 'mg'
+    | 'rocket'
+    | 'sniper'
+    | 'shotgun'
+    | 'pistol'
+    | 'grenadier'
+    | 'satchel'
+    | 'chainsaw';
+  shield: 'none' | 'round' | 'kite' | 'tower' | 'buckler' | 'riot';
   mount?: 'horse' | 'warhorse' | 'pony';
-  engine?: 'ram' | 'catapult' | 'ballista' | 'trebuchet';
+  engine?: 'ram' | 'catapult' | 'ballista' | 'trebuchet' | 'mortar' | 'atgun' | 'howitzer';
+  /** modern era: body 'vehicle' */
+  vehicle?: 'jeep' | 'tank' | 'technical' | 'command' | 'truck';
+  /** radio / rocket pack on the back (modern) */
+  backpack?: boolean;
   cape?: boolean;
   beard?: boolean;
   /** carries a trade pack on the back */
