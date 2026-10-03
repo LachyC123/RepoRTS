@@ -11,6 +11,8 @@ export interface PathResult {
   pts: number[];
   /** true if the goal itself was reached (false = partial/closest) */
   complete: boolean;
+  /** breach mode: wall/gate tiles the path goes through (in order) */
+  blockers?: number[];
 }
 
 /**
@@ -196,7 +198,9 @@ export class Pathfinder {
         if (!isFinite(c)) continue;
         let step = c;
         if (k >= 4) {
-          if (!isFinite(this.tileCost(cy * W + nx, faction, breach)) || !isFinite(this.tileCost(ny * W + cx, faction, breach))) continue;
+          // corners are never cut, even through breachable walls
+          if (!isFinite(this.tileCost(cy * W + nx, faction, false)) || !isFinite(this.tileCost(ny * W + cx, faction, false))) continue;
+          if (breach && (this.map.occ[ni] !== 0 || this.map.occ[cur] !== 0)) continue;
           step *= SQ2;
         }
         const ng = gc + step;
@@ -224,12 +228,22 @@ export class Pathfinder {
       c = parent[c];
     }
     tiles.reverse();
+    let blockers: number[] | undefined;
+    if (breach) {
+      blockers = [];
+      for (const ti of tiles) if (this.map.occ[ti] !== 0 && !(this.map.gateOwner[ti] !== 0 && this.map.gateOwner[ti] - 1 === faction)) blockers.push(ti);
+      // walk up to the first blocker only
+      if (blockers.length) {
+        const cut = tiles.indexOf(blockers[0]);
+        if (cut > 0) tiles.length = cut;
+      }
+    }
     const pts = this.smooth(tiles, faction, breach);
     if (found && goalExact) {
       pts[pts.length - 2] = gx;
       pts[pts.length - 1] = gy;
     }
-    return { pts, complete: found };
+    return { pts, complete: found && !(blockers && blockers.length), blockers };
   }
 
   /** string-pulling: keep a waypoint only when LOS to the next is blocked */

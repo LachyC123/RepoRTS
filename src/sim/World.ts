@@ -346,7 +346,22 @@ export class World {
           continue;
         }
       }
-      const res = this.pathfinder.find(u.x, u.y, u.destX, u.destY, u.faction);
+      let res = this.pathfinder.find(u.x, u.y, u.destX, u.destY, u.faction);
+      if (res && !res.complete && u.def.special !== 'worker' && this.wallsAround(u.destX, u.destY, u.faction)) {
+        // the goal is sealed behind hostile walls: path to the wall and batter through it
+        const br = this.pathfinder.find(u.x, u.y, u.destX, u.destY, u.faction, { breach: true });
+        if (br && br.blockers && br.blockers.length) {
+          const wallId = this.map.occ[br.blockers[0]];
+          const wb = this.buildingById.get(wallId);
+          if (wb && !wb.destroyed && this.isHostile(u.faction, wb.faction)) {
+            res = br;
+            if (u.order.kind !== 'attack' || !this.buildingById.get((u.order as { targetId: number }).targetId)?.isGate) {
+              u.targetId = wb.id;
+              u.retargetT = 3;
+            }
+          }
+        }
+      }
       if (!res) {
         u.path = null;
         u.arrived = true;
@@ -525,6 +540,13 @@ export class World {
       this.events.emit('treeGrown', { x: (r.i % m.w) * TILE + 8, y: Math.floor(r.i / m.w) * TILE + 8, i: r.i });
     }
     this.regrowth = keep;
+  }
+
+  /** is there a hostile fortified settlement around this point? */
+  wallsAround(x: number, y: number, faction: FactionId) {
+    const r = this.map.region[Math.floor(y / TILE) * this.map.w + Math.floor(x / TILE)];
+    const s = this.settlements[r];
+    return !!s && s.wallIds.length > 0 && s.owner !== faction;
   }
 
   /** helper used by systems/tests: is (x,y) a passable world point for faction */

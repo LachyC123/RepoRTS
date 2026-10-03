@@ -102,12 +102,17 @@ export class CombatSystem {
       let tgt = this.target(u.targetId);
       const order = u.order;
       const explicit = order.kind === 'attack';
-      if (explicit && !tgt) {
-        // explicit target died: fall back to aggressive idle around here
-        u.order = { kind: 'idle' };
-        u.homeX = u.x;
-        u.homeY = u.y;
-        u.targetId = 0;
+      if (explicit) {
+        const ot = this.target(order.targetId);
+        const wallTgt = tgt && !isUnit(tgt) && (tgt.def.id === 'wall' || tgt.def.id === 'gatehouse') && tgt.id !== order.targetId;
+        if (!ot) {
+          // explicit target died: fall back to aggressive idle around here
+          u.order = { kind: 'idle' };
+          u.homeX = u.x;
+          u.homeY = u.y;
+          u.targetId = 0;
+          tgt = null;
+        } else if (!wallTgt) tgt = ot;
       }
       if (tgt && !explicit && !w.isHostile(u.faction, tgt.faction)) tgt = null;
       // pure move: ignore enemies until arrival
@@ -123,7 +128,8 @@ export class CombatSystem {
         const fromHome = Math.hypot(u.x - u.homeX, u.y - u.homeY);
         if (d > u.def.vision * TILE * 1.3 || (order.kind !== 'move' && fromHome > leash) || !this.canSee(u, tgt)) tgt = null;
       }
-      if ((!tgt || (u.retargetT <= 0 && !explicit)) && u.retargetT <= 0) {
+      const breaching = tgt && !isUnit(tgt) && (tgt.def.id === 'wall' || tgt.def.id === 'gatehouse');
+      if ((!tgt || (u.retargetT <= 0 && !explicit && !breaching)) && u.retargetT <= 0) {
         u.retargetT = 0.35 + (u.id % 7) * 0.03;
         const found = this.acquire(u, tgt);
         if (found) tgt = found;

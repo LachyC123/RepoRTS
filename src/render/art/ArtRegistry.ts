@@ -1,4 +1,5 @@
 import type Phaser from 'phaser';
+import { canvasTexture } from '../texUtil';
 import type { PixelCanvas } from './PixelCanvas';
 
 /**
@@ -65,7 +66,7 @@ export class ArtRegistry {
     let placed: { p: Pending; x: number; y: number }[] = [];
     const flush = () => {
       if (!page) return;
-      const tex = scene.textures.addCanvas(key, page)!;
+      const tex = canvasTexture(scene, key, page);
       for (const it of placed) {
         tex.add(it.p.name, 0, it.x, it.y, it.p.pc.w, it.p.pc.h);
         this.frames.set(it.p.name, { key, frame: it.p.name, w: it.p.pc.w, h: it.p.pc.h, ox: it.p.ax / it.p.pc.w, oy: it.p.ay / it.p.pc.h });

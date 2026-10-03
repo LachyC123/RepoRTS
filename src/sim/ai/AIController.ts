@@ -9,7 +9,7 @@ import { aiEconomy } from './AIEconomy';
 import { aiMilitary } from './AIMilitary';
 import { Intel } from './Intel';
 
-export type SquadKind = 'capture' | 'attack' | 'defend' | 'raid' | 'scout';
+export type SquadKind = 'capture' | 'attack' | 'defend' | 'raid' | 'scout' | 'hire';
 
 export interface Squad {
   id: number;
@@ -226,6 +226,26 @@ export class AIController {
       if (cav.length >= 3) {
         const tgt = this.raidTarget();
         if (tgt >= 0) this.form('raid', cav.slice(0, 6), tgt, w.settlements[tgt].owner, 0);
+      }
+    }
+
+    // 3b) mercenary companies: send a detachment to hire if we can pay
+    const ev = w.events2 as unknown as { camps?: { buildingId: number; stock: Record<string, number> }[] } | null;
+    if (ev?.camps?.length && this.f.res.gold > 380 && !this.squads.some((q) => q.kind === 'hire')) {
+      const camp = ev.camps[0];
+      const b = w.buildingById.get(camp.buildingId);
+      if (b) {
+        const nearOwned = owned.some((s) => Math.hypot(s.px - b.x, s.py - b.y) < 40 * TILE);
+        const freeUnits = avail.filter((u) => !this.squads.some((q) => q.units.has(u.id)));
+        if (nearOwned && freeUnits.length >= 3) {
+          const picked = this.pick(freeUnits, b.x, b.y, 2.5);
+          const q = this.form('hire', picked, b.settlementId, NEUTRAL, 0);
+          q.holdUntil = w.time + 60;
+          w.orderMove(picked.map((u) => u.id), b.doorX, b.doorY + 14, { attackMove: true });
+          q.state = 'move';
+          q.lastOrder = w.time;
+          (q as Squad & { campId?: number }).campId = b.id;
+        }
       }
     }
 
@@ -511,6 +531,11 @@ export class AIController {
         }
         continue;
       }
+      if (q.kind === 'hire') {
+        const campId = (q as Squad & { campId?: number }).campId ?? 0;
+        if (!w.buildingById.get(campId) || w.time > q.holdUntil || this.f.res.gold < 120) this.disband(q);
+        continue;
+      }
       if (q.kind === 'raid') {
         // hit workers/production buildings, avoid fights
         if (w.time - q.lastOrder > 6) {
@@ -587,6 +612,8 @@ export class AIController {
       score += st === 'hostile' ? 10 : 0;
       score *= 0.6 + this.aggression * 0.8;
       if (other.isPlayer) score *= this.diff.playerBias;
+      // a gentler first match while the player learns
+      if (other.isPlayer && w.setup.tutorial && w.time < 600) continue;
       if (wars.length >= 2 && k !== leader) continue;
       if (score > 52) {
         w.diplomacy.declareWar(this.id, k as FactionId, 'ai');

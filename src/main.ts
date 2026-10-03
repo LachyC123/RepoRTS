@@ -3,20 +3,17 @@ import '@fontsource/pixelify-sans/600.css';
 import '@fontsource/jacquarda-bastarda-9/400.css';
 import '@fontsource/silkscreen/400.css';
 import './ui/styles.css';
+import { audio } from './audio';
 import { settings } from './core/Settings';
-import { GameClient } from './game/GameClient';
-import { buildMatchSetup, DEFAULT_CHOICES } from './game/matchSetup';
+import { App } from './game/App';
 
 settings.load();
+audio.setVolumes(settings.data.master, settings.data.music, settings.data.sfx);
+settings.onChange((d) => audio.setVolumes(d.master, d.music, d.sfx));
+document.documentElement.style.setProperty('--ui-scale', String(settings.data.uiScale));
 
-const params = new URLSearchParams(location.search);
-const gameEl = document.getElementById('game')!;
-
-function startMatch() {
-  const setup = buildMatchSetup({ ...DEFAULT_CHOICES, seed: params.has('seed') ? Number(params.get('seed')) : undefined, spectate: params.has('spectate') });
-  const client = new GameClient(setup, gameEl);
-  client.start();
-  (window as unknown as { client: GameClient }).client = client;
-}
-
-startMatch();
+const app = new App(document.getElementById('game')!, document.getElementById('ui')!);
+(window as unknown as { app: App }).app = app;
+// fonts first so canvas text and the title render correctly
+const fontsReady = (document as Document & { fonts?: { ready: Promise<unknown> } }).fonts?.ready ?? Promise.resolve();
+Promise.race([fontsReady, new Promise((r) => setTimeout(r, 1500))]).then(() => app.start());

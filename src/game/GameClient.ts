@@ -1,16 +1,34 @@
 import Phaser from 'phaser';
+import { audio, music } from '../audio';
+import { settings } from '../core/Settings';
+import { EventBus } from '../core/EventBus';
+import { BUILDINGS } from '../data/buildings';
 import { TILE, type FactionId } from '../data/constants';
 import type { InputHooks } from '../input/InputController';
 import { Selection } from '../input/Selection';
 import type { CameraController } from '../render/CameraController';
 import { GameScene } from '../render/GameScene';
+import { AIManager } from '../sim/ai/AIManager';
+import { WorldEvents } from '../sim/events/WorldEvents';
+import type { FormationKind } from '../sim/units/Formation';
 import type { Unit } from '../sim/units/Unit';
 import { World, type MatchSetup } from '../sim/World';
-import { settings } from '../core/Settings';
-import { audio } from '../audio';
+
+export interface ClientEvents {
+  toast: { text: string; error?: boolean };
+  selection: Record<string, never>;
+  openBuild: { region: number; plot: number };
+  mode: { mode: string };
+  paused: { paused: boolean };
+  armies: Record<string, never>;
+  ready: Record<string, never>;
+  matchEnd: { winner: number; reason: string };
+  cinematic: { on: boolean };
+}
 
 /**
  * Glue between the simulation, the Phaser renderer and the DOM UI for one match.
+ * All player commands go through here so feedback (sounds, toasts) is consistent.
  */
 export class GameClient {
   world: World;
@@ -20,9 +38,13 @@ export class GameClient {
   paused = false;
   speed = 1;
   dpr = 1;
+  formation: FormationKind;
   readonly playerFaction: number;
+  readonly ui = new EventBus<ClientEvents>();
   private readyCbs: ((s: GameScene) => void)[] = [];
   private frameCbs: ((dt: number, s: GameScene) => void)[] = [];
+  cinematic = false;
+  lastAlert: { x: number; y: number; t: number } | null = null;
 
   constructor(
     setup: MatchSetup,
@@ -30,8 +52,16 @@ export class GameClient {
   ) {
     this.world = new World(setup);
     this.world.initMatch();
+    this.world.ai = new AIManager(this.world);
+    this.world.events2 = new WorldEvents(this.world);
     this.playerFaction = setup.player;
     this.selection = new Selection(this.world);
+    this.formation = settings.data.formation;
+    this.selection.onChange(() => this.ui.emit('selection', {}));
+    this.world.events.on('notice', (n) => {
+      if (n.alarm && n.x !== undefined && n.y !== undefined) this.lastAlert = { x: n.x, y: n.y, t: this.world.time };
+    });
+    this.world.events.on('matchOver', (e) => this.ui.emit('matchEnd', { winner: e.winner, reason: e.reason }));
   }
 
   start() {
@@ -49,7 +79,7 @@ export class GameClient {
       roundPixels: false,
       disableContextMenu: true,
       banner: false,
-      fps: { target: 60, smoothStep: true },
+      fps: { target: 60, smoothStep: false },
       input: { mouse: false, touch: false, keyboard: false, gamepad: false },
       scale: { mode: Phaser.Scale.NONE, zoom: 1 / this.dpr },
       render: { powerPreference: 'high-performance', batchSize: 4096 },
@@ -81,6 +111,7 @@ export class GameClient {
     this.scene = s;
     for (const cb of this.readyCbs) cb(s);
     this.readyCbs = [];
+    this.ui.emit('ready', {});
   }
 
   frame(dt: number, s: GameScene) {
@@ -88,6 +119,7 @@ export class GameClient {
     const c = s.camCtl;
     audio.setListener(c.x, c.y, c.viewW / c.zoom, c.viewH / c.zoom, c.zoom);
     audio.update(dt);
+    music.update(dt);
     if (this.world.tick % 15 === 0) this.selection.prune();
   }
 
@@ -100,30 +132,287 @@ export class GameClient {
   startFocus(): [number, number] {
     const f = this.world.player ?? this.world.factions[0];
     const r = this.world.capitalRegion(f.id as FactionId);
-    if (r) return [r.cx * TILE + 8, r.cy * TILE + 8];
+    if (r) return [r.cx * TILE + 8, r.cy * TILE + 30];
     return [this.world.map.w * 8, this.world.map.h * 8];
+  }
+
+  setPaused(p: boolean) {
+    this.paused = p;
+    if (p) audio.suspend();
+    else audio.resume();
+    this.ui.emit('paused', { paused: p });
+  }
+
+  toast(text: string, error = false) {
+    this.ui.emit('toast', { text, error });
+    if (error) audio.play('ui_error');
+  }
+
+  focus(x: number, y: number, zoom?: number) {
+    this.scene?.camCtl.flyTo(x, y, zoom, 0.6);
+  }
+
+  // ------------------------------------------------------------------ commands
+  private pf() {
+    return this.playerFaction as FactionId;
+  }
+
+  cmdBuild(region: number, plot: number, type: string): boolean {
+    const sys = this.world.settlementSys;
+    let p = plot;
+    if (p < 0) {
+      // auto-pick the best free plot for this building
+      const s = this.world.settlements[region];
+      let best = -1;
+      let bestScore = -Infinity;
+      for (let i = 0; i < s.unlockedPlots; i++) {
+        if (s.plots[i].buildingId) continue;
+        if (!sys.meetsRequirement(s, i, BUILDINGS[type]).ok) continue;
+        // keep deposit/forest plots for buildings that need them
+        let sc = -i * 0.1;
+        if (!BUILDINGS[type].requires) {
+          if (sys.meetsRequirement(s, i, BUILDINGS.mine).ok) sc -= 3;
+          if (sys.meetsRequirement(s, i, BUILDINGS.lumber_camp).ok) sc -= 1;
+        }
+        if (BUILDINGS[type].requires === 'forest') sc += sys.countTrees(s.plots[i].def.x + 1.5, s.plots[i].def.y + 1.5) * 0.2;
+        if (sc > bestScore) {
+          bestScore = sc;
+          best = i;
+        }
+      }
+      if (best < 0) {
+        this.toast(BUILDINGS[type].requires === 'forest' ? 'No plot near a forest' : BUILDINGS[type].requires === 'mineral' ? 'No plot near a deposit' : 'No free plot — upgrade the settlement', true);
+        return false;
+      }
+      p = best;
+    }
+    const r = sys.build(this.pf(), region, p, type);
+    if (!r.ok) {
+      this.toast(r.reason ?? 'Cannot build', true);
+      return false;
+    }
+    audio.play('ui_click');
+    return true;
+  }
+
+  cmdRecruit(buildingId: number, type: string): boolean {
+    const r = this.world.settlementSys.recruit(this.pf(), buildingId, type);
+    if (!r.ok) {
+      this.toast(r.reason ?? 'Cannot recruit', true);
+      return false;
+    }
+    audio.play('recruit', { volume: 0.6 });
+    return true;
+  }
+
+  cmdCancel(buildingId: number, idx: number) {
+    this.world.settlementSys.cancelTrain(this.pf(), buildingId, idx);
+    audio.play('ui_close');
+  }
+
+  cmdUpgrade(region: number) {
+    const r = this.world.settlementSys.upgrade(this.pf(), region);
+    if (!r.ok) return this.toast(r.reason ?? 'Cannot upgrade', true);
+    audio.play('build_place');
+    this.toast(`${this.world.settlements[region].name} is being upgraded`);
+  }
+
+  cmdFortify(region: number) {
+    const r = this.world.settlementSys.fortifyCmd(this.pf(), region);
+    if (!r.ok) return this.toast(r.reason ?? 'Cannot fortify', true);
+    audio.play('build_place');
+  }
+
+  cmdResearch(buildingId: number, id: string) {
+    const r = this.world.settlementSys.research(this.pf(), buildingId, id);
+    if (!r.ok) return this.toast(r.reason ?? 'Cannot research', true);
+    audio.play('ui_click');
+  }
+
+  cmdTrade(res: 'wood' | 'food' | 'stone', buy: boolean) {
+    const r = this.world.settlementSys.trade(this.pf(), res, buy);
+    if (!r.ok) return this.toast(r.reason ?? 'Cannot trade', true);
+    audio.play('coins');
+  }
+
+  cmdDemolish(buildingId: number) {
+    const r = this.world.settlementSys.demolish(this.pf(), buildingId);
+    if (!r.ok) return this.toast(r.reason ?? 'Cannot demolish', true);
+    this.selection.clear();
+  }
+
+  cmdHold() {
+    const ids = [...this.selection.units];
+    if (!ids.length) return;
+    this.world.orderHold(ids);
+    audio.play('order_move');
+    this.toast('Holding position');
+  }
+
+  cmdStop() {
+    const ids = [...this.selection.units];
+    this.world.orderStop(ids);
+    audio.play('ui_click');
+  }
+
+  cycleFormation() {
+    const order: FormationKind[] = ['line', 'wedge', 'defensive', 'loose'];
+    this.formation = order[(order.indexOf(this.formation) + 1) % order.length];
+    settings.set('formation', this.formation);
+    audio.play('ui_click');
+    this.toast(`Formation: ${this.formation.toUpperCase()}`);
+    // re-form in place if units are selected and idle
+    const units = this.selection.unitList().filter((u) => u.def.special !== 'worker');
+    if (units.length > 1) {
+      let cx = 0;
+      let cy = 0;
+      for (const u of units) {
+        cx += u.destX;
+        cy += u.destY;
+      }
+      this.world.orderMove(units.map((u) => u.id), cx / units.length, cy / units.length, { formation: this.formation, attackMove: true });
+    }
+  }
+
+  createArmy(): number {
+    const ids = this.selection.unitList().filter((u) => u.def.special !== 'worker').map((u) => u.id);
+    if (!ids.length) return 0;
+    // if every selected unit is already one army, keep it
+    const n = this.selection.nextFreeArmy();
+    if (!n) {
+      this.toast('All nine army banners are in use', true);
+      return 0;
+    }
+    this.selection.assignArmy(n, ids);
+    audio.play('horn_recruit', { volume: 0.5 });
+    this.ui.emit('armies', {});
+    return n;
+  }
+
+  selectAllMilitary() {
+    const ids = this.world.units.filter((u) => u.alive && u.faction === this.playerFaction && u.def.special !== 'worker').map((u) => u.id);
+    this.selection.setUnits(ids);
+    if (ids.length) audio.play('select_army');
+  }
+
+  selectIdle() {
+    const ids = this.world.units
+      .filter((u) => u.alive && u.faction === this.playerFaction && u.def.special !== 'worker' && u.arrived && !u.targetId && u.order.kind === 'idle')
+      .map((u) => u.id);
+    if (!ids.length) return this.toast('No idle troops');
+    this.selection.setUnits(ids);
+    const u = this.world.unitById.get(ids[0])!;
+    this.focus(u.x, u.y);
+  }
+
+  jumpToAlert() {
+    if (this.lastAlert) this.focus(this.lastAlert.x, this.lastAlert.y);
+  }
+
+  jumpCapital() {
+    const f = this.world.player;
+    if (!f) return;
+    const s = f.capitalSettlement >= 0 ? this.world.settlements[f.capitalSettlement] : null;
+    if (s) this.focus(s.cx, s.cy + 20);
+  }
+
+  // ------------------------------------------------------------------ picking / input hooks
+  pickStructure(x: number, y: number): ReturnType<InputHooks['pickStructure']> {
+    const w = this.world;
+    const tx = Math.floor(x / TILE);
+    const ty = Math.floor(y / TILE);
+    // empty plots of a selected own settlement
+    const selRegion = this.selection.region >= 0 ? this.selection.region : this.selection.building ? w.buildingById.get(this.selection.building)?.settlementId ?? -1 : -1;
+    if (selRegion >= 0) {
+      const s = w.settlements[selRegion];
+      if (s.owner === this.playerFaction) {
+        for (let i = 0; i < s.unlockedPlots; i++) {
+          const p = s.plots[i];
+          if (p.buildingId) continue;
+          if (tx >= p.def.x && ty >= p.def.y && tx < p.def.x + p.def.size && ty < p.def.y + p.def.size) return { kind: 'plot', region: s.id, plot: i };
+        }
+      }
+    }
+    // buildings (include the roof area above the footprint)
+    let best: { id: number; region: number; d: number } | null = null;
+    w.buildingHash.query(x, y, 64, (b) => {
+      if (b.destroyed) return;
+      if (b.faction !== this.playerFaction && !w.vis.isExplored(this.playerFaction, b.x, b.y)) return;
+      const x0 = b.tx * TILE;
+      const y0 = b.ty * TILE - (b.size >= 3 ? 14 : 8);
+      const x1 = (b.tx + b.size) * TILE;
+      const y1 = (b.ty + b.size) * TILE;
+      if (x < x0 || x > x1 || y < y0 || y > y1) return;
+      const d = Math.hypot(b.x - x, b.y - y) + (b.def.id === 'wall' || b.def.id === 'gatehouse' ? 30 : 0);
+      if (!best || d < best.d) best = { id: b.id, region: b.settlementId, d };
+    });
+    if (best) {
+      const b = best as { id: number; region: number };
+      return { kind: 'building', id: b.id, region: b.region };
+    }
+    // the settlement square itself
+    for (const s of w.settlements) {
+      if (Math.hypot(s.px - x, s.py - y) < 24) return { kind: 'region', id: s.id };
+    }
+    return null;
   }
 
   inputHooks(scene: GameScene): InputHooks {
     return {
       order: (kind, x, y, target?: Unit) => {
-        const ids = [...this.selection.units];
+        const ids = this.selection.unitList().filter((u) => u.faction === this.playerFaction).map((u) => u.id);
         if (!ids.length) return;
         if (kind === 'attack' && target) {
           this.world.orderAttack(ids, target.id);
           scene.addMarker(target.x, target.y, 'attack');
           audio.play('order_attack');
-        } else {
-          this.world.orderMove(ids, x, y, { attackMove: kind === 'attackMove', formation: settings.data.formation });
-          scene.addMarker(x, y, kind === 'attackMove' ? 'attack' : 'move');
-          audio.play(kind === 'attackMove' ? 'order_attack' : 'order_move');
+          return;
         }
+        // tapping an enemy building attacks it
+        const s = this.pickStructure(x, y);
+        if (s && s.kind === 'building') {
+          const b = this.world.buildingById.get(s.id)!;
+          if (b.faction !== this.playerFaction && b.def.category !== 'landmark' && b.def.id !== 'merc_camp') {
+            this.world.orderAttack(ids, b.id);
+            scene.addMarker(b.x, b.y, 'attack');
+            audio.play('order_attack');
+            return;
+          }
+          if (b.def.id === 'merc_camp') {
+            this.world.orderMove(ids, b.doorX, b.doorY + 12, { formation: this.formation });
+            scene.addMarker(b.doorX, b.doorY + 12, 'move');
+            audio.play('order_move');
+            return;
+          }
+        }
+        this.world.orderMove(ids, x, y, { attackMove: kind === 'attackMove', formation: this.formation });
+        scene.addMarker(x, y, kind === 'attackMove' ? 'attack' : 'move');
+        audio.play(kind === 'attackMove' ? 'order_attack' : 'order_move');
       },
-      pickStructure: () => null,
+      pickStructure: (x, y) => this.pickStructure(x, y),
+      plotTapped: (region, plot) => {
+        audio.play('ui_open');
+        this.ui.emit('openBuild', { region, plot });
+      },
+      groundTarget: (mode, x, y) => {
+        if (mode === 'rally' && this.selection.building) {
+          const b = this.world.buildingById.get(this.selection.building);
+          if (b && b.faction === this.playerFaction) {
+            this.world.settlementSys.setRally(this.pf(), b.id, x, y);
+            scene.addMarker(x, y, 'move');
+            audio.play('ui_click');
+            this.toast('Rally point set');
+            return true;
+          }
+        }
+        return false;
+      },
       selected: () => {
         if (this.selection.units.size) audio.play(this.selection.units.size > 4 ? 'select_army' : 'select');
+        else if (this.selection.building || this.selection.region >= 0) audio.play('ui_click');
       },
       interact: () => audio.init(),
+      modeConsumed: () => this.ui.emit('mode', { mode: 'default' }),
       selectSameType: (u) => {
         const v = scene.camCtl.view(0);
         const ids = this.world.units
@@ -132,6 +421,11 @@ export class GameClient {
         this.selection.setUnits(ids);
       },
     };
+  }
+
+  setMode(mode: 'default' | 'move' | 'attack' | 'select' | 'rally') {
+    if (this.scene) this.scene.input2.mode = mode;
+    this.ui.emit('mode', { mode });
   }
 
   destroy() {

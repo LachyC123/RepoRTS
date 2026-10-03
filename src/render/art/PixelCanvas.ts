@@ -75,7 +75,8 @@ export class PixelCanvas {
   /** push pixel buffer to a canvas (browser only) */
   flush(): HTMLCanvasElement {
     const c = this.canvas;
-    const ctx = c.getContext('2d')!;
+    // CPU-backed canvas: cheap toDataURL / texture uploads, no GPU readbacks
+    const ctx = c.getContext('2d', { willReadFrequently: true })!;
     ctx.putImageData(new ImageData(this.bytes, this.w, this.h), 0, 0);
     return c;
   }

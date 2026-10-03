@@ -1,4 +1,5 @@
 import Phaser from 'phaser';
+import { canvasTexture } from './texUtil';
 import { TILE } from '../data/constants';
 import { CHUNK, type GameMap } from '../sim/map/GameMap';
 import { buildFields, minimapColor, paintChunk, type TerrainFields } from './art/terrainArt';
@@ -56,7 +57,7 @@ export class TerrainRenderer {
     ctx.putImageData(img, 0, 0);
     const key = 'terrain_placeholder';
     if (this.scene.textures.exists(key)) this.scene.textures.remove(key);
-    this.scene.textures.addCanvas(key, c);
+    canvasTexture(this.scene, key, c);
     this.placeholder = this.scene.make.image({ x: 0, y: 0, key }, false).setOrigin(0, 0).setScale(TILE);
     this.layer.add(this.placeholder);
   }
@@ -174,7 +175,7 @@ export class TerrainRenderer {
     const key = `terrain_${cx}_${cy}`;
     if (fresh) {
       if (this.scene.textures.exists(key)) this.scene.textures.remove(key);
-      this.scene.textures.addCanvas(key, canvas);
+      canvasTexture(this.scene, key, canvas);
       const img = this.scene.make.image({ x: cx * S, y: cy * S, key }, false).setOrigin(0, 0);
       this.layer.add(img);
       this.images[id] = img;
@@ -185,7 +186,7 @@ export class TerrainRenderer {
         this.placeholder = null;
       }
     } else {
-      (this.scene.textures.get(key) as Phaser.Textures.CanvasTexture).refresh();
+      this.scene.textures.get(key).source[0].update();
     }
   }
 

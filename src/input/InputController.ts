@@ -9,7 +9,11 @@ export interface InputHooks {
   /** world point tapped/right-clicked with a selection → order */
   order(kind: 'move' | 'attack' | 'attackMove', x: number, y: number, target?: Unit): void;
   /** returns something selectable at a world point that is not a unit (building/settlement) */
-  pickStructure(x: number, y: number): { kind: 'building'; id: number; region: number } | { kind: 'region'; id: number } | null;
+  pickStructure(x: number, y: number): { kind: 'building'; id: number; region: number } | { kind: 'region'; id: number } | { kind: 'plot'; region: number; plot: number } | null;
+  /** an empty plot of the selected settlement was tapped */
+  plotTapped?(region: number, plot: number): void;
+  /** rally / custom ground-target modes */
+  groundTarget?(mode: CommandMode, x: number, y: number): boolean;
   selected(): void;
   /** called on any pointer interaction (audio unlock etc.) */
   interact(): void;
@@ -323,6 +327,13 @@ export class InputController {
     const enemy = this.pickUnit(x, y, false, true);
     const hasSel = this.sel.units.size > 0;
 
+    if (this.mode === 'rally' && (!isMouse || p.button === 0)) {
+      if (this.hooks.groundTarget?.('rally', wx, wy)) {
+        this.mode = 'default';
+        this.hooks.modeConsumed?.('rally');
+      }
+      return;
+    }
     // explicit command modes from the action bar / hotkeys
     if ((this.mode === 'move' || this.mode === 'attack') && hasSel && (!isMouse || p.button === 0)) {
       if (this.mode === 'attack') {
@@ -337,6 +348,7 @@ export class InputController {
 
     if (isMouse) {
       if (p.button === 2) {
+        if (!hasSel && this.sel.building && this.hooks.groundTarget?.('rally', wx, wy)) return;
         if (hasSel) {
           if (enemy) this.hooks.order('attack', enemy.x, enemy.y, enemy);
           else this.hooks.order('move', wx, wy);
@@ -357,7 +369,8 @@ export class InputController {
       this.lastTap = { t: now, x, y, unit: 0 };
       const s = this.hooks.pickStructure(wx, wy);
       if (s) {
-        if (s.kind === 'building') this.sel.selectBuilding(s.id, s.region);
+        if (s.kind === 'plot') this.hooks.plotTapped?.(s.region, s.plot);
+        else if (s.kind === 'building') this.sel.selectBuilding(s.id, s.region);
         else this.sel.selectRegion(s.id);
         this.hooks.selected();
         return;
@@ -397,7 +410,8 @@ export class InputController {
     }
     const s = this.hooks.pickStructure(wx, wy);
     if (s) {
-      if (s.kind === 'building') this.sel.selectBuilding(s.id, s.region);
+      if (s.kind === 'plot') this.hooks.plotTapped?.(s.region, s.plot);
+      else if (s.kind === 'building') this.sel.selectBuilding(s.id, s.region);
       else this.sel.selectRegion(s.id);
       this.hooks.selected();
       return;
