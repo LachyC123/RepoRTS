@@ -6,7 +6,8 @@ export default defineConfig({
     target: 'es2020',
     chunkSizeWarningLimit: 2000,
     rollupOptions: {
-      output: { manualChunks: { phaser: ['phaser'] } },
+      // Phaser in its own chunk so game-code updates don't bust its cache
+      output: { manualChunks: (id: string) => (id.includes('node_modules/phaser') ? 'phaser' : undefined) },
     },
   },
   server: { host: true },
