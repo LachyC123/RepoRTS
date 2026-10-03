@@ -54,6 +54,8 @@ export class UnitRenderer {
     if (!u.alive) {
       const d = t - u.deathT;
       const seq = (u.id & 1) === 0 ? FR.dieA : FR.dieB;
+      // the wounded writhe now and then, lifting themselves a little
+      if (u.downed > 0 && d > 1 && (t * 0.7 + u.id * 0.13) % 3 < 0.35) return seq[1];
       return seq[d < 0.14 ? 0 : d < 0.34 ? 1 : 2];
     }
     if (u.def.deploy && u.deploy < 1) return u.deploy > 0.5 ? FR.deploy[1] : FR.deploy[0];
@@ -71,7 +73,11 @@ export class UnitRenderer {
       if (u.def.look.weapon === 'none') return FR.work[Math.floor(k * 3) & 3];
       return FR.work[k < 0.2 ? 0 : k < 0.35 ? 1 : k < 0.55 ? 2 : k < 0.8 ? 3 : 0];
     }
+    const ps = u.persona?.state;
+    // napping on duty: slumped down where they stood
+    if (ps === 'nap') return FR.dieA[1];
     const spd = Math.hypot(u.vx, u.vy);
+    if (ps === 'berserk' && spd > 3) return FR.run[Math.floor(t * 12 + u.id) & 3];
     if (spd > 6) {
       const cav = u.def.tags.includes('cavalry');
       const rate = cav ? 0.055 : 0.07;
@@ -129,7 +135,7 @@ export class UnitRenderer {
       if (age < 0.08) s.setTintFill(0xffffff);
       else s.clearTint();
       s.sy = c.y - (age > 0.4 ? 10 : 0);
-      s.setAlpha(age > 9 ? Math.max(0, 1 - (age - 9) / 3) : 1);
+      s.setAlpha(c.downed > 0 || age <= 9 ? 1 : Math.max(0, 1 - (age - 9) / 3));
     }
     for (const [id, s] of this.corpseSprites) {
       if (!cseen.has(id)) {
@@ -157,6 +163,7 @@ export class UnitRenderer {
     if (u.hitFlash > 0.06) s.setTintFill(0xffffff);
     else if (u.hitFlash > 0) s.setTint(0xff9a8a);
     else if (u.routing > 0) s.setTint(0xd8d0e8);
+    else if (u.persona?.state === 'berserk') s.setTint((Math.floor(this.world.time * 8) & 1) === 0 ? 0xff8a7a : 0xffc8b8);
     else s.clearTint();
   }
 

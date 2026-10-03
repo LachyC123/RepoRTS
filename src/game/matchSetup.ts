@@ -1,3 +1,4 @@
+import type { Era } from '../data/era';
 import type { FactionId } from '../data/constants';
 import { AI_HOUSES, KINGDOM_COLORS, type CrestId, type Difficulty, type FactionSetup } from '../data/factions';
 import type { MatchSetup } from '../sim/World';
@@ -12,6 +13,10 @@ export interface PlayerChoices {
   tutorial?: boolean;
   /** headless / spectator: all four kingdoms are AI */
   spectate?: boolean;
+  era?: Era;
+  living?: boolean;
+  autoArmies?: boolean;
+  sandbox?: boolean;
 }
 
 export const DEFAULT_CHOICES: PlayerChoices = {
@@ -20,6 +25,10 @@ export const DEFAULT_CHOICES: PlayerChoices = {
   color: 'blue',
   crest: 'lion',
   difficulty: 'normal',
+  era: 'medieval',
+  living: true,
+  autoArmies: true,
+  sandbox: false,
 };
 
 /** Builds the four kingdoms: the player in the west, rival houses in the north, east and south. */
@@ -32,7 +41,7 @@ export function buildMatchSetup(c: PlayerChoices): MatchSetup {
     name: c.kingdomName.replace(/^Kingdom of /i, ''), // short form, like the AI kingdoms (Varnmark, Eldmoor…)
     house: 'House ' + c.kingdomName.replace(/^Kingdom of /, ''),
     commanderName: c.commanderName,
-    commanderTitle: 'The Crown Commander',
+    commanderTitle: c.era === 'modern' ? 'General' : 'The Crown Commander',
     color: c.color,
     crest: c.crest,
     isPlayer: !c.spectate,
@@ -54,5 +63,5 @@ export function buildMatchSetup(c: PlayerChoices): MatchSetup {
       personality: h.personality,
     });
   });
-  return { seed, difficulty: c.difficulty, factions, player: c.spectate ? -1 : 0, tutorial: c.tutorial };
+  return { seed, difficulty: c.difficulty, factions, player: c.spectate ? -1 : 0, tutorial: c.tutorial, era: c.era ?? 'medieval', living: c.living ?? true, autoArmies: c.autoArmies ?? true, sandbox: !!c.sandbox };
 }

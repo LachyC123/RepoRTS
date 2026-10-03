@@ -57,5 +57,13 @@ export interface SimEvents {
   workerAction: { id: number; x: number; y: number; action: string };
   research: { faction: FactionId; id: string; x: number; y: number };
   mapChanged: { tx: number; ty: number; w: number; h: number };
+  /** a named soldier says something (speech bubble) */
+  unitSay: { id: number; x: number; y: number; faction: FactionId; text: string; kind: string };
+  /** a line for the war journal */
+  journal: { t: number; faction: FactionId; text: string; x: number; y: number; kind: string };
+  /** a trigger-happy soldier fires at nothing */
+  potshot: { id: number; x: number; y: number; tx: number; ty: number; kind: string };
+  /** a downed soldier is back on their feet */
+  unitRevived: { id: number; x: number; y: number; faction: FactionId };
   ceasefireOffer: { from: FactionId; against: FactionId; duration: number; id: number };
 }

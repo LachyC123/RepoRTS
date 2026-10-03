@@ -4,6 +4,7 @@ import { NEUTRAL, SIM_DT, TILE, type FactionId, type Resources } from '../data/c
 import type { Difficulty, FactionSetup } from '../data/factions';
 import { CROWNSHIRE, type MapDef } from '../data/map_crownshire';
 import { UNITS } from '../data/units';
+import { setEra, type Era } from '../data/era';
 import { Faction } from './Faction';
 import type { Notice, SimEvents } from './events';
 import type { Building } from './buildings/Building';
@@ -29,6 +30,7 @@ import { SpatialHash } from './SpatialHash';
 import { computeSlots, type FormationKind } from './units/Formation';
 import { Movement } from './units/Movement';
 import { Unit } from './units/Unit';
+import { LivingSystem } from './units/Living';
 
 export interface MatchSetup {
   seed: number;
@@ -39,6 +41,14 @@ export interface MatchSetup {
   player: FactionId | -1;
   tutorial?: boolean;
   startRes?: Resources;
+  /** medieval (default) or modern: re-dresses units, buildings and art */
+  era?: Era;
+  /** named soldiers with personalities, wounds and rescues */
+  living?: boolean;
+  /** the player's soldiers act on their own unless given direct orders */
+  autoArmies?: boolean;
+  /** no domination or elimination victory: play as long as you like */
+  sandbox?: boolean;
 }
 
 export const START_RES: Resources = { gold: 300, wood: 250, food: 220, stone: 100 };
@@ -66,6 +76,8 @@ export class World {
   readonly vis: Visibility;
   readonly diplomacy: Diplomacy;
   readonly victory: VictorySystem;
+  /** named soldiers, wounds and rescues, quirks (null when living soldiers are off) */
+  readonly living: LivingSystem | null;
   readonly buildingHash: SpatialHash<Building>;
   readonly graph: RegionGraph;
   private buildingHashCount = -1;
@@ -95,6 +107,8 @@ export class World {
   winner: FactionId | -1 = -1;
 
   constructor(setup: MatchSetup) {
+    // the era re-dresses the shared data tables before anything reads them
+    setEra(setup.era ?? 'medieval');
     this.setup = setup;
     this.mapDef = setup.map ?? CROWNSHIRE;
     this.rng = new Random(setup.seed);
@@ -114,6 +128,7 @@ export class World {
     this.vis = new Visibility(this);
     this.diplomacy = new Diplomacy(this);
     this.victory = new VictorySystem(this);
+    this.living = setup.living ? new LivingSystem(this) : null;
     const startRes = setup.startRes ?? START_RES;
     for (const fs of setup.factions) this.factions[fs.id] = new Faction(fs, startRes);
     // neutral faction (bandits, rebels, garrisons)
@@ -187,10 +202,10 @@ export class World {
   }
 
   // ------------------------------------------------------------------ units
-  spawnUnit(type: string, faction: FactionId, x: number, y: number, fromBuilding?: number): Unit {
+  spawnUnit(type: string, faction: FactionId, x: number, y: number, fromBuilding?: number, reuseId?: number): Unit {
     const def = UNITS[type];
     if (!def) throw new Error('unknown unit ' + type);
-    const u = new Unit(this.newId(), def, faction, x, y);
+    const u = new Unit(reuseId ?? this.newId(), def, faction, x, y);
     u.born = this.time;
     // place on a passable tile
     const pf = this.pathfinder;
@@ -208,6 +223,7 @@ export class World {
     u.destY = u.y;
     this.units.push(u);
     this.unitById.set(u.id, u);
+    this.living?.onSpawn(u);
     this.events.emit('unitSpawned', { id: u.id, x: u.x, y: u.y, faction, type, fromBuilding });
     return u;
   }
@@ -224,7 +240,7 @@ export class World {
     }
     this.units.length = w;
     // corpses fade after a while
-    if (this.corpses.length) this.corpses = this.corpses.filter((c) => this.time - c.deathT < 12);
+    if (this.corpses.length) this.corpses = this.corpses.filter((c) => c.downed > 0 || this.time - c.deathT < 12);
   }
 
   // ------------------------------------------------------------------ orders
@@ -407,6 +423,7 @@ export class World {
     this.diplomacy.update(dt);
     this.events2?.update(dt);
     this.victory.update(dt);
+    this.living?.update(dt);
     for (const u of this.units) {
       u.animT += dt;
       if (u.hitFlash > 0) u.hitFlash -= dt;

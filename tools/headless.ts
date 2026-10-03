@@ -5,7 +5,14 @@ import { NEUTRAL } from '../src/data/constants';
 const seed = Number(process.argv[2] ?? 1);
 const minutes = Number(process.argv[3] ?? 5);
 const withAI = process.argv[4] !== 'noai';
-const setup = buildMatchSetup({ ...DEFAULT_CHOICES, seed, spectate: true, difficulty: (process.argv[5] as never) ?? 'normal' });
+const setup = buildMatchSetup({
+  ...DEFAULT_CHOICES,
+  seed,
+  spectate: true,
+  difficulty: (process.argv[5] as never) ?? 'normal',
+  era: process.env.ERA === 'modern' ? 'modern' : 'medieval',
+  living: process.env.LIVING !== '0',
+});
 const w = new World(setup);
 w.initMatch();
 if (withAI) {
@@ -19,6 +26,14 @@ try {
   /* optional */
 }
 const notices: string[] = [];
+const says = new Map<string, number>();
+const journalKinds = new Map<string, number>();
+const journal: string[] = [];
+w.events.on('unitSay', (e) => says.set(e.kind, (says.get(e.kind) ?? 0) + 1));
+w.events.on('journal', (e) => {
+  journalKinds.set(e.kind, (journalKinds.get(e.kind) ?? 0) + 1);
+  if (process.env.JOURNAL) journal.push(`[${fmt(w.time)}] ${e.text}`);
+});
 w.events.on('notice', (n) => notices.push(`[${fmt(w.time)}] ${n.text}${n.sub ? ' — ' + n.sub : ''}`));
 function fmt(t: number) {
   const m = Math.floor(t / 60);
@@ -55,3 +70,8 @@ for (const f of w.factions) {
   console.log(`${f.name}: ${f.alive ? 'alive' : 'dead'} tiers ${JSON.stringify(tiers)} trained ${f.stats.unitsTrained} lost ${f.stats.unitsLost}`);
 }
 console.log('\n' + notices.slice(-60).join('\n'));
+if (w.living) {
+  console.log('\nsays', JSON.stringify(Object.fromEntries(says)));
+  console.log('journal', JSON.stringify(Object.fromEntries(journalKinds)));
+  if (journal.length) console.log(journal.slice(-80).join('\n'));
+}

@@ -218,7 +218,7 @@ export class CombatSystem {
         let s = d + (def.tags.includes('siege') ? 0 : 60);
         // defensive structures and gates first, then cores
         if (b.def.defence) s *= 0.7;
-        if (b.isGate) s *= def.look.engine === 'ram' ? 0.4 : 0.8;
+        if (b.isGate) s *= def.look.engine === 'ram' || def.buildingsOnly ? 0.4 : 0.8;
         if (b.def.id === 'wall') s *= 1.4;
         if (s < bs) {
           bs = s;
@@ -260,6 +260,7 @@ export class CombatSystem {
         const wc = u.def.look.weapon;
         if (wc === 'bow' || wc === 'longbow') u.atkVar = d > u.range * 0.55 ? 1 : 0;
         else if (wc === 'crossbow') u.atkVar = u.order.kind === 'hold' ? 1 : 0;
+        else if (wc === 'rifle' || wc === 'sniper' || wc === 'mg' || wc === 'rocket') u.atkVar = u.order.kind === 'hold' || d > u.range * 0.7 ? 1 : 0;
         else u.atkVar = (u.swings + u.id) & 1;
         u.swings++;
         w.events.emit('unitAttack', { id: u.id, x: u.x, y: u.y, type: u.def.id, targetX: t.x, targetY: t.y });
@@ -339,7 +340,7 @@ export class CombatSystem {
         x: u.x + u.facing * 4,
         y: u.y - (def.look.body === 'engine' ? 10 : 8),
         target: t,
-        attack: def.attack + u.atkBonus,
+        attack: (def.attack + u.atkBonus) * u.quirkAtk,
         attackType: def.attackType,
         accuracy: def.accuracy ?? 0.8,
         bonus: def.bonus,
@@ -364,13 +365,13 @@ export class CombatSystem {
         mult /= def.charge!;
         charge = false;
       }
-      this.damageUnit(t, def.attack + u.atkBonus, def.attackType, def.bonus, def.armorPen ?? 0, mult, u.faction, u.x, u.y, u, charge);
+      this.damageUnit(t, (def.attack + u.atkBonus) * u.quirkAtk, def.attackType, def.bonus, def.armorPen ?? 0, mult, u.faction, u.x, u.y, u, charge);
       if (charge) {
         w.events.emit('charge', { id: u.id, x: t.x, y: t.y });
         t.morale -= 6;
       }
     } else {
-      this.damageBuilding(t, def.attack + u.atkBonus, def.attackType, mult, u.faction);
+      this.damageBuilding(t, (def.attack + u.atkBonus) * u.quirkAtk, def.attackType, mult, u.faction);
     }
   }
 
@@ -401,7 +402,7 @@ export class CombatSystem {
     let blocked = false;
     // shield block vs missiles from the front
     if (type === 'pierce' && t.def.look.shield !== 'none') {
-      const chance = t.def.look.shield === 'tower' ? 0.45 : t.def.look.shield === 'kite' ? 0.25 : t.def.look.shield === 'round' ? 0.18 : 0.06;
+      const chance = t.def.look.shield === 'tower' || t.def.look.shield === 'riot' ? 0.45 : t.def.look.shield === 'kite' ? 0.25 : t.def.look.shield === 'round' ? 0.18 : 0.06;
       const facingShot = (fromX - t.x) * t.facing > 0 || t.arrived;
       if (facingShot && w.rng.next() < chance) {
         dmg *= 0.2;
@@ -429,7 +430,7 @@ export class CombatSystem {
       t.retargetT = 0.6;
     }
     w.events.emit('unitHit', { id: t.id, x: t.x, y: t.y, dmg, kind: type, blocked, fromX, fromY, heavy, by: attacker ? attacker.def.id : '' });
-    if (t.hp <= 0) this.kill(t, faction, attacker);
+    if (t.hp <= 0 && !w.living?.shrugOff(t)) this.kill(t, faction, attacker, dmg);
   }
 
   damageBuilding(b: Building, attack: number, type: AttackType, mult: number, faction: FactionId) {
@@ -440,7 +441,7 @@ export class CombatSystem {
     w.events.emit('buildingHit', { id: b.id, x: b.x, y: b.y, dmg, siege: type === 'siege' });
   }
 
-  kill(t: Unit, killerFaction: FactionId | -1, killer: Unit | null) {
+  kill(t: Unit, killerFaction: FactionId | -1, killer: Unit | null, dmg = 0) {
     const w = this.w;
     if (!t.alive) return;
     t.alive = false;
@@ -448,6 +449,7 @@ export class CombatSystem {
     t.deathT = w.time;
     t.path = null;
     if (killer) killer.kills++;
+    w.living?.onFall(t, killer, dmg);
     const vf = w.factions[t.faction];
     if (t.def.special !== 'worker') {
       vf.stats.unitsLost++;

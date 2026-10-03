@@ -15,6 +15,7 @@ import { FxDirector } from './FxDirector';
 import { Particles } from './Particles';
 import { TerrainRenderer } from './TerrainRenderer';
 import { TerritoryRenderer } from './TerritoryRenderer';
+import { SpeechRenderer } from './Speech';
 import { UnitRenderer } from './UnitRenderer';
 import { Weather } from './Weather';
 import { WorldObjects } from './WorldObjects';
@@ -38,6 +39,7 @@ export class GameScene extends Phaser.Scene {
   fog!: FogRenderer;
   particles!: Particles;
   fx!: FxDirector;
+  speech!: SpeechRenderer;
   ambient!: Ambient;
   weather!: Weather;
   ysort!: YSortLayer;
@@ -146,6 +148,8 @@ export class GameScene extends Phaser.Scene {
       this.units.visible = (u) => u.faction === pf || (u.seenBy & bit) !== 0;
       this.buildingsR.exploredTest = (x, y) => world.vis.isExplored(pf, x, y);
     }
+    this.speech = new SpeechRenderer(this, world, this.overLayer, (u) => pf < 0 || u.faction === pf || world.vis.isVisible(pf, u.x, u.y));
+    this.speech.playerFaction = pf;
     this.applyQuality();
     settings.onChange(() => this.applyQuality());
 
@@ -225,6 +229,7 @@ export class GameScene extends Phaser.Scene {
     this.ambient.update(simDt, this.renderTime, view, zoom);
     this.particles.update(simDt);
     this.fx.update(simDt, alpha);
+    this.speech.update(simDt, zoom, alpha, this.renderTime);
     this.weather.enabled = !settings.data.reducedEffects;
     this.weather.update(simDt);
     this.territory.update(dt, zoom);

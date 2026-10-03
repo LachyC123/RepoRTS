@@ -1,3 +1,4 @@
+import type { Persona } from './Persona';
 import type { FactionId } from '../../data/constants';
 import type { UnitDef } from '../../data/units';
 
@@ -67,6 +68,21 @@ export class Unit {
   deathT = 0;
   routing = 0;
   cheerT = 0;
+  /** living soldiers: who this is (name, rank, trait, mood state) */
+  persona: Persona | null = null;
+  /** downed and bleeding: seconds left before they die where they lie (corpses only) */
+  downed = 0;
+  /** the friend coming to drag this soldier out (corpses only) */
+  rescuer = 0;
+  /** quirk/rank multipliers (berserk, tired, promotions) */
+  quirkAtk = 1;
+  quirkSpeed = 1;
+  /** autonomy: true = acts on its own; false = following the player's direct order */
+  auto = true;
+  /** time of the player's last direct order */
+  manualT = -999;
+  /** autopilot task this unit belongs to (0 = free) */
+  task = 0;
 
   /** player control group (0 = none) */
   army = 0;
@@ -112,6 +128,6 @@ export class Unit {
   }
 
   get speed() {
-    return this.def.speed * this.speedMul * (this.routing > 0 ? 1.25 : 1) * (this.hp < this.maxHp * 0.35 ? 0.88 : 1);
+    return this.def.speed * this.speedMul * this.quirkSpeed * (this.routing > 0 ? 1.25 : 1) * (this.hp < this.maxHp * 0.35 ? 0.88 : 1);
   }
 }
