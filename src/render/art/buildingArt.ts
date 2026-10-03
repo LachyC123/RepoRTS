@@ -34,16 +34,16 @@ export interface BuildingOpts {
   deposit?: 'gold' | 'stone' | null;
 }
 
-type RoofMat = 'thatch' | 'tile' | 'slate' | 'shingle' | 'lead';
-type WallMat = 'stone' | 'ashlar' | 'rough' | 'timber' | 'logs' | 'planks' | 'plaster' | 'barn' | 'charred';
-interface Team {
+export type RoofMat = 'thatch' | 'tile' | 'slate' | 'shingle' | 'lead';
+export type WallMat = 'stone' | 'ashlar' | 'rough' | 'timber' | 'logs' | 'planks' | 'plaster' | 'barn' | 'charred';
+export interface Team {
   main: string;
   light: string;
   dark: string;
   symbol: KingdomColor['symbol'];
 }
 
-const TILE = 16;
+export const TILE = 16;
 const W = RAMP.wood;
 const S = RAMP.stone;
 const PL = RAMP.plaster;
@@ -51,25 +51,25 @@ const M = RAMP.metal;
 const GD = RAMP.goldm;
 const TH = RAMP.thatch;
 const FI = RAMP.fire;
-const HAY = ['#6e521c', ...RAMP.hay, '#ead27a'];
-const ROCK = RAMP.rock.slice(1);
-const LEAF = ['#16301c', '#1f4022', '#2a5228', '#36652e', '#457a35', '#578f3e', '#6ca44a'];
-const BARN = ['#341816', '#4e221c', '#6a2e24', '#82392a', '#9a4a34', '#ae5e42'];
-const ASH = ['#47403f', '#5c5452', '#736a66', '#8b827b', '#a39a90', '#bab1a4', '#cfc7b8'];
-const CHAR = ['#141012', '#1e1716', '#2a201c', '#382a22', '#46362a'];
-const ROUGH = ['#463e48', '#5a5058', '#6e6468', '#847a78', '#9a908a', '#b0a69c'];
-const DARK = '#1c141e';
-const INTERIOR = '#2e2428';
-const SOOT = '#1a1216';
-const GLASS = '#252c44';
-const GLASS_HI = '#62769c';
-const LIT = ['#9a5a26', '#d89a3c', '#f6cf6a'];
-const ENDG = ['#6e4a2c', '#a07a4a', '#c8a070'];
-const CREAM = '#eadfc4';
-const NEUTRAL_TEAM: Team = { main: '#8c7f6c', light: '#c9bda6', dark: '#4a4136', symbol: 'circle' };
+export const HAY = ['#6e521c', ...RAMP.hay, '#ead27a'];
+export const ROCK = RAMP.rock.slice(1);
+export const LEAF = ['#16301c', '#1f4022', '#2a5228', '#36652e', '#457a35', '#578f3e', '#6ca44a'];
+export const BARN = ['#341816', '#4e221c', '#6a2e24', '#82392a', '#9a4a34', '#ae5e42'];
+export const ASH = ['#47403f', '#5c5452', '#736a66', '#8b827b', '#a39a90', '#bab1a4', '#cfc7b8'];
+export const CHAR = ['#141012', '#1e1716', '#2a201c', '#382a22', '#46362a'];
+export const ROUGH = ['#463e48', '#5a5058', '#6e6468', '#847a78', '#9a908a', '#b0a69c'];
+export const DARK = '#1c141e';
+export const INTERIOR = '#2e2428';
+export const SOOT = '#1a1216';
+export const GLASS = '#252c44';
+export const GLASS_HI = '#62769c';
+export const LIT = ['#9a5a26', '#d89a3c', '#f6cf6a'];
+export const ENDG = ['#6e4a2c', '#a07a4a', '#c8a070'];
+export const CREAM = '#eadfc4';
+export const NEUTRAL_TEAM: Team = { main: '#8c7f6c', light: '#c9bda6', dark: '#4a4136', symbol: 'circle' };
 const BANDIT: Team = { main: '#5a3a32', light: '#8a6a58', dark: '#2e1e1c', symbol: 'triangle' };
 
-const ROOF: Record<RoofMat, readonly string[]> = {
+export const ROOF: Record<RoofMat, readonly string[]> = {
   thatch: TH,
   tile: RAMP.tile,
   slate: ['#22263a', '#2e3448', '#3c4459', '#4d566d', '#616b83', '#7a849b'],
@@ -78,17 +78,17 @@ const ROOF: Record<RoofMat, readonly string[]> = {
 };
 
 // ------------------------------------------------------------------------------------ helpers
-const md = (a: number, n: number) => ((a % n) + n) % n;
-const clamp = (v: number, a: number, b: number) => (v < a ? a : v > b ? b : v);
+export const md = (a: number, n: number) => ((a % n) + n) % n;
+export const clamp = (v: number, a: number, b: number) => (v < a ? a : v > b ? b : v);
 
 /** quantise v∈[0,1] onto a ramp, optional ordered dithering */
-function rv(r: readonly string[], v: number, x = 0, y = 0, d = 0): string {
+export function rv(r: readonly string[], v: number, x = 0, y = 0, d = 0): string {
   const n = r.length;
   const i = Math.round(v * (n - 1) + (d ? BAYER4[(x & 3) + ((y & 3) << 2)] * d : 0));
   return r[i < 0 ? 0 : i >= n ? n - 1 : i];
 }
 
-function vnoise(x: number, period: number, seed: number) {
+export function vnoise(x: number, period: number, seed: number) {
   const f0 = x / period;
   const i = Math.floor(f0);
   const f = f0 - i;
@@ -98,7 +98,7 @@ function vnoise(x: number, period: number, seed: number) {
   return a + (b - a) * t;
 }
 
-function vnoise2(x: number, y: number, period: number, seed: number) {
+export function vnoise2(x: number, y: number, period: number, seed: number) {
   const fx = x / period;
   const fy = y / period;
   const xi = Math.floor(fx);
@@ -115,7 +115,7 @@ function vnoise2(x: number, y: number, period: number, seed: number) {
 }
 
 // ------------------------------------------------------------------------------------ context
-interface Ctx {
+export interface Ctx {
   size: number;
   state: BuildingState;
   team: Team | null;
@@ -139,7 +139,7 @@ interface Ctx {
   dmg: number;
 }
 
-function makeCtx(size: number, top: number, team: Team | null, state: BuildingState, variant = 0, tier = 3, salt = 0): Ctx {
+export function makeCtx(size: number, top: number, team: Team | null, state: BuildingState, variant = 0, tier = 3, salt = 0): Ctx {
   const Wd = size * TILE + 6;
   const H = top + size * TILE + 4;
   const ay = H - 4;
@@ -166,12 +166,12 @@ function makeCtx(size: number, top: number, team: Team | null, state: BuildingSt
   };
 }
 
-function teamOf(k: KingdomColor | null): Team | null {
+export function teamOf(k: KingdomColor | null): Team | null {
   return k ? { main: k.main, light: k.light, dark: k.dark, symbol: k.symbol } : null;
 }
 
 /** scorch marks on the object layer (damaged / ruined / burned) */
-function scorch(c: Ctx, n: number, strength: number) {
+export function scorch(c: Ctx, n: number, strength: number) {
   const p = c.pc;
   for (let k = 0; k < n; k++) {
     let sx = -1;
@@ -201,7 +201,7 @@ function scorch(c: Ctx, n: number, strength: number) {
 }
 
 /** outline, cast the soft lower-right shadow onto the ground layer, composite, crop */
-function finish(c: Ctx, opt: { noShadow?: boolean } = {}): BuildingSprite {
+export function finish(c: Ctx, opt: { noShadow?: boolean } = {}): BuildingSprite {
   const { pc, base, W: w, H: h } = c;
   if (c.dmg === 1) scorch(c, 4, 0.55);
   if (c.dmg === 2) scorch(c, 8, 0.7);
@@ -241,11 +241,11 @@ function finish(c: Ctx, opt: { noShadow?: boolean } = {}): BuildingSprite {
 }
 
 // ------------------------------------------------------------------------------------ ground
-type YardKind = 'dirt' | 'cobble' | 'straw' | 'mud' | 'gravel' | 'ash' | 'flag';
+export type YardKind = 'dirt' | 'cobble' | 'straw' | 'mud' | 'gravel' | 'ash' | 'flag';
 const COBBLE = ['#5c5258', '#6c6266', '#7c7274', '#8c8282', '#9e9490'];
 const DIRT = ['#5a4430', '#6a5238', '#7a6142', '#88704e', '#97805c'];
 /** ground patch on the base layer; edges fade out (semi-transparent) so it blends with terrain */
-function yard(c: Ctx, kind: YardKind, x0: number, y0: number, w: number, h: number, rad = 4) {
+export function yard(c: Ctx, kind: YardKind, x0: number, y0: number, w: number, h: number, rad = 4) {
   const b = c.base;
   for (let y = y0; y < y0 + h; y++)
     for (let x = x0; x < x0 + w; x++) {
@@ -295,12 +295,12 @@ function yard(c: Ctx, kind: YardKind, x0: number, y0: number, w: number, h: numb
     }
 }
 /** yard covering the footprint from row `top` down to the front edge */
-function yardFront(c: Ctx, kind: YardKind, top: number, inset = 1) {
+export function yardFront(c: Ctx, kind: YardKind, top: number, inset = 1) {
   yard(c, c.con && (kind === 'cobble' || kind === 'flag') ? 'dirt' : kind, c.L + inset, top, c.R - c.L - inset * 2, c.G - top - 1);
 }
 
 /** warm light pool / glow on the ground layer */
-function glow(c: Ctx, cx: number, cy: number, rx: number, ry: number, a: number) {
+export function glow(c: Ctx, cx: number, cy: number, rx: number, ry: number, a: number) {
   for (let y = Math.floor(cy - ry); y <= cy + ry; y++)
     for (let x = Math.floor(cx - rx); x <= cx + rx; x++) {
       const d = ((x - cx) / rx) ** 2 + ((y - cy) / ry) ** 2;
@@ -396,7 +396,7 @@ function wallTex(mat: WallMat, lx: number, ly: number, w: number, h: number, px:
   }
 }
 
-interface WallOpts {
+export interface WallOpts {
   /** gable triangle rise above the wall (matching roofNS) */
   gable?: number;
   ghw?: number;
@@ -406,7 +406,7 @@ interface WallOpts {
   spacing?: number;
 }
 
-function wall(c: Ctx, x: number, y: number, w: number, h: number, mat: WallMat, o: WallOpts = {}) {
+export function wall(c: Ctx, x: number, y: number, w: number, h: number, mat: WallMat, o: WallOpts = {}) {
   const p = c.pc;
   const gb = y + h - 1;
   const gh = c.con === 1 ? 0 : o.gable ?? 0;
@@ -469,7 +469,7 @@ function wall(c: Ctx, x: number, y: number, w: number, h: number, mat: WallMat, 
 }
 
 /** a vertical post (1-2px) */
-function post(c: Ctx, x: number, yTop: number, gb: number, w = 1) {
+export function post(c: Ctx, x: number, yTop: number, gb: number, w = 1) {
   const p = c.pc;
   p.vline(x, yTop, gb, W[4]);
   if (w > 1) p.vline(x + 1, yTop, gb, W[2]);
@@ -540,13 +540,13 @@ function ridgeCol(mat: RoofMat, px: number): string {
   }
 }
 
-function ruinFloor(px: number, py: number, seed: number) {
+export function ruinFloor(px: number, py: number, seed: number) {
   const n = hash2(px >> 1, py >> 1, seed + 9);
   return n < 0.55 ? '#3a2e30' : n < 0.85 ? '#4a3c38' : '#2a2024';
 }
 
 /** state-aware roof pixel: cov = 0 at the eave → 1 at the ridge */
-function putRoof(c: Ctx, px: number, py: number, col: string, cov: number, raf: 'v' | 'h', ox: number) {
+export function putRoof(c: Ctx, px: number, py: number, col: string, cov: number, raf: 'v' | 'h', ox: number) {
   if (c.con === 2 && cov > 0.42) {
     const k = raf === 'v' ? px - ox : py;
     const m = md(k, 4);
@@ -561,14 +561,14 @@ function putRoof(c: Ctx, px: number, py: number, col: string, cov: number, raf: 
 }
 
 /** darken the rows right under an eave (only already-drawn pixels) */
-function eaveShadow(c: Ctx, x0: number, x1: number, y: number, a0 = 0.38, a1 = 0.16) {
+export function eaveShadow(c: Ctx, x0: number, x1: number, y: number, a0 = 0.38, a1 = 0.16) {
   for (let x = x0; x <= x1; x++) {
     if (c.pc.get(x, y) >>> 24) c.pc.blend(x, y, '#1a1020', a0);
     if (c.pc.get(x, y + 1) >>> 24) c.pc.blend(x, y + 1, '#1a1020', a1);
   }
 }
 
-function roofHoles(c: Ctx, x: number, y: number, w: number, h: number, n: number) {
+export function roofHoles(c: Ctx, x: number, y: number, w: number, h: number, n: number) {
   const p = c.pc;
   for (let k = 0; k < n; k++) {
     const hx = x + 2 + hash2(k, 1, c.seed + 31) * Math.max(1, w - 4);
@@ -585,7 +585,7 @@ function roofHoles(c: Ctx, x: number, y: number, w: number, h: number, n: number
   }
 }
 
-function ruinDebris(c: Ctx, x: number, y: number, w: number, h: number) {
+export function ruinDebris(c: Ctx, x: number, y: number, w: number, h: number) {
   const p = c.pc;
   const n = Math.max(1, Math.round((w * h) / 90));
   for (let k = 0; k < n; k++) {
@@ -603,7 +603,7 @@ function ruinDebris(c: Ctx, x: number, y: number, w: number, h: number) {
   }
 }
 
-interface RoofOpts {
+export interface RoofOpts {
   ridge?: number;
   hip?: number;
   holes?: number;
@@ -612,7 +612,7 @@ interface RoofOpts {
 }
 
 /** roof with an east-west ridge seen from above-front. Region x..x+w-1, y..y+h-1; bottom row = eave */
-function roofEW(c: Ctx, x: number, y: number, w: number, h: number, mat: RoofMat, o: RoofOpts = {}) {
+export function roofEW(c: Ctx, x: number, y: number, w: number, h: number, mat: RoofMat, o: RoofOpts = {}) {
   if (c.con === 1) return;
   const yr = y + Math.max(1, Math.round((h - 1) * (o.ridge ?? 0.34)));
   const hip = Math.min(o.hip ?? 0, Math.floor(w / 2));
@@ -704,7 +704,7 @@ function roofEW(c: Ctx, x: number, y: number, w: number, h: number, mat: RoofMat
 }
 
 /** roof with north-south ridge: front gable chevron. Column dx∈[-hw,hw]; eave corners at yb */
-function roofNS(c: Ctx, cx: number, yb: number, hw: number, gh: number, len: number, mat: RoofMat, o: { finial?: 'team' | 'cross' | 'post' | null; trim?: boolean } = {}) {
+export function roofNS(c: Ctx, cx: number, yb: number, hw: number, gh: number, len: number, mat: RoofMat, o: { finial?: 'team' | 'cross' | 'post' | null; trim?: boolean } = {}) {
   if (c.con === 1) return;
   const p = c.pc;
   for (let dx = -hw; dx <= hw; dx++) {
@@ -756,7 +756,7 @@ function roofNS(c: Ctx, cx: number, yb: number, hw: number, gh: number, len: num
 }
 
 /** square pyramid / spire. Base rect cx±hw, rows yb-d..yb; apex rise above base centre */
-function pyramid(c: Ctx, cx: number, yb: number, hw: number, d: number, rise: number, mat: RoofMat, o: { finial?: 'team' | 'cross' | 'gold' | null } = {}) {
+export function pyramid(c: Ctx, cx: number, yb: number, hw: number, d: number, rise: number, mat: RoofMat, o: { finial?: 'team' | 'cross' | 'gold' | null } = {}) {
   if (c.con === 1 || c.dmg === 2) return;
   const p = c.pc;
   const R0 = ROOF[mat];
@@ -843,7 +843,7 @@ function crenPattern(k: number, period: number) {
 }
 
 /** crenellated flat top of a square tower/wall. Top surface rows y..y+d-1, front wall face below */
-function crenTop(c: Ctx, x: number, y: number, w: number, d: number, o: { floor?: 'stone' | 'wood'; period?: number; ramp?: readonly string[] } = {}) {
+export function crenTop(c: Ctx, x: number, y: number, w: number, d: number, o: { floor?: 'stone' | 'wood'; period?: number; ramp?: readonly string[] } = {}) {
   if (c.con !== 0) return;
   const p = c.pc;
   const S = o.ramp ?? RAMP.stone;
@@ -872,7 +872,7 @@ function crenTop(c: Ctx, x: number, y: number, w: number, d: number, o: { floor?
 }
 
 /** N-S running wall walk seen from above (castle side walls) */
-function wallStrip(c: Ctx, x: number, y0: number, y1: number, w: number) {
+export function wallStrip(c: Ctx, x: number, y0: number, y1: number, w: number) {
   if (c.con !== 0) return;
   const p = c.pc;
   for (let py = y0; py <= y1; py++)
@@ -893,7 +893,7 @@ function wallStrip(c: Ctx, x: number, y0: number, y1: number, w: number) {
 }
 
 /** hollow ruined top (interior seen from above) */
-function hollow(c: Ctx, x: number, y: number, w: number, d: number) {
+export function hollow(c: Ctx, x: number, y: number, w: number, d: number) {
   const p = c.pc;
   for (let py = y; py < y + d; py++)
     for (let px = x; px < x + w; px++) {
@@ -929,7 +929,7 @@ function towerTex(mat: WallMat, dx: number, n: number, r: number, ly: number, se
  * Round tower. cx, cyG = centre of its ground ellipse. Body height h.
  * top: 'cren' crenellated, 'cone' conical roof, 'flat'
  */
-function roundTower(c: Ctx, cx: number, cyG: number, r: number, h: number, o: { top?: 'cren' | 'cone' | 'flat'; roof?: RoofMat; coneH?: number; finial?: 'team' | 'gold' | null; mat?: WallMat; slits?: boolean; jagged?: boolean } = {}) {
+export function roundTower(c: Ctx, cx: number, cyG: number, r: number, h: number, o: { top?: 'cren' | 'cone' | 'flat'; roof?: RoofMat; coneH?: number; finial?: 'team' | 'gold' | null; mat?: WallMat; slits?: boolean; jagged?: boolean } = {}) {
   const p = c.pc;
   const mat = o.mat ?? 'stone';
   const ry = Math.max(1, Math.round(r * 0.42));
@@ -1013,7 +1013,7 @@ function roundCren(c: Ctx, cx: number, cy: number, r: number, ry: number, S: rea
 }
 
 /** square tower: front face + top (crenellated / pyramid roof) */
-function sqTower(c: Ctx, x: number, gb: number, w: number, h: number, d: number, o: { mat?: WallMat; top?: 'cren' | 'pyramid' | 'none'; roof?: RoofMat; rise?: number; finial?: 'team' | 'cross' | 'gold' | null; slits?: boolean } = {}) {
+export function sqTower(c: Ctx, x: number, gb: number, w: number, h: number, d: number, o: { mat?: WallMat; top?: 'cren' | 'pyramid' | 'none'; roof?: RoofMat; rise?: number; finial?: 'team' | 'cross' | 'gold' | null; slits?: boolean } = {}) {
   const mat = o.mat ?? 'stone';
   let hh = h;
   if (c.con === 1) hh = Math.max(3, Math.round(h * 0.35));
@@ -1036,7 +1036,7 @@ function sqTower(c: Ctx, x: number, gb: number, w: number, h: number, d: number,
 }
 
 // ------------------------------------------------------------------------------------ openings
-function door(c: Ctx, x: number, y: number, w: number, h: number, kind: 'plank' | 'arch' | 'dark' | 'gate' | 'double' = 'plank', frame: 'stone' | 'wood' | null = null) {
+export function door(c: Ctx, x: number, y: number, w: number, h: number, kind: 'plank' | 'arch' | 'dark' | 'gate' | 'double' = 'plank', frame: 'stone' | 'wood' | null = null) {
   if (c.con === 1) return;
   const p = c.pc;
   const k = c.con === 2 || c.dmg === 2 ? 'dark' : kind;
@@ -1084,8 +1084,8 @@ function door(c: Ctx, x: number, y: number, w: number, h: number, kind: 'plank' 
   }
 }
 
-type WinKind = 'glass' | 'lit' | 'shutter' | 'slit' | 'arch' | 'boarded' | 'box' | 'stained' | 'round';
-function win(c: Ctx, x: number, y: number, w: number, h: number, kind: WinKind = 'glass') {
+export type WinKind = 'glass' | 'lit' | 'shutter' | 'slit' | 'arch' | 'boarded' | 'box' | 'stained' | 'round';
+export function win(c: Ctx, x: number, y: number, w: number, h: number, kind: WinKind = 'glass') {
   if (c.con === 1) return;
   const p = c.pc;
   const ruined = c.dmg === 2 || c.con === 2;
@@ -1139,12 +1139,12 @@ function win(c: Ctx, x: number, y: number, w: number, h: number, kind: WinKind =
   if (lit) glowPx(c, x - 1, y + h, w + 2);
 }
 
-function glowPx(c: Ctx, x: number, y: number, w: number) {
+export function glowPx(c: Ctx, x: number, y: number, w: number) {
   for (let i = 0; i < w; i++) if (c.pc.get(x + i, y) >>> 24) c.pc.blend(x + i, y, LIT[2], 0.25);
 }
 
 /** stone chimney; top row = yTop (sooty opening seen from above), runs down h rows */
-function chimney(c: Ctx, x: number, yTop: number, h: number, o: { glow?: boolean; w?: number; stack?: boolean } = {}) {
+export function chimney(c: Ctx, x: number, yTop: number, h: number, o: { glow?: boolean; w?: number; stack?: boolean } = {}) {
   if (c.con === 1) return;
   const p = c.pc;
   const w = o.w ?? (c.size >= 2 ? 4 : 3);
@@ -1172,7 +1172,7 @@ function chimney(c: Ctx, x: number, yTop: number, h: number, o: { glow?: boolean
 }
 
 // ------------------------------------------------------------------------------------ cloth
-function symbolAt(c: Ctx, cx: number, cy: number, sym: Team['symbol'], col: string) {
+export function symbolAt(c: Ctx, cx: number, cy: number, sym: Team['symbol'], col: string) {
   const p = c.pc;
   switch (sym) {
     case 'cross':
@@ -1200,7 +1200,7 @@ function symbolAt(c: Ctx, cx: number, cy: number, sym: Team['symbol'], col: stri
 }
 
 /** waving flag cloth attached at (x, y) to the right */
-function flagCloth(c: Ctx, x: number, y: number, w: number, h: number, t: Team, phase: number) {
+export function flagCloth(c: Ctx, x: number, y: number, w: number, h: number, t: Team, phase: number) {
   const p = c.pc;
   for (let lx = 0; lx < w; lx++) {
     const wave = Math.sin(lx * 1.1 - phase * 1.57);
@@ -1216,7 +1216,7 @@ function flagCloth(c: Ctx, x: number, y: number, w: number, h: number, t: Team, 
 }
 
 /** flagpole with a waving banner; gb = ground row */
-function poleFlag(c: Ctx, x: number, gb: number, h: number, t: Team | null, o: { w?: number; fh?: number; phase?: number; sym?: boolean } = {}) {
+export function poleFlag(c: Ctx, x: number, gb: number, h: number, t: Team | null, o: { w?: number; fh?: number; phase?: number; sym?: boolean } = {}) {
   if (!t || c.con !== 0) return;
   const p = c.pc;
   const top = gb - h;
@@ -1234,7 +1234,7 @@ function poleFlag(c: Ctx, x: number, gb: number, h: number, t: Team | null, o: {
 }
 
 /** hanging wall banner: rod at row y, cloth below */
-function wallBanner(c: Ctx, x: number, y: number, w: number, h: number, t: Team | null) {
+export function wallBanner(c: Ctx, x: number, y: number, w: number, h: number, t: Team | null) {
   if (!t || c.con !== 0) return;
   const p = c.pc;
   const torn = c.dmg >= 1;
@@ -1257,7 +1257,7 @@ function wallBanner(c: Ctx, x: number, y: number, w: number, h: number, t: Team 
   }
 }
 
-function shieldCrest(c: Ctx, cx: number, y: number, t: Team | null) {
+export function shieldCrest(c: Ctx, cx: number, y: number, t: Team | null) {
   if (!t || c.con !== 0 || c.dmg === 2) return;
   const p = c.pc;
   p.rect(cx - 2, y, 5, 3, t.main);
@@ -1270,7 +1270,7 @@ function shieldCrest(c: Ctx, cx: number, y: number, t: Team | null) {
 }
 
 /** striped market awning. Top edge at y (back), slopes down to front edge y+d */
-function awning(c: Ctx, x: number, y: number, w: number, d: number, t: Team) {
+export function awning(c: Ctx, x: number, y: number, w: number, d: number, t: Team) {
   if (c.con !== 0) return;
   const p = c.pc;
   for (let ly = 0; ly <= d; ly++)
@@ -1294,10 +1294,10 @@ function awning(c: Ctx, x: number, y: number, w: number, d: number, t: Team) {
 }
 
 // ------------------------------------------------------------------------------------ props
-function built(c: Ctx) {
+export function built(c: Ctx) {
   return c.con === 0;
 }
-function barrel(c: Ctx, x: number, gb: number) {
+export function barrel(c: Ctx, x: number, gb: number) {
   if (!built(c)) return;
   const p = c.pc;
   p.rect(x, gb - 4, 4, 5, W[3]);
@@ -1308,7 +1308,7 @@ function barrel(c: Ctx, x: number, gb: number) {
   p.hline(x, x + 3, gb - 5, W[5]);
   p.px(x + 3, gb - 5, W[4]);
 }
-function crate(c: Ctx, x: number, gb: number, s = 4) {
+export function crate(c: Ctx, x: number, gb: number, s = 4) {
   if (!built(c)) return;
   const p = c.pc;
   p.rect(x, gb - s + 1, s, s, W[4]);
@@ -1317,7 +1317,7 @@ function crate(c: Ctx, x: number, gb: number, s = 4) {
   p.line(x, gb, x + s - 1, gb - s + 1, W[2]);
   p.hline(x, x + s - 1, gb - s + 1, W[3]);
 }
-function sack(c: Ctx, x: number, gb: number) {
+export function sack(c: Ctx, x: number, gb: number) {
   if (!built(c)) return;
   const p = c.pc;
   p.rect(x, gb - 2, 3, 3, '#b8a27a');
@@ -1325,7 +1325,7 @@ function sack(c: Ctx, x: number, gb: number) {
   p.vline(x + 2, gb - 2, gb, '#8a7452');
   p.px(x, gb - 2, '#d0bc94');
 }
-function logPile(c: Ctx, x: number, gb: number, n: number, rows = 3, dep = 3) {
+export function logPile(c: Ctx, x: number, gb: number, n: number, rows = 3, dep = 3) {
   const p = c.pc;
   const logs: [number, number][] = [];
   for (let r = 0; r < rows; r++) for (let i = 0; i < n - r; i++) logs.push([x + i * 3 + r * 1.5, gb - 2 - r * 3]);
@@ -1344,12 +1344,12 @@ function logPile(c: Ctx, x: number, gb: number, n: number, rows = 3, dep = 3) {
     p.px(lx, ly + 2, W[2]);
   }
 }
-function haystack(c: Ctx, cx: number, gb: number, r: number) {
+export function haystack(c: Ctx, cx: number, gb: number, r: number) {
   if (!built(c)) return;
   blob(c.pc, cx, gb - r * 0.75, r, r * 0.85, HAY, c.seed + cx);
   c.pc.px(cx, Math.round(gb - r * 1.6), HAY[3]);
 }
-function hayBale(c: Ctx, x: number, gb: number) {
+export function hayBale(c: Ctx, x: number, gb: number) {
   if (!built(c)) return;
   const p = c.pc;
   p.rect(x, gb - 2, 5, 3, HAY[3]);
@@ -1357,7 +1357,7 @@ function hayBale(c: Ctx, x: number, gb: number) {
   p.vline(x + 4, gb - 2, gb, HAY[1]);
   p.vline(x + 2, gb - 4, gb, HAY[2]);
 }
-function fenceH(c: Ctx, x0: number, x1: number, gb: number, step = 4) {
+export function fenceH(c: Ctx, x0: number, x1: number, gb: number, step = 4) {
   if (!built(c)) return;
   const p = c.pc;
   p.hline(x0, x1, gb - 3, W[4]);
@@ -1368,7 +1368,7 @@ function fenceH(c: Ctx, x0: number, x1: number, gb: number, step = 4) {
     p.px(x, gb - 4, W[5]);
   }
 }
-function fenceV(c: Ctx, x: number, y0: number, y1: number, step = 4) {
+export function fenceV(c: Ctx, x: number, y0: number, y1: number, step = 4) {
   if (!built(c)) return;
   const p = c.pc;
   p.vline(x, y0 - 3, y1 - 3, W[4]);
@@ -1410,7 +1410,7 @@ function well(c: Ctx, cx: number, gb: number) {
     for (let lx = -5 + (3 - ly); lx <= 5 - (3 - ly); lx++) p.px(cx + lx, gb - 14 + ly, rv(ROOF.shingle, lx < 0 ? 0.7 : 0.35, 0, 0) );
   p.hline(cx - 5, cx + 5, gb - 11, W[1]);
 }
-function target(c: Ctx, cx: number, gb: number) {
+export function target(c: Ctx, cx: number, gb: number) {
   if (!built(c)) return;
   const p = c.pc;
   p.line(cx - 2, gb, cx, gb - 5, W[2]);
@@ -1459,7 +1459,7 @@ function shieldsRow(c: Ctx, x: number, y: number, n: number, t: Team) {
     p.px(sx + 1, y + 1, i & 1 ? t.light : M[5]);
   }
 }
-function tent(c: Ctx, cx: number, gb: number, hw: number, h: number, len: number, col: string, o: { stripe?: string; team?: Team | null; door?: boolean } = {}) {
+export function tent(c: Ctx, cx: number, gb: number, hw: number, h: number, len: number, col: string, o: { stripe?: string; team?: Team | null; door?: boolean } = {}) {
   const p = c.pc;
   if (c.con !== 0) {
     // bare A-frame poles + folded canvas
@@ -1496,7 +1496,7 @@ function tent(c: Ctx, cx: number, gb: number, hw: number, h: number, len: number
   p.vline(cx, gb - h - len - 2, gb - h - len, W[2]);
   if (o.team) flagCloth(c, cx + 1, gb - h - len - 2, 3, 2, o.team, c.seed & 3);
 }
-function campfire(c: Ctx, cx: number, gb: number, lit = true) {
+export function campfire(c: Ctx, cx: number, gb: number, lit = true) {
   if (!built(c)) return;
   const p = c.pc;
   for (let a = 0; a < 8; a++) {
@@ -1517,7 +1517,7 @@ function campfire(c: Ctx, cx: number, gb: number, lit = true) {
     glow(c, cx, gb - 1, 6, 3.5, 0.35);
   }
 }
-function cart(c: Ctx, x: number, gb: number, load: 'hay' | 'gold' | 'stone' | 'logs' | null = null) {
+export function cart(c: Ctx, x: number, gb: number, load: 'hay' | 'gold' | 'stone' | 'logs' | null = null) {
   if (!built(c)) return;
   const p = c.pc;
   p.line(x - 3, gb - 2, x, gb - 3, W[2]);
@@ -1542,7 +1542,7 @@ function cart(c: Ctx, x: number, gb: number, load: 'hay' | 'gold' | 'stone' | 'l
   p.ellipse(x + 3.5, gb - 1.5, 2, 2, W[1]);
   p.px(x + 3, gb - 2, W[4]);
 }
-function oreCart(c: Ctx, x: number, gb: number, gold: boolean) {
+export function oreCart(c: Ctx, x: number, gb: number, gold: boolean) {
   if (!built(c)) return;
   const p = c.pc;
   p.rect(x, gb - 4, 6, 3, M[2]);
@@ -1571,7 +1571,7 @@ function grave(c: Ctx, x: number, gb: number, kind: number) {
   }
   p.hline(x - 1, x + 3, gb, RAMP.dirt[1]);
 }
-function stoneBlock(c: Ctx, x: number, gb: number, w: number, h: number, d = 2) {
+export function stoneBlock(c: Ctx, x: number, gb: number, w: number, h: number, d = 2) {
   const p = c.pc;
   p.rect(x, gb - h + 1, w, h, S[4]);
   p.vline(x + w - 1, gb - h + 1, gb, S[3]);
@@ -1579,7 +1579,7 @@ function stoneBlock(c: Ctx, x: number, gb: number, w: number, h: number, d = 2) 
   p.vline(x + w - 1, gb - h + 1 - d, gb - h, S[5]);
   p.hline(x, x + w - 1, gb, S[2]);
 }
-function stump(c: Ctx, x: number, gb: number, axe = false) {
+export function stump(c: Ctx, x: number, gb: number, axe = false) {
   const p = c.pc;
   p.rect(x, gb - 2, 4, 3, W[2]);
   p.vline(x, gb - 2, gb, W[3]);
@@ -1592,10 +1592,10 @@ function stump(c: Ctx, x: number, gb: number, axe = false) {
     p.px(x + 1, gb - 3, M[3]);
   }
 }
-function bush(c: Ctx, cx: number, gb: number, r = 3) {
+export function bush(c: Ctx, cx: number, gb: number, r = 3) {
   blob(c.pc, cx, gb - r * 0.7, r, r * 0.8, LEAF, c.seed + cx);
 }
-function flowers(c: Ctx, x: number, gb: number, n: number) {
+export function flowers(c: Ctx, x: number, gb: number, n: number) {
   const fl = ['#e05a6a', '#f0d060', '#f0f0e8', '#d070c0'];
   for (let i = 0; i < n; i++) {
     const fx = x + i * 2;
@@ -1614,7 +1614,7 @@ function torch(c: Ctx, x: number, y: number) {
 }
 
 // ------------------------------------------------------------------------------------ construction overlays
-function scaffold(c: Ctx, x: number, gb: number, w: number, h: number) {
+export function scaffold(c: Ctx, x: number, gb: number, w: number, h: number) {
   const p = c.pc;
   const top = gb - h;
   const n = Math.max(2, Math.round(w / 10) + 1);
@@ -1635,7 +1635,7 @@ function scaffold(c: Ctx, x: number, gb: number, w: number, h: number) {
 }
 
 /** generic construction supplies at the front corners */
-function supplies(c: Ctx) {
+export function supplies(c: Ctx) {
   const p = c.pc;
   const gb = c.G - 2;
   // plank stack
@@ -1655,7 +1655,7 @@ function supplies(c: Ctx) {
 }
 
 /** foundation outline (construction) on the ground layer */
-function foundation(c: Ctx, x: number, gb: number, w: number, d: number) {
+export function foundation(c: Ctx, x: number, gb: number, w: number, d: number) {
   const b = c.base;
   for (let px = x; px < x + w; px++) {
     b.px(px, gb, S[3]);
@@ -1669,7 +1669,7 @@ function foundation(c: Ctx, x: number, gb: number, w: number, d: number) {
 }
 
 /** standard state extras for a main body (scaffold / supplies) */
-function construct(c: Ctx, x: number, gb: number, w: number, h: number, d: number) {
+export function construct(c: Ctx, x: number, gb: number, w: number, h: number, d: number) {
   if (c.con === 0) return;
   foundation(c, x - 1, gb + 1, w + 2, d);
   scaffold(c, x, gb, w, c.con === 1 ? Math.round(h * 0.6) : h + 2);
@@ -1677,10 +1677,10 @@ function construct(c: Ctx, x: number, gb: number, w: number, h: number, d: numbe
 }
 
 // ======================================================================================== BUILDINGS
-type Drawer = (c: Ctx, o: BuildingOpts) => void;
+export type Drawer = (c: Ctx, o: BuildingOpts) => void;
 
 // ---------------------------------------------------------------------------- generic houses
-interface HouseSpec {
+export interface HouseSpec {
   x: number;
   gb: number;
   w: number;
@@ -1702,7 +1702,7 @@ interface HouseSpec {
   finial?: boolean;
 }
 /** a building with an east-west roof */
-function houseEW(c: Ctx, s: HouseSpec) {
+export function houseEW(c: Ctx, s: HouseSpec) {
   const y = s.gb - s.wh + 1;
   const ov = s.ov ?? 2;
   wall(c, s.x, y, s.w, s.wh, s.wall, { found: s.found ?? (s.wall === 'timber' || s.wall === 'plaster' ? 2 : 0), ends: s.ends ?? s.wall === 'logs' });
@@ -1714,7 +1714,7 @@ function houseEW(c: Ctx, s: HouseSpec) {
   construct(c, s.x, s.gb, s.w, s.wh, s.rh - 4);
 }
 
-interface GableSpec {
+export interface GableSpec {
   cx: number;
   gb: number;
   hw: number;
@@ -1729,7 +1729,7 @@ interface GableSpec {
   gableWin?: WinKind | null;
 }
 /** a building with its gable facing the viewer */
-function houseNS(c: Ctx, s: GableSpec) {
+export function houseNS(c: Ctx, s: GableSpec) {
   const w = s.hw * 2 - 1;
   const x = s.cx - s.hw + 1;
   const y = s.gb - s.wh + 1;

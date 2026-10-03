@@ -2,6 +2,7 @@
  * Contact sheet for procedural building art.
  *   npx tsx tools/buildingPreview.ts [groups] [out.png] [scale]
  * groups: comma list of core,castle,eco,land,misc (default: all) → screenshots/buildings.png
+ *         modern = every modern-era sprite (or a subset: mcastle,mcore,meco,mmisc)
  */
 import { mkdirSync } from 'node:fs';
 import { KINGDOM_COLORS } from '../src/data/factions';
@@ -16,6 +17,7 @@ import {
   type BuildingSprite,
   type BuildingState,
 } from '../src/render/art/buildingArt';
+import { drawModernBuilding, drawModernCottage, drawModernRubble, drawModernWall } from '../src/render/art/modernBuildingArt';
 import { writePng } from './png';
 
 interface Item {
@@ -37,11 +39,15 @@ const b = (type: string, size: number, team = BLUE as (typeof KINGDOM_COLORS)[nu
 });
 
 // ad-hoc rows: type/size/state/variant/landmark  e.g. watchtower/2/built  landmark/2/built/0/abbey
+// prefix with m: for the modern era, e.g. m:barracks/3/damaged
 const adhoc: Row = [];
 for (const g of groups)
   if (g.includes('/')) {
-    const [t, sz, st, v, lm] = g.split('/');
-    adhoc.push(b(t, Number(sz ?? 2), RED, (st as BuildingState) ?? 'built', { variant: Number(v ?? 0), landmark: (lm as LandmarkKind) ?? null, tier: 4, deposit: 'gold' }));
+    const modern = g.startsWith('m:');
+    const [t, sz, st, v, lm] = g.replace(/^m:/, '').split('/');
+    const o = { variant: Number(v ?? 0), landmark: (lm as LandmarkKind) ?? null, tier: 4, deposit: 'gold' as const };
+    if (modern) adhoc.push({ s: drawModernBuilding(t, Number(sz ?? 2), RED, (st as BuildingState) ?? 'built', o), size: Number(sz ?? 2) });
+    else adhoc.push(b(t, Number(sz ?? 2), RED, (st as BuildingState) ?? 'built', o));
   }
 if (adhoc.length) rows.push(adhoc);
 if (groups.includes('castle')) {
@@ -112,6 +118,63 @@ if (groups.includes('misc')) {
   rows.push([1, 2, 3, 4].flatMap((s) => [0, 1].map((v) => ({ s: drawRubble(s, v + s), size: s }))).concat([{ s: drawScaffold(2, 0.3), size: 2 }, { s: drawScaffold(3, 1), size: 3 }]));
 }
 
+// ---------------------------------------------------------------- modern era
+const mg = (g: string) => groups.includes('modern') || groups.includes(g);
+const mb = (type: string, size: number, team = BLUE as (typeof KINGDOM_COLORS)[number] | null, state: BuildingState = 'built', o: Parameters<typeof drawBuilding>[4] = {}): Item => ({
+  s: drawModernBuilding(type, size, team, state, o),
+  size,
+});
+if (mg('mcastle')) {
+  rows.push([mb('capital_castle', 5, BLUE, 'built', { tier: 3 }), mb('capital_castle', 5, RED, 'built', { tier: 4 }), mb('capital_castle', 4, GREEN, 'built', { tier: 3 }), mb('capital_castle', 3, YELLOW, 'built', { tier: 4 })]);
+  rows.push(STATES.slice(1).map((st) => mb('capital_castle', 5, PURPLE, st, { tier: 4 })));
+  rows.push([mb('capital_castle', 4, RED, 'built', { tier: 4 }), mb('capital_castle', 3, BLUE, 'built', { tier: 3 }), mb('capital_castle', 4, BLUE, 'damaged', { tier: 3 }), mb('capital_castle', 3, GREEN, 'ruined', { tier: 3 })]);
+}
+if (mg('mcore')) {
+  rows.push([...STATES.map((st) => mb('keep', 4, RED, st)), mb('keep', 3, GREEN)]);
+  rows.push(STATES.map((st) => mb('town_hall', 3, BLUE, st)));
+  rows.push(STATES.map((st) => mb('village_hall', 3, YELLOW, st)));
+  rows.push([...STATES.map((st) => mb('outpost_tower', 2, PURPLE, st)), mb('watchtower', 2, RED), mb('watchtower', 2, BLUE, 'damaged'), mb('landmark', 2, null, 'built', { landmark: 'abbey' })]);
+}
+if (mg('meco')) {
+  const types: [string, number][] = [
+    ['house', 2],
+    ['farm', 2],
+    ['lumber_camp', 2],
+    ['mine', 2],
+    ['blacksmith', 2],
+    ['chapel', 2],
+    ['watchtower', 2],
+    ['market', 3],
+    ['barracks', 3],
+    ['archery_range', 3],
+    ['stable', 3],
+    ['siege_workshop', 3],
+    ['merc_camp', 3],
+  ];
+  const teams = [BLUE, RED, GREEN, YELLOW, PURPLE];
+  types.forEach(([t, s], i) => {
+    const row: Row = STATES.map((st) => mb(t, s, teams[i % 5], st, { deposit: 'gold' }));
+    if (t === 'house') for (let v = 1; v < 4; v++) row.push(mb(t, s, BLUE, 'built', { variant: v }));
+    if (t === 'mine') row.push(mb(t, s, RED, 'built', { deposit: 'stone' }));
+    if (s === 2 && t !== 'house') row.push(mb(t, s, null, 'built', { variant: 1, deposit: 'stone' }));
+    rows.push(row);
+  });
+}
+if (mg('mmisc')) {
+  const cot: Row = [];
+  for (let tier = 1; tier <= 4; tier += 1) for (let v = 0; v < 4; v++) if (tier !== 2) cot.push({ s: drawModernCottage(v, tier >= 3 ? BLUE : null, tier), size: 1 });
+  rows.push(cot);
+  const walls: Row = [];
+  for (const kind of ['concrete', 'sandbag'] as const) {
+    for (const m of [0, 10, 5, 3, 6, 12, 9, 15, 11, 14]) walls.push({ s: drawModernWall(kind, m, false, RED, false), size: 1 });
+    walls.push({ s: drawModernWall(kind, 10, true, RED, false), size: 1 });
+    walls.push({ s: drawModernWall(kind, 5, true, RED, false), size: 1 });
+    walls.push({ s: drawModernWall(kind, 10, false, RED, true), size: 1 });
+  }
+  rows.push(walls);
+  rows.push([1, 2, 3, 4].flatMap((s) => [0, 1].map((v) => ({ s: drawModernRubble(s, v + s), size: s }))).concat([mb('wall', 1, RED), mb('gatehouse', 1, RED), mb('gatehouse', 1, GREEN, 'damaged')]));
+}
+
 // ---------------------------------------------------------------- wall ring demo (composited on the grid)
 interface Placed {
   s: BuildingSprite;
@@ -153,6 +216,27 @@ if (groups.includes('misc')) {
   ring('stone', 16, oy);
   ring('palisade', 16 + 7 * 16, oy);
   // a castle surrounded by a few cottages for scale
+  cursorY = oy + 6 * 16;
+  maxW = Math.max(maxW, 16 + 14 * 16);
+}
+
+if (mg('mmisc')) {
+  const ringM = (kind: 'concrete' | 'sandbag', ox: number, oy: number) => {
+    const n = 5;
+    const isWall = (tx: number, ty: number) => tx >= 0 && ty >= 0 && tx < n && ty < n && (tx === 0 || ty === 0 || tx === n - 1 || ty === n - 1);
+    for (let ty = 0; ty < n; ty++)
+      for (let tx = 0; tx < n; tx++) {
+        if (!isWall(tx, ty)) continue;
+        const m = (isWall(tx, ty - 1) ? 1 : 0) | (isWall(tx + 1, ty) ? 2 : 0) | (isWall(tx, ty + 1) ? 4 : 0) | (isWall(tx - 1, ty) ? 8 : 0);
+        const g = (ty === n - 1 && tx === 2) || (tx === n - 1 && ty === 2);
+        placed.push({ s: drawModernWall(kind, m, g, GREEN, kind === 'sandbag' && tx === 0 && ty === 2), gx: ox + tx * 16, gy: oy + (ty + 1) * 16 });
+      }
+    // a few modern cottages inside for scale
+    placed.push({ s: drawModernCottage(ox + oy, GREEN, 3), gx: ox + 32, gy: oy + 48 });
+  };
+  const oy = Math.ceil((cursorY + 30) / 16) * 16;
+  ringM('concrete', 16, oy);
+  ringM('sandbag', 16 + 7 * 16, oy);
   cursorY = oy + 6 * 16;
   maxW = Math.max(maxW, 16 + 14 * 16);
 }
