@@ -2,6 +2,7 @@ import type { Era } from '../data/era';
 import type { FactionId } from '../data/constants';
 import { AI_HOUSES, KINGDOM_COLORS, type CrestId, type Difficulty, type FactionSetup } from '../data/factions';
 import type { MatchSetup } from '../sim/World';
+import type { DoctrineId } from '../data/doctrines';
 
 export interface PlayerChoices {
   kingdomName: string;
@@ -17,6 +18,10 @@ export interface PlayerChoices {
   living?: boolean;
   autoArmies?: boolean;
   sandbox?: boolean;
+  /** your own leader runs the realm; you watch (and may meddle) */
+  realmAuto?: boolean;
+  /** your leader's style */
+  doctrine?: DoctrineId | 'random';
 }
 
 export const DEFAULT_CHOICES: PlayerChoices = {
@@ -29,6 +34,8 @@ export const DEFAULT_CHOICES: PlayerChoices = {
   living: true,
   autoArmies: true,
   sandbox: false,
+  realmAuto: true,
+  doctrine: 'random',
 };
 
 /** Builds the four kingdoms: the player in the west, rival houses in the north, east and south. */
@@ -38,8 +45,8 @@ export function buildMatchSetup(c: PlayerChoices): MatchSetup {
   const factions: FactionSetup[] = [];
   factions.push({
     id: 0,
-    name: c.kingdomName.replace(/^Kingdom of /i, ''), // short form, like the AI kingdoms (Varnmark, Eldmoor…)
-    house: 'House ' + c.kingdomName.replace(/^Kingdom of /, ''),
+    name: c.kingdomName.replace(/^(Kingdom|Republic) of /i, ''), // short form, like the AI kingdoms (Varnmark, Eldmoor…)
+    house: 'House ' + c.kingdomName.replace(/^(Kingdom|Republic) of /i, ''),
     commanderName: c.commanderName,
     commanderTitle: c.era === 'modern' ? 'General' : 'The Crown Commander',
     color: c.color,
@@ -56,12 +63,12 @@ export function buildMatchSetup(c: PlayerChoices): MatchSetup {
       name: h.kingdom,
       house: h.house,
       commanderName: h.commander,
-      commanderTitle: h.commanderTitle,
+      commanderTitle: c.era === 'modern' ? 'General' : h.commanderTitle,
       color,
       crest: h.crest,
       isPlayer: false,
       personality: h.personality,
     });
   });
-  return { seed, difficulty: c.difficulty, factions, player: c.spectate ? -1 : 0, tutorial: c.tutorial, era: c.era ?? 'medieval', living: c.living ?? true, autoArmies: c.autoArmies ?? true, sandbox: !!c.sandbox };
+  return { seed, difficulty: c.difficulty, factions, player: c.spectate ? -1 : 0, tutorial: c.tutorial, era: c.era ?? 'medieval', living: c.living ?? true, autoArmies: c.autoArmies ?? true, sandbox: !!c.sandbox, realmAuto: !c.spectate && !!c.realmAuto, doctrine: c.doctrine ?? 'random' };
 }

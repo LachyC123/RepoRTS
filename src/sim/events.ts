@@ -74,6 +74,8 @@ export interface SimEvents {
   siloReady: { id: number; x: number; y: number; faction: FactionId };
   /** a small world happening (goose, treasure, splash...) for the FX layer */
   happening: { kind: string; x: number; y: number; text: string; faction: FactionId | -1 };
+  /** the weather turned */
+  weather: { kind: 'sunny' | 'cloudy' | 'rain' | 'mist' };
   /** a medic patches people up */
   healPulse: { id: number; x: number; y: number; faction: FactionId };
   /** a bard or piper plays (sometimes badly) */

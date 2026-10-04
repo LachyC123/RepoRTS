@@ -34,6 +34,7 @@ import { LivingSystem } from './units/Living';
 import { SupportSystem } from './units/Support';
 import { SocialSystem } from './units/Social';
 import { Happenings } from './events/Happenings';
+import { Sky } from './Sky';
 import { SuperweaponSystem } from './Superweapon';
 import { LeaderSystem } from './ai/Leaders';
 import type { DoctrineId } from '../data/doctrines';
@@ -96,6 +97,8 @@ export class World {
   readonly social: SocialSystem;
   /** geese, stray dogs, lost patrols, letters from home */
   readonly happenings: Happenings;
+  /** time of day and weather */
+  readonly sky: Sky;
   /** missile silos / great bombards and their strikes */
   readonly superweapons: SuperweaponSystem;
   readonly buildingHash: SpatialHash<Building>;
@@ -153,6 +156,7 @@ export class World {
     this.support = new SupportSystem(this);
     this.social = new SocialSystem(this);
     this.happenings = new Happenings(this);
+    this.sky = new Sky(this);
     this.superweapons = new SuperweaponSystem(this);
     const startRes = setup.startRes ?? START_RES;
     for (const fs of setup.factions) this.factions[fs.id] = new Faction(fs, startRes);
@@ -484,6 +488,7 @@ export class World {
     this.support.update(dt);
     this.social.update(dt);
     this.happenings.update(dt);
+    this.sky.update();
     this.superweapons.update(dt);
     for (const u of this.units) {
       u.animT += dt;

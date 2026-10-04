@@ -62,6 +62,10 @@ export class Faction {
   eliminatedAt = -1;
   /** whoever is in command right now */
   leader: Leader | null = null;
+  /** recent losses by the class of the unit that killed them (decays): what keeps beating us */
+  lossesBy: Record<string, number> = { melee: 0, ranged: 0, cavalry: 0, siege: 0 };
+  /** the lesson the leader last drew from them */
+  lesson = '';
 
   constructor(setup: FactionSetup, startRes: Resources) {
     this.id = setup.id;

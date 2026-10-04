@@ -29,6 +29,7 @@ import { LeaderSystem } from '../ai/Leaders';
 import { SupportSystem } from '../units/Support';
 import { SocialSystem } from '../units/Social';
 import { Happenings } from '../events/Happenings';
+import { Sky } from '../Sky';
 import { SuperweaponSystem } from '../Superweapon';
 import { MoraleSystem } from '../units/Morale';
 import { Movement } from '../units/Movement';
@@ -67,6 +68,7 @@ const BASE_CLASSES: Record<string, { prototype: object }> = {
   SupportSystem,
   SocialSystem,
   Happenings,
+  Sky,
   SuperweaponSystem,
   MoraleSystem,
   Unit,

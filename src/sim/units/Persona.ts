@@ -46,6 +46,8 @@ export interface Persona {
   /** where they are from and what they did before the war */
   home: string;
   job: string;
+  /** the squad they last marched with */
+  unit: string;
 }
 
 export const TRAITS: Record<Trait, { label: string; desc: string; weight: number }> = {
@@ -119,6 +121,7 @@ export function newPersona(rng: Random, era: Era, vehicle: boolean): Persona {
     memories: [],
     home: rng.pick(HOMES[era]),
     job: rng.pick(JOBS[era]),
+    unit: '',
   };
 }
 
@@ -185,7 +188,8 @@ export type LineKind =
   | 'weather'
   | 'goose'
   | 'river'
-  | 'lost';
+  | 'lost'
+  | 'surrender';
 
 const LINES: Record<Era, Record<LineKind, string[]>> = {
   medieval: {
@@ -233,6 +237,7 @@ const LINES: Record<Era, Record<LineKind, string[]>> = {
     goose: ['THE GOOSE!', 'It’s got Wat! RUN!', 'Nobody look it in the eye!', 'Honk... honk...'],
     river: ['I’m all wet!', 'Who put a river there?!', 'Fish! In my armour!'],
     lost: ['I think we’re lost.', 'This tree looks familiar.', 'Left at the big rock. Or was it right?'],
+    surrender: ['I surrender! Do you have pie?', 'Don’t hurt me! I was only the cook!', 'I always liked your flag better.', 'Mercy! I’ll carry your shields!'],
   },
   modern: {
     panic: ['Nope. Nope. NOPE.', 'I left the oven on!', "This wasn't in the brochure!", 'Tell my mum I was brave!', 'Tactical retreat!!', "I'm too young for this!", 'NOT TODAY!'],
@@ -279,6 +284,7 @@ const LINES: Record<Era, Record<LineKind, string[]>> = {
     goose: ['THE GOOSE!', 'It’s got Mike! RUN!', 'Nobody look it in the eye!', 'Honk... honk...'],
     river: ['I’m all wet!', 'Who put a river there?!', 'My radio! My RADIO!'],
     lost: ['I think we’re lost.', 'The map is upside down. Again.', 'GPS says we’re in the sea.'],
+    surrender: ['I surrender! Got any snacks?', 'Don’t shoot! I’m just the radio guy!', 'Your side has better food, right?', 'White flag! WHITE FLAG!'],
   },
 };
 

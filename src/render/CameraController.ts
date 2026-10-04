@@ -76,6 +76,7 @@ export class CameraController {
 
   /** zoom by factor toward screen point (css px) */
   zoomAt(factor: number, sx: number, sy: number, immediate = false) {
+    this.lastUserT = performance.now();
     this.targetZoom = clamp(this.targetZoom * factor, this.minZoom, this.maxZoom);
     this.zoomFocus = { sx, sy };
     if (immediate) this.applyZoom(this.targetZoom);
@@ -93,8 +94,12 @@ export class CameraController {
     } else this.zoom = z;
   }
 
+  /** when the person last moved the camera themselves (watch mode backs off) */
+  lastUserT = -1e9;
+
   /** pan by css px delta (drag) */
   panBy(dx: number, dy: number) {
+    this.lastUserT = performance.now();
     this.x -= dx / this.zoom;
     this.y -= dy / this.zoom;
     this.fly = null;
@@ -171,6 +176,7 @@ export class CameraController {
       if (this.keys.right) kx += 1;
       if (this.keys.up) ky -= 1;
       if (this.keys.down) ky += 1;
+      if (kx || ky) this.lastUserT = performance.now();
       if (this.edgeScroll && !this.dragging && this.pointerEdge.x >= 0) {
         const m = 14;
         if (this.pointerEdge.x < m) kx -= 1;

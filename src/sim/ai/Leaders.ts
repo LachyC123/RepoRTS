@@ -68,9 +68,9 @@ export type ThoughtKind =
 type Lines = Partial<Record<ThoughtKind, string[]>>;
 
 const GENERIC: Lines = {
-  attack: ['{enemy} looks soft. We march on {target}.', 'Everyone to {target}. Bring snacks.', '{target} will be ours by supper.', 'Right. {target}. Go.'],
-  capture: ['{target} has nobody in charge. That changes now.', 'Plant the flag at {target}.', 'Free land at {target}. Mine now.'],
-  defend: ['{target} is under attack! Everyone back!', 'They want {target}? Over my dead body. Ideally theirs.', 'Defend {target}! That is an order, not a suggestion.'],
+  attack: ['Send {squad} to {target}.', '{squad}, take {target}. No dawdling.', '{enemy} looks soft. We march on {target}.', 'Everyone to {target}. Bring snacks.', '{target} will be ours by supper.', 'Right. {target}. Go.'],
+  capture: ['{squad} will plant our flag at {target}.', '{target} has nobody in charge. That changes now.', 'Plant the flag at {target}.', 'Free land at {target}. Mine now.'],
+  defend: ['{squad}, get to {target}! Now!', '{target} is under attack! Everyone back!', 'They want {target}? Over my dead body. Ideally theirs.', 'Defend {target}! That is an order, not a suggestion.'],
   retreat: ['Fall back! That was a tactical experiment.', 'Retreat! Regroup! Re-something!', 'We are not running. We are advancing backwards.'],
   war: ['War on {enemy}. {reason}', '{enemy} has it coming. {reason}', 'I declare war on {enemy}! {reason}'],
   peace: ['A truce with {enemy}. For now.', 'Fine. Peace with {enemy}. I hate it.', 'We shake hands with {enemy}. Count your fingers after.'],
@@ -265,7 +265,8 @@ export class LeaderSystem {
       big: modern ? 'missile' : 'great bombard',
       ...vars,
     };
-    const text = w.rng.pick(pool).replace(/\{(\w+)\}/g, (_, k: string) => all[k] ?? k);
+    let text = w.rng.pick(pool).replace(/\{(\w+)\}/g, (_, k: string) => all[k] ?? k);
+    text = text.charAt(0).toUpperCase() + text.slice(1);
     const who = this.leaderName(f);
     const th: Thought = { t: w.time, faction: f, who, text, kind, x: opts.x, y: opts.y };
     this.feed.push(th);
@@ -395,6 +396,28 @@ export class LeaderSystem {
           target.grudge[f.id] = (target.grudge[f.id] ?? 0) + 6;
           this.retorts.push({ f: target.id, enemy: f.name, at: w.time + 3 + w.rng.next() * 5 });
         } else this.think(f.id, 'muse', { enemy: target?.name ?? 'the neighbours' });
+      }
+      // what keeps killing us: losses fade, and a clear pattern becomes a lesson
+      let top = '';
+      let tv = 0;
+      for (const k of Object.keys(f.lossesBy)) {
+        f.lossesBy[k] *= Math.pow(0.985, step);
+        if (f.lossesBy[k] > tv) {
+          tv = f.lossesBy[k];
+          top = k;
+        }
+      }
+      if (tv > 10 && top !== f.lesson) {
+        f.lesson = top;
+        const modern = eraState.era === 'modern';
+        const names: Record<string, [string, string]> = {
+          melee: [modern ? 'riflemen' : 'swordsmen', modern ? 'machine gunners and grenadiers' : 'archers and crossbowmen'],
+          ranged: [modern ? 'gunners' : 'archers', modern ? 'riot troopers and scout cars' : 'shieldmen and cavalry'],
+          cavalry: [modern ? 'vehicles' : 'horsemen', modern ? 'AT riflemen' : 'spearmen and pikemen'],
+          siege: [modern ? 'artillery' : 'siege engines', modern ? 'scout cars and commandos' : 'cavalry and ballistae'],
+        };
+        const [them, us] = names[top] ?? ['soldiers', 'soldiers'];
+        this.think(f.id, 'counter', { enemyUnit: them, unit: us }, { force: true });
       }
       // a leader desperate for too long gets overthrown
       l.lowT = l.mood < -0.75 ? l.lowT + step : Math.max(0, l.lowT - step * 2);

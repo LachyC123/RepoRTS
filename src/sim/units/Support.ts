@@ -29,9 +29,10 @@ export class SupportSystem {
       if (d.healer) this.heal(u, step);
       if (d.inspire) this.inspire(u, step, playing);
     }
+    const rain = w.sky.weather === 'rain' ? 2.5 : 1;
     for (const b of w.buildings) {
       if (b.burnT <= 0 || b.destroyed) continue;
-      b.burnT -= step;
+      b.burnT -= step * rain;
       w.combat.damageBuilding(b, 7 * step, 'siege', 1, b.burnBy as never);
       // the fire spreads to the building next door, now and then
       if (w.rng.next() < 0.015 * step * 2) {

@@ -7,6 +7,7 @@ import type { Unit } from '../units/Unit';
 import type { World } from '../World';
 import { aiEconomy } from './AIEconomy';
 import { aiMilitary } from './AIMilitary';
+import { isModern } from '../../data/era';
 import { applyDoctrine, DOCTRINES, type Doctrine } from '../../data/doctrines';
 import { Intel } from './Intel';
 
@@ -36,6 +37,8 @@ export interface Squad {
   lastProgress: number;
   /** power needed when formed */
   need: number;
+  /** what the troops call themselves */
+  name: string;
 }
 
 export interface AIDebug {
@@ -442,8 +445,12 @@ export class AIController {
       bestDist: Infinity,
       lastProgress: this.w.time,
       need,
+      name: this.squadName(units),
     };
-    for (const u of units) u.squad = q.id;
+    for (const u of units) {
+      u.squad = q.id;
+      if (u.persona) u.persona.unit = q.name;
+    }
     this.squads.push(q);
     if (this.autopilot) this.announce(q, units);
     else if (kind !== 'hire') {
@@ -452,9 +459,25 @@ export class AIController {
       const enemy = s.owner !== NEUTRAL ? this.w.factions[s.owner].name : 'nobody';
       const tk = kind === 'defend' ? 'defend' : kind === 'capture' ? 'capture' : 'attack';
       const important = s.isCapital || s.tier >= 3;
-      if (kind !== 'raid' && (kind !== 'capture' || units.length >= 3) && (kind !== 'defend' || important || this.w.rng.next() < 0.25)) this.w.leaders.think(this.id, tk, { target: s.name, enemy }, { force: kind === 'attack', x: s.px, y: s.py });
+      if (kind !== 'raid' && (kind !== 'capture' || units.length >= 3) && (kind !== 'defend' || important || this.w.rng.next() < 0.25)) this.w.leaders.think(this.id, tk, { target: s.name, enemy, squad: q.name }, { force: kind === 'attack', x: s.px, y: s.py });
     }
     return q;
+  }
+
+  /** squads name themselves: "the Muddy Boots", "Hale's Hooligans", "Echo Badgers" */
+  private squadName(units: Unit[]): string {
+    const w = this.w;
+    const rng = w.rng;
+    const modern = isModern();
+    const vet = units.filter((u) => u.persona && !u.persona.nick).sort((a, b) => b.persona!.rank - a.persona!.rank || b.persona!.kills - a.persona!.kills)[0];
+    if (vet && rng.next() < 0.35) {
+      const last = vet.persona!.last;
+      const pool = modern ? ['Hooligans', 'Heroes', 'Rascals', 'Irregulars', 'Misfits', 'Lot'] : ['Hooligans', 'Heroes', 'Rascals', 'Irregulars', 'Misfits', 'Lot', 'Merry Men'];
+      return `${last}'s ${rng.pick(pool)}`;
+    }
+    const adj = modern ? ['Bravo', 'Echo', 'Lucky', 'Rusty', 'Mad', 'Night', 'Iron', 'Thunder', 'Soggy', 'Second', 'Dusty', 'Loud'] : ['Muddy', 'Iron', 'Third', 'Drunken', 'Lucky', 'Grim', 'Merry', 'Bold', 'Soggy', 'Royal', 'Wandering', 'Loud'];
+    const noun = modern ? ['Badgers', 'Wolves', 'Spuds', 'Ravens', 'Rats', 'Pigeons', 'Kettles', 'Rangers', 'Hornets', 'Beans'] : ['Boots', 'Turnips', 'Ravens', 'Spears', 'Badgers', 'Lads', 'Hounds', 'Pikes', 'Pies', 'Geese'];
+    return `${modern ? '' : 'the '}${rng.pick(adj)} ${rng.pick(noun)}`;
   }
 
   /** the player hears what their soldiers decided to do */
@@ -467,7 +490,7 @@ export class AIController {
     if (units.length < 2 || (this.announced.get(key) ?? -99) > w.time - 60) return;
     this.announced.set(key, w.time);
     const lead = units.filter((u) => u.persona).sort((a, b) => b.persona!.rank - a.persona!.rank || b.persona!.kills - a.persona!.kills)[0];
-    const who = lead && w.living ? `${w.living.name(lead)}'s squad` : 'A squad';
+    const who = q.name ? q.name.replace(/^the /, 'The ') : lead && w.living ? `${w.living.name(lead)}'s squad` : 'A squad';
     const what = q.kind === 'defend' ? `rushes to defend ${s.name}` : q.kind === 'capture' ? `sets off to claim ${s.name}` : q.kind === 'attack' ? `marches on ${s.name}` : q.kind === 'raid' ? `rides out to raid ${s.name}` : `heads for ${s.name}`;
     w.notify({ kind: 'unit', text: `${who} ${what}`, sub: `${units.length} soldier${units.length > 1 ? 's' : ''} · acting on their own`, factions: [this.id], x: s.px, y: s.py, priority: 0, quiet: units.length < 4, regionId: s.id });
     if (lead) w.living?.speak(lead, 'order');

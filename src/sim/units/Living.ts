@@ -451,10 +451,25 @@ export class LivingSystem {
         continue;
       }
       const d = Math.hypot(c.x - u.x, c.y - u.y);
-      if (d < 9) {
+      if (d < 10) {
+        if (u.def.healer) {
+          // medics patch people up where they lie
+          p.stateT += step;
+          u.vx = u.vy = 0;
+          if (p.stateT >= 0.8) this.revive(c, u);
+          continue;
+        }
+        if (p.stateT === 0) {
+          // grab them by the collar and drag them back toward home
+          const home = this.dragPoint(c);
+          w.setDestination(u, home[0], home[1], 0);
+          u.order = { kind: 'move', x: home[0], y: home[1], attackMove: false };
+        }
         p.stateT += step;
-        u.vx = u.vy = 0;
-        if (p.stateT >= (u.def.healer ? 0.8 : 2.5)) this.revive(c, u);
+        // the body comes along
+        c.x = u.x - u.facing * 6;
+        c.y = u.y + 1;
+        if (p.stateT >= 4 || (u.arrived && p.stateT > 1.2)) this.revive(c, u);
       } else if (u.arrived || !u.path) {
         w.setDestination(u, c.x, c.y, 0);
         u.order = { kind: 'move', x: c.x, y: c.y, attackMove: false };
@@ -495,6 +510,26 @@ export class LivingSystem {
       r.order = { kind: 'move', x: c.x, y: c.y, attackMove: false };
       this.say(r, 'rescue', { name: c.persona.first }, true);
     }
+  }
+
+  /** somewhere a few strides back toward friendly ground */
+  private dragPoint(c: Unit): [number, number] {
+    const w = this.w;
+    let best: [number, number] = [c.x, c.y];
+    let bd = Infinity;
+    for (const s of w.settlements) {
+      if (s.owner !== c.faction) continue;
+      const d = Math.hypot(s.px - c.x, s.py - c.y);
+      if (d < bd) {
+        bd = d;
+        best = [s.px, s.py];
+      }
+    }
+    const dx = best[0] - c.x;
+    const dy = best[1] - c.y;
+    const l = Math.hypot(dx, dy) || 1;
+    const r = Math.min(l, 3.5 * TILE);
+    return [c.x + (dx / l) * r, c.y + (dy / l) * r];
   }
 
   /** back on their feet (same soldier, same name) */

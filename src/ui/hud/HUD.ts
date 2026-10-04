@@ -114,6 +114,7 @@ export class HUD {
     this.timerEl = el('div', 'hud-timer panel', this.root);
     this.buildRealms();
     this.buildWarRoom();
+    this.captionEl = el('div', 'hud-caption', this.root);
     this.buildMinimap();
     this.armiesEl = el('div', 'hud-armies', this.root);
     this.selEl = el('div', 'hud-sel panel', this.root);
@@ -194,14 +195,19 @@ export class HUD {
       this.tip(pop, () => ({ title: 'Population', desc: 'Soldiers in your service / capacity. Raise capacity with houses and settlements.' }));
     }
     const sys = el('div', 'hud-sys', top);
-    if (settings.data.gameSpeedControls && !matchMedia('(pointer: coarse)').matches) {
+    // watch mode: a camera that follows the drama by itself
+    this.watchBtn = el('button', 'hud-btn watch', sys, '👁') as HTMLButtonElement;
+    onPress(this.watchBtn, () => this.setWatch(!this.watching), { sound: () => audio.play('ui_click') });
+    this.tip(this.watchBtn, () => ({ title: 'Watch mode', desc: 'The camera follows the most interesting thing happening anywhere in the valley, and shows the whole map. Move the camera yourself to look around; it picks up again after a few seconds. (W)' }));
+    const watcher = !!c.world.setup.realmAuto || c.playerFaction < 0;
+    if ((settings.data.gameSpeedControls && !matchMedia('(pointer: coarse)').matches) || watcher) {
       this.speedBtn = el('button', 'hud-btn', sys, '1×') as HTMLButtonElement;
       onPress(this.speedBtn, () => {
-        const speeds = [1, 1.5, 2];
+        const speeds = [1, 1.5, 2, 3];
         c.speed = speeds[(speeds.indexOf(c.speed) + 1) % speeds.length];
         this.speedBtn.textContent = `${c.speed}×`;
       }, { sound: () => audio.play('ui_click') });
-      this.tip(this.speedBtn, () => ({ title: 'Game speed', desc: '1× · 1.5× · 2×' }));
+      this.tip(this.speedBtn, () => ({ title: 'Game speed', desc: '1× · 1.5× · 2× · 3×' }));
     }
     const pause = el('button', 'hud-btn', sys, '❚❚') as HTMLButtonElement;
     onPress(pause, () => this.onMenu?.(), { sound: () => audio.play('ui_open') });
@@ -274,6 +280,10 @@ export class HUD {
     }
     this.minimap.update(dt);
     this.updateWarRoom();
+    if (this.captionT > 0) {
+      this.captionT -= dt;
+      if (this.captionT <= 0) this.captionEl.classList.remove('show');
+    }
     if ((this.t * 6) % 1 < dt * 6) this.refreshTop();
     if ((this.t * 4) % 1 < dt * 4) {
       this.refreshSelection();
@@ -620,7 +630,7 @@ export class HUD {
           const o = w.unitById.get(id);
           return o?.persona ? `${o.persona.first} ${o.persona.last}` : null;
         };
-        const bits: string[] = [`From ${per.home}; was ${per.job}.`];
+        const bits: string[] = [`From ${per.home}; was ${per.job}.${per.unit ? ` Marches with ${per.unit}.` : ''}`];
         const friends = per.friends.map(nm).filter(Boolean);
         if (friends.length) bits.push(`Friends: ${friends.join(', ')}.`);
         const rival = per.rival ? nm(per.rival) : null;
@@ -1039,6 +1049,33 @@ export class HUD {
     }
   }
 
+  // ------------------------------------------------------------------ watch mode
+  private watchBtn!: HTMLButtonElement;
+  private captionEl!: HTMLElement;
+  private captionT = 0;
+  watching = false;
+
+  setWatch(on: boolean) {
+    const c = this.client;
+    const sc = c.scene;
+    if (!sc) return;
+    this.watching = on;
+    this.watchBtn.classList.toggle('active', on);
+    sc.director.onCaption = (t) => this.caption(t);
+    sc.director.setEnabled(on);
+    // watching shows the whole valley; playing restores your fog of war
+    if (c.playerFaction >= 0) c.world.vis.revealAll = on || this.revealed;
+    if (on) this.toast('Watch mode: the camera follows the action');
+  }
+  /** the map was revealed for other reasons (debug ?reveal) */
+  revealed = false;
+
+  caption(text: string) {
+    this.captionEl.textContent = text;
+    this.captionEl.classList.add('show');
+    this.captionT = 5;
+  }
+
   // ------------------------------------------------------------------ war room
   private warEl!: HTMLElement;
   private warLines: { el: HTMLElement; t: number }[] = [];
@@ -1398,6 +1435,9 @@ export class HUD {
         else this.takeCommand(own);
         break;
       }
+      case 'w':
+        this.setWatch(!this.watching);
+        break;
       case 'j':
         if (this.sheetEl?.classList.contains('journal')) this.closeSheet();
         else this.openJournal();

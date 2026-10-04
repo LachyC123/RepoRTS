@@ -68,6 +68,13 @@ export function aiMilitary(ai: AIController) {
     if (d.healer) wgt = total > 6 && healers < total / (w.living ? 9 : 14) ? 0.6 : 0.02;
     if (d.inspire) wgt = total > 10 && singers < total / 16 ? 0.2 : 0.01;
     if (d.incendiary) wgt *= 1 + (seen.melee / seenTotal) * 1.5 * cp;
+    // lessons learned the hard way: counter whatever keeps killing us
+    const lb = f.lossesBy;
+    const lt = Math.max(1, lb.melee + lb.ranged + lb.cavalry + lb.siege);
+    if (f.lesson === 'cavalry' && d.tags.includes('spear')) wgt *= 1 + (lb.cavalry / lt) * 2;
+    if (f.lesson === 'ranged' && (d.id === 'shieldman' || cls === 'cavalry')) wgt *= 1 + (lb.ranged / lt) * 1.6;
+    if (f.lesson === 'melee' && (cls === 'ranged' || d.incendiary)) wgt *= 1 + (lb.melee / lt) * 1.4;
+    if (f.lesson === 'siege' && (cls === 'cavalry' || d.id === 'ballista')) wgt *= 1 + (lb.siege / lt) * 1.6;
     // whoever is in command has favourites
     if (doc) wgt *= doc.units[d.id] ?? 1;
     wgt *= w.leaders.quirkMul(me, 'units', d.id);

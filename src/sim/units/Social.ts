@@ -173,6 +173,8 @@ export class SocialSystem {
         u.morale = Math.max(0, u.morale - 4);
       }
       this.states(u, p, step);
+      // cornered, bleeding and alone: some throw down their weapons and change sides
+      if (u.routing > 0 && u.hp < u.maxHp * 0.35 && p.trait !== 'brave' && p.trait !== 'loyal' && !u.def.look.vehicle && w.rng.next() < 0.12 * step) this.trySurrender(u);
       // ---- bonds: who you spend time with
       if (w.rng.next() < 0.35) this.mingle(u, p, fighting, step);
       // ---- revenge: the nemesis is in sight
@@ -275,13 +277,53 @@ export class SocialSystem {
     }
   }
 
+  private trySurrender(u: Unit) {
+    const w = this.w;
+    let friends = 0;
+    const foes = new Map<number, number>();
+    w.unitHash.query(u.x, u.y, 5 * TILE, (o) => {
+      if (!o.alive || o === u || o.def.special === 'worker') return;
+      if (o.faction === u.faction) friends++;
+      else if (o.faction !== NEUTRAL && w.isHostile(u.faction, o.faction)) foes.set(o.faction, (foes.get(o.faction) ?? 0) + 1);
+    });
+    let captor = -1;
+    let most = 0;
+    for (const [f, n] of foes) if (n > most) {
+      most = n;
+      captor = f;
+    }
+    if (captor < 0 || most < 3 || friends > 1) return;
+    const lv = w.living!;
+    const was = w.factions[u.faction];
+    const now = w.factions[captor];
+    lv.speak(u, 'surrender');
+    lv.note(u, 'panic', `${lv.name(u, true)} surrendered to ${now.name} and now fights for them.`);
+    was.pop -= u.def.pop;
+    now.pop += u.def.pop;
+    u.faction = captor as FactionId;
+    u.routing = 0;
+    u.targetId = 0;
+    u.morale = 40;
+    u.auto = true;
+    u.squad = 0;
+    u.army = 0;
+    u.order = { kind: 'idle' };
+    u.persona!.friends = [];
+    u.persona!.rival = 0;
+    u.persona!.nemesis = 0;
+    u.persona!.bonds = {};
+    w.events.emit('happening', { kind: 'surrender', x: u.x, y: u.y, text: 'SURRENDER', faction: captor as FactionId });
+  }
+
   /** quiet, safe, idle soldiers in their own land light a fire and swap stories */
   private gatherings() {
     const w = this.w;
-    if (w.rng.next() > 0.25) return;
+    // fires are lit after dark (and rarely in the rain)
+    const chance = (w.sky.night ? 0.6 : 0.18) * (w.sky.weather === 'rain' ? 0.3 : 1);
+    if (w.rng.next() > chance) return;
     for (const u of w.units) {
       const p = u.persona;
-      if (!u.alive || !p || p.state !== 'normal' || p.idleT < 25 || u.routing > 0) continue;
+      if (!u.alive || !p || p.state !== 'normal' || p.idleT < (w.sky.night ? 12 : 25) || u.routing > 0) continue;
       if (this.campfires.some((c) => c.faction === u.faction && Math.hypot(c.x - u.x, c.y - u.y) < 8 * TILE)) continue;
       const m = w.map;
       const ri = m.region[Math.floor(u.y / TILE) * m.w + Math.floor(u.x / TILE)];

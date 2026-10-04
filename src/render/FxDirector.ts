@@ -152,6 +152,10 @@ export class FxDirector {
           this.floatText(ev.x, ev.y - 22, ev.text, null, '#ffd860');
           this.sfx('coins', ev.x, ev.y, 0.6);
           break;
+        case 'surrender':
+          this.floatText(ev.x, ev.y - 26, 'I SURRENDER!', null, '#f8f8f0');
+          this.fx.burst(4, { frame: 'fx/dot2', x: ev.x, y: ev.y - 14, z: 2, life: 1, g: 60, tint: 0xffffff }, 20, 20);
+          break;
         case 'sighting':
           this.floatText(ev.x, ev.y, '?!', null, '#c8e8ff');
           break;

@@ -38,6 +38,8 @@ export class App {
   ) {
     const saved = settings.data.lastChoices as Partial<PlayerChoices> | undefined;
     this.choices = { ...DEFAULT_CHOICES, ...(saved ?? {}), tutorial: !settings.data.tutorialDone };
+    // a guided first match needs you in command
+    if (this.choices.tutorial) this.choices.realmAuto = false;
     document.addEventListener('pointerdown', () => audio.init(), { capture: true });
     document.addEventListener('keydown', () => audio.init(), { capture: true });
     document.addEventListener('visibilitychange', () => {
@@ -53,7 +55,7 @@ export class App {
     const p = new URLSearchParams(location.search);
     if (p.has('quick') || p.has('spectate')) {
       this.reveal = p.has('reveal');
-      this.startMatch({ ...this.choices, tutorial: p.has('tutorial'), seed: p.has('seed') ? Number(p.get('seed')) : undefined, spectate: p.has('spectate'), era: p.get('era') === 'modern' ? 'modern' : p.get('era') === 'medieval' ? 'medieval' : this.choices.era, sandbox: p.has('sandbox') || this.choices.sandbox }, !p.has('intro'));
+      this.startMatch({ ...this.choices, tutorial: p.has('tutorial'), seed: p.has('seed') ? Number(p.get('seed')) : undefined, spectate: p.has('spectate'), era: p.get('era') === 'modern' ? 'modern' : p.get('era') === 'medieval' ? 'medieval' : this.choices.era, sandbox: p.has('sandbox') || this.choices.sandbox, realmAuto: p.has('auto') || (this.choices.realmAuto && !p.has('manual')) }, !p.has('intro'));
     } else this.showMenu();
   }
 
@@ -100,7 +102,7 @@ export class App {
       back: () => this.showMenu(),
       start: (c) => {
         this.choices = c;
-        settings.set('lastChoices', { kingdomName: c.kingdomName, commanderName: c.commanderName, color: c.color, crest: c.crest, difficulty: c.difficulty, era: c.era, living: c.living, autoArmies: c.autoArmies, sandbox: c.sandbox });
+        settings.set('lastChoices', { kingdomName: c.kingdomName, commanderName: c.commanderName, color: c.color, crest: c.crest, difficulty: c.difficulty, era: c.era, living: c.living, autoArmies: c.autoArmies, sandbox: c.sandbox, realmAuto: c.realmAuto, doctrine: c.doctrine });
         this.startMatch(c, false);
       },
     });
@@ -162,7 +164,10 @@ export class App {
             const f = client.world.player;
             if (file) this.hud!.banner('GAME LOADED', `${file.meta.realm} · ${formatTime(file.meta.time)}`);
             else if (f) this.hud!.banner(f.name, `${f.setup.commanderName} ${f.setup.commanderTitle}`);
-            if (c.tutorial && client.playerFaction >= 0 && !file) this.tutorial = new Tutorial(client, this.hud!);
+            if (c.tutorial && client.playerFaction >= 0 && !file && !client.world.setup.realmAuto) this.tutorial = new Tutorial(client, this.hud!);
+            this.hud!.revealed = this.reveal;
+            // a realm that runs itself is for watching
+            if (client.world.setup.realmAuto || client.playerFaction < 0) this.hud!.setWatch(true);
           };
           if (skipIntro || client.playerFaction < 0) afterIntro();
           else playIntro(client, this.uiEl, afterIntro);

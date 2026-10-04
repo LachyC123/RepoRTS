@@ -64,7 +64,7 @@ export class GameClient {
     this.world.events.on('matchOver', (e) => this.ui.emit('matchEnd', { winner: e.winner, reason: e.reason }));
     // the first capture explains how to read the map
     this.world.events.on('regionCaptured', (e) => {
-      if (e.to !== this.playerFaction || this.firstCaptureHint) return;
+      if (e.to !== this.playerFaction || this.firstCaptureHint || this.world.setup.realmAuto) return;
       this.firstCaptureHint = true;
       const col = this.world.factions[this.playerFaction]?.color.id ?? '';
       setTimeout(() => this.toast(`Land tinted ${col} is yours. Other colours are rival ${word('kingdoms')} (see ${word('KINGDOMS')}, top right); untinted land is unclaimed.`), 3500);
@@ -144,7 +144,8 @@ export class GameClient {
   private checkBorders() {
     const w = this.world;
     const pf = this.playerFaction;
-    if (pf < 0 || this.cinematic) return;
+    // a realm that runs itself doesn't need border-crossing hints
+    if (pf < 0 || this.cinematic || w.setup.realmAuto) return;
     const m = w.map;
     const seen = new Set<number>();
     for (const u of w.units) {

@@ -4,6 +4,7 @@ import { formatTime } from '../../core/math';
 import { CRESTS, DIFFICULTIES, KINGDOM_COLORS, type CrestId, type Difficulty } from '../../data/factions';
 import { DOMINATION_SHARE, NEUTRAL } from '../../data/constants';
 import type { PlayerChoices } from '../../game/matchSetup';
+import { DOCTRINE_IDS, DOCTRINES, type DoctrineId } from '../../data/doctrines';
 import type { World } from '../../sim/World';
 import { installFrames } from '../hud/assets';
 import { clear, el, onPress } from '../hud/dom';
@@ -113,6 +114,51 @@ export function setupScreen(root: HTMLElement, initial: PlayerChoices, h: { star
     nameIn.placeholder = modern ? 'Nation name' : 'Kingdom name';
   };
   renderEra();
+  // ---- who runs the realm
+  el('h2', '', d, "WHO'S IN CHARGE");
+  const chargeRow = el('div', 'row era-row', d);
+  const styleH = el('h2', '', d, 'YOUR LEADER’S STYLE');
+  const styleRow = el('div', 'row', d);
+  const styleDesc = el('div', 'opt-desc', d);
+  const renderCharge = () => {
+    clear(chargeRow);
+    const opts: [boolean, string, string, string][] = [
+      [true, '👁', 'Your leader commands', 'Sit back and watch your realm run itself. Step in whenever you like.'],
+      [false, '⚑', 'You command', 'You build and train. Your soldiers still think for themselves.'],
+    ];
+    for (const [v, icon, name, desc] of opts) {
+      const ch = el('div', `choice era-card ${!!c.realmAuto === v ? 'on' : ''}`, chargeRow);
+      el('span', 'era-icon', ch, icon);
+      el('b', '', ch, name);
+      el('span', 'era-desc', ch, desc);
+      onPress(ch, () => {
+        c.realmAuto = v;
+        if (v) c.tutorial = false;
+        renderCharge();
+        renderOpts();
+      }, { sound: click });
+    }
+  };
+  const renderStyle = () => {
+    clear(styleRow);
+    const cur = c.doctrine ?? 'random';
+    const ids: (DoctrineId | 'random')[] = ['random', ...DOCTRINE_IDS];
+    for (const id of ids) {
+      const label = id === 'random' ? 'Surprise me' : DOCTRINES[id].label;
+      const ch = el('div', `choice ${cur === id ? 'on' : ''}`, styleRow, label);
+      const desc = id === 'random' ? 'A random leader. They might be brilliant. They might be obsessed with geese.' : DOCTRINES[id].desc;
+      ch.addEventListener('pointerenter', () => (styleDesc.textContent = desc));
+      onPress(ch, () => {
+        c.doctrine = id;
+        styleDesc.textContent = desc;
+        renderStyle();
+      }, { sound: click });
+    }
+    styleDesc.textContent = cur === 'random' ? 'A random leader. They might be brilliant. They might be obsessed with geese.' : DOCTRINES[cur].desc;
+  };
+  renderCharge();
+  renderStyle();
+  void styleH;
   el('h2', '', d, 'DIFFICULTY');
   const diffRow = el('div', 'row', d);
   const diffDesc: Record<Difficulty, string> = {
@@ -143,13 +189,20 @@ export function setupScreen(root: HTMLElement, initial: PlayerChoices, h: { star
   el('h2', '', d, 'OPTIONS');
   const optRow = el('div', 'row', d);
   const optDesc = el('div', 'opt-desc', d);
+  const optEls: Partial<Record<string, HTMLElement>> = {};
+  const renderOpts = () => {
+    for (const [k, e] of Object.entries(optEls)) e?.classList.toggle('on', !!c[k as 'tutorial']);
+  };
   const opt = (label: string, key: 'tutorial' | 'living' | 'autoArmies' | 'sandbox', desc: string) => {
     const ch = el('div', `choice ${c[key] ? 'on' : ''}`, optRow, label);
+    optEls[key] = ch;
     ch.title = desc;
     onPress(ch, () => {
       c[key] = !c[key];
+      if (key === 'tutorial' && c.tutorial) c.realmAuto = false;
       ch.classList.toggle('on', !!c[key]);
       optDesc.textContent = desc;
+      renderCharge();
     }, { sound: click });
     ch.addEventListener('pointerenter', () => (optDesc.textContent = desc));
   };

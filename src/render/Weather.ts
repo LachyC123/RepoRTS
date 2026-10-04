@@ -19,6 +19,8 @@ export class Weather {
   private shadows: { img: Phaser.GameObjects.Image; x: number; y: number; s: number }[] = [];
   enabled = true;
   wind = 1;
+  /** the simulation decides the weather; this only draws it */
+  source?: () => WeatherKind;
   onChange?: (k: WeatherKind) => void;
 
   constructor(
@@ -51,7 +53,10 @@ export class Weather {
       return;
     }
     this.t += dt;
-    if (this.t > this.next) {
+    if (this.source) {
+      const k = this.source();
+      if (k !== this.kind) this.set(k);
+    } else if (this.t > this.next) {
       this.t = 0;
       this.next = 150 + Math.random() * 120;
       const r = Math.random();

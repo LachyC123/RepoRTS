@@ -1,5 +1,6 @@
 import { NEUTRAL, TILE, type FactionId } from '../../data/constants';
 import type { AttackType, ProjectileKind, UnitTag } from '../../data/units';
+import { unitClass } from '../../data/units';
 import type { Building } from '../buildings/Building';
 import type { World } from '../World';
 import type { Unit } from './Unit';
@@ -477,7 +478,12 @@ export class CombatSystem {
     t.hp = 0;
     t.deathT = w.time;
     t.path = null;
-    if (killer) killer.kills++;
+    if (killer) {
+      killer.kills++;
+      // the losing side remembers what beat them
+      const lf = w.factions[t.faction];
+      if (lf && t.def.special !== 'worker') lf.lossesBy[unitClass(killer.def)] = (lf.lossesBy[unitClass(killer.def)] ?? 0) + 1;
+    }
     w.living?.onFall(t, killer, dmg);
     const vf = w.factions[t.faction];
     if (t.def.special !== 'worker') {
