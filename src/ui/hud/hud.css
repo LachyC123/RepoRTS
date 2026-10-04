@@ -1219,3 +1219,17 @@
 .hud-caption.show {
   opacity: 1;
 }
+@media (max-height: 500px) {
+  .hud-caption {
+    bottom: calc(max(6px, env(safe-area-inset-bottom)) + 8px);
+    font-size: 0.8em;
+    max-width: 52vw;
+  }
+  .hud-war {
+    max-width: 40vw;
+    font-size: 0.62em;
+  }
+  .hud-war .wl:nth-last-child(n + 3) {
+    display: none;
+  }
+}

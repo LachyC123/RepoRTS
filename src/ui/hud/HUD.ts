@@ -430,7 +430,9 @@ export class HUD {
     const w = this.client.world;
     const pf = this.client.playerFaction as FactionId;
     const involved = pf < 0 || (n.factions?.includes(pf) ?? false);
-    const show = involved ? !n.quiet : n.world && (n.priority ?? 0) >= 1;
+    let show = involved ? !n.quiet : n.world && (n.priority ?? 0) >= 1;
+    // watching: only the headlines (the war room and captions tell the rest)
+    if (this.watching && (n.priority ?? 0) < 1 && !n.alarm) show = false;
     if (!show) return;
     // de-duplicate repeated messages
     const last = this.lastNoticeText.get(n.text) ?? -99;
