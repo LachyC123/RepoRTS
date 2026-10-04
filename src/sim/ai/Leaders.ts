@@ -274,7 +274,7 @@ export class LeaderSystem {
     w.events.emit('leaderThought', th);
     // the commander says it out loud if they are on the field
     const c = fac.commanderId ? w.unitById.get(fac.commanderId) : undefined;
-    if (c && c.alive) w.events.emit('unitSay', { id: c.id, x: c.x, y: c.y, faction: f, text, kind: kind === 'retreat' || kind === 'mood_down' ? 'panic' : kind === 'attack' || kind === 'war' ? 'berserk' : 'normal' });
+    if (c && c.alive) w.events.emit('unitSay', { id: c.id, x: c.x, y: c.y, faction: f, text: `♛ ${text}`, kind: 'leader' });
   }
 
   warReason() {

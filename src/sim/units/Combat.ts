@@ -54,6 +54,9 @@ export interface FireSpec {
   incendiary?: boolean;
 }
 
+/** fights between soldiers resolve this much faster than the raw stats (buildings are unaffected) */
+export const COMBAT_PACE = 2;
+
 const SPEED: Record<ProjectileKind, number> = { arrow: 230, bolt: 330, rock: 130, bigrock: 120, ballista: 300, bullet: 620, rocket: 210, grenade: 150, shell: 150, tankshell: 520, firepot: 140, flame: 260, missile: 200, fireball: 180 };
 const ARC: Record<ProjectileKind, number> = { arrow: 0.22, bolt: 0.06, rock: 0.4, bigrock: 0.5, ballista: 0.05, bullet: 0.01, rocket: 0.04, grenade: 0.35, shell: 0.55, tankshell: 0.02, firepot: 0.4, flame: 0.03, missile: 0.6, fireball: 0.6 };
 
@@ -428,7 +431,7 @@ export class CombatSystem {
     }
     const armorBase = type === 'siege' ? Math.floor(t.def.armor.pierce * 0.3) : type === 'pierce' ? t.def.armor.pierce + t.armorBonus.pierce : t.def.armor.melee + t.armorBonus.melee;
     const armor = Math.max(0, armorBase - pen);
-    let dmg = Math.max(1, attack * m - armor) * (0.88 + w.rng.next() * 0.24);
+    let dmg = Math.max(1, attack * m - armor) * (0.88 + w.rng.next() * 0.24) * COMBAT_PACE;
     let blocked = false;
     // shield block vs missiles from the front
     if (type === 'pierce' && t.def.look.shield !== 'none') {

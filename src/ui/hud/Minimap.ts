@@ -221,6 +221,37 @@ export class Minimap {
       const sel = this.client.selection.units.has(u.id);
       ctx.fillRect((u.x / TILE) * S - 1, (u.y / TILE) * S - 1, sel ? 3 : 2, sel ? 3 : 2);
     }
+    // leaders: a crown in their colour
+    for (const f of w.factions) {
+      if (!f || !f.commanderId) continue;
+      const c = w.unitById.get(f.commanderId);
+      if (!c || !c.alive) continue;
+      if (pf >= 0 && c.faction !== pf && !(c.seenBy & (1 << pf)) && !w.vis.revealAll) continue;
+      const x = (c.x / TILE) * S;
+      const y = (c.y / TILE) * S;
+      ctx.fillStyle = '#1b1420';
+      ctx.beginPath();
+      ctx.moveTo(x - 5, y + 3);
+      ctx.lineTo(x - 5, y - 4);
+      ctx.lineTo(x - 2, y - 1);
+      ctx.lineTo(x, y - 5);
+      ctx.lineTo(x + 2, y - 1);
+      ctx.lineTo(x + 5, y - 4);
+      ctx.lineTo(x + 5, y + 3);
+      ctx.closePath();
+      ctx.fill();
+      ctx.fillStyle = f.color.light;
+      ctx.beginPath();
+      ctx.moveTo(x - 4, y + 2);
+      ctx.lineTo(x - 4, y - 2.5);
+      ctx.lineTo(x - 1.6, y);
+      ctx.lineTo(x, y - 3.5);
+      ctx.lineTo(x + 1.6, y);
+      ctx.lineTo(x + 4, y - 2.5);
+      ctx.lineTo(x + 4, y + 2);
+      ctx.closePath();
+      ctx.fill();
+    }
     // battles
     for (const [r, v] of this.battles) {
       const reg = m.regions[r];

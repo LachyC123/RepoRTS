@@ -23,6 +23,7 @@ const STYLE: Record<string, { bg: number; fg: string; edge: number }> = {
   joke: { bg: 0xfff0a0, fg: '#3a2a10', edge: 0x3a2a10 },
   nap: { bg: 0xe6e0f0, fg: '#4a4060', edge: 0x4a4060 },
   promote: { bg: 0xffe27a, fg: '#3a2a10', edge: 0x6a4a10 },
+  leader: { bg: 0xffe9a0, fg: '#2a1a08', edge: 0x8a5a10 },
   saved: { bg: 0xd8f5c8, fg: '#1e3a14', edge: 0x1e3a14 },
   rescue: { bg: 0xd8f5c8, fg: '#1e3a14', edge: 0x1e3a14 },
 };
@@ -71,7 +72,7 @@ export class SpeechRenderer {
     if (old) this.drop(old);
     if (this.bubbles.length >= MAX) {
       // make room: oldest enemy chatter first, then the oldest of anything
-      const victim = this.bubbles.find((b) => !b.mine) ?? (mine ? this.bubbles[0] : null);
+      const victim = this.bubbles.find((b) => !b.mine && b.kind !== 'leader') ?? (mine || kind === 'leader' ? this.bubbles.find((b) => b.kind !== 'leader') ?? null : null);
       if (!victim) return;
       this.drop(victim);
     }
@@ -83,7 +84,7 @@ export class SpeechRenderer {
       this.layer.add(t);
     }
     t.setText(text).setColor(st.fg).setVisible(true).setAlpha(1);
-    this.bubbles.push({ id, text: t, t: 0, life: 2.4 + Math.min(2.5, text.length * 0.05), kind, mine, x, y });
+    this.bubbles.push({ id, text: t, t: 0, life: (kind === 'leader' ? 3.4 : 2.4) + Math.min(2.5, text.length * 0.05), kind, mine, x, y });
   }
 
   private drop(b: Bubble) {
@@ -153,7 +154,8 @@ export class SpeechRenderer {
       // pop in, float, fade out
       const pop = b.t < 0.12 ? 0.6 + (b.t / 0.12) * 0.5 : b.t < 0.2 ? 1.1 - ((b.t - 0.12) / 0.08) * 0.1 : 1;
       const a = b.t > b.life - 0.35 ? (b.life - b.t) / 0.35 : 1;
-      const px = b.mine ? 11 : 9.5; // css px
+      // leaders speak up; your own soldiers a little louder than everyone else
+      const px = b.kind === 'leader' ? 12.5 : b.mine ? 11 : 9.5; // css px
       const sc = (px / 26) * s * pop;
       const shake = b.kind === 'berserk' || b.kind === 'panic' ? Math.sin(now * 40 + b.id) * 0.6 * s : 0;
       const tx = b.x + shake;

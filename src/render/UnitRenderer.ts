@@ -162,6 +162,8 @@ export class UnitRenderer {
     s.setPosition(Math.round(x + sway), Math.round(y));
     s.sy = y;
     s.setFlipX(u.facing < 0);
+    // leaders stand a head taller than everyone else
+    s.setScale(u.def.special === 'commander' ? 1.3 : 1);
     if (u.hitFlash > 0.06) s.setTintFill(0xffffff);
     else if (u.hitFlash > 0) s.setTint(0xff9a8a);
     else if (u.routing > 0) s.setTint(0xd8d0e8);

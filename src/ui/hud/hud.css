@@ -1233,3 +1233,96 @@
     display: none;
   }
 }
+.realm .rl {
+  grid-column: 2 / -1;
+  font-size: 0.8em;
+  color: var(--rc, #c8b890);
+  opacity: 0.9;
+  margin-top: -2px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  max-width: 190px;
+}
+.realm .rl:empty {
+  display: none;
+}
+/* live match-up card for the battle under the camera */
+.hud-match {
+  position: absolute;
+  left: 50%;
+  bottom: calc(max(8px, env(safe-area-inset-bottom)) + 150px * var(--ui-scale));
+  transform: translateX(-50%);
+  padding: 4px 10px 6px;
+  background: rgba(16, 12, 20, 0.82);
+  border: 1px solid rgba(240, 200, 120, 0.35);
+  display: none;
+  flex-direction: column;
+  align-items: center;
+  gap: 2px;
+  pointer-events: none;
+  min-width: 240px;
+}
+.hud-match.show {
+  display: flex;
+}
+.hud-match .mw {
+  font-family: var(--font-small);
+  font-size: 0.66em;
+  letter-spacing: 0.14em;
+  color: #c8a860;
+}
+.hud-match .mrow {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  font-size: 0.86em;
+  color: #fff0c8;
+}
+.hud-match .mrow img {
+  width: 16px;
+  height: 19px;
+  image-rendering: pixelated;
+}
+.hud-match .mrow b {
+  font-size: 1.15em;
+}
+.hud-match .mrow i {
+  font-style: normal;
+  color: #ff9a6a;
+}
+.hud-match .mbar {
+  display: flex;
+  width: 100%;
+  height: 5px;
+  background: #1b1420;
+  border: 1px solid #000;
+}
+.hud-match .mbar i {
+  display: block;
+  height: 100%;
+  transition: width 0.4s;
+}
+@media (max-height: 500px) {
+  .hud-match {
+    bottom: calc(max(6px, env(safe-area-inset-bottom)) + 4px);
+    font-size: 0.8em;
+    min-width: 190px;
+  }
+  .hud-caption {
+    bottom: calc(max(6px, env(safe-area-inset-bottom)) + 66px);
+  }
+  .realm .rl {
+    display: none;
+  }
+}
+.lcard {
+  position: relative;
+}
+.lcard .lfollow {
+  position: absolute;
+  right: 6px;
+  top: 6px;
+  font-size: 0.7em;
+  padding: 0 8px;
+  height: 24px;
+}

@@ -79,7 +79,7 @@ export class HUD {
   private timerEl!: HTMLElement;
   private tooltipEl!: HTMLElement;
   private standEls: { id: number; it: HTMLElement; val: HTMLElement; inc: HTMLElement }[] = [];
-  private realmEls: { id: number; row: HTMLElement; st: HTMLElement; pct: HTMLElement }[] = [];
+  private realmEls: { id: number; row: HTMLElement; st: HTMLElement; pct: HTMLElement; lead: HTMLElement }[] = [];
   private mapTipEl!: HTMLElement;
   private hover: { x: number; y: number; t: number; onMap: boolean; region: number } = { x: 0, y: 0, t: 0, onMap: false, region: -1 };
   private sheetEl: HTMLElement | null = null;
@@ -115,6 +115,7 @@ export class HUD {
     this.buildRealms();
     this.buildWarRoom();
     this.captionEl = el('div', 'hud-caption', this.root);
+    this.matchEl = el('div', 'hud-match', this.root);
     this.buildMinimap();
     this.armiesEl = el('div', 'hud-armies', this.root);
     this.selEl = el('div', 'hud-sel panel', this.root);
@@ -280,6 +281,7 @@ export class HUD {
     }
     this.minimap.update(dt);
     this.updateWarRoom();
+    this.updateMatchup(dt);
     if (this.captionT > 0) {
       this.captionT -= dt;
       if (this.captionT <= 0) this.captionEl.classList.remove('show');
@@ -343,15 +345,23 @@ export class HUD {
       el('span', 'rn', row, f.id === c.playerFaction ? 'You' : f.name);
       const st = el('span', 'rs', row);
       const pct = el('span', 'rp', row);
-      this.realmEls.push({ id: f.id, row, st, pct });
+      const lead = el('span', 'rl', row);
+      this.realmEls.push({ id: f.id, row, st, pct, lead });
       onPress(row, () => {
         const me = f.id === c.playerFaction;
         const rel = me ? '' : ` · ${STANCE_LABEL[w.diplomacy.stance(c.playerFaction as FactionId, f.id as FactionId)]}`;
-        c.toast(me ? `Your land is tinted ${f.color.id}` : `${f.name}${rel} · their land is tinted ${f.color.id}`);
+        // find their leader on the field, else their capital
+        const ldr = f.commanderId ? w.unitById.get(f.commanderId) : undefined;
+        const canSee = ldr && ldr.alive && (me || w.vis.revealAll || (ldr.seenBy & (1 << c.playerFaction)) !== 0);
+        c.toast(canSee ? `${f.setup.commanderName}, leader of ${f.name}` : me ? `Your land is tinted ${f.color.id}` : `${f.name}${rel} · their land is tinted ${f.color.id}`);
+        if (canSee) {
+          c.scene?.camCtl.flyTo(ldr!.x, ldr!.y, Math.max(c.scene.camCtl.zoom, c.scene.camCtl.normalZoom() * 1.3), 0.9);
+          return;
+        }
         const cap = f.capitalSettlement >= 0 ? w.settlements[f.capitalSettlement] : null;
         if (cap && (w.vis.isExplored(c.playerFaction as FactionId, cap.cx, cap.cy) || f.id === c.playerFaction)) c.focus(cap.cx, cap.cy + 20);
       }, { sound: () => audio.play('ui_click') });
-      this.tip(row, () => ({ title: f.id === c.playerFaction ? `${f.name} (you)` : f.name, desc: f.id === c.playerFaction ? 'Land tinted this colour is yours.' : `Land tinted this colour belongs to ${f.name}. ${STANCE_HELP[w.diplomacy.stance(c.playerFaction as FactionId, f.id as FactionId)]}`, extra: `${f.regionsOwned} region${f.regionsOwned === 1 ? '' : 's'} · tap to view their capital` }));
+      this.tip(row, () => ({ title: f.id === c.playerFaction ? `${f.name} (you)` : f.name, desc: f.id === c.playerFaction ? 'Land tinted this colour is yours.' : `Land tinted this colour belongs to ${f.name}. ${STANCE_HELP[w.diplomacy.stance(c.playerFaction as FactionId, f.id as FactionId)]}`, extra: `${f.regionsOwned} region${f.regionsOwned === 1 ? '' : 's'} · tap to find their leader` }));
     }
     const un = el('div', 'realm unclaimed', box);
     el('span', 'swatch', un);
@@ -375,6 +385,10 @@ export class HUD {
       }
       const p = `${Math.round(f.territoryShare * 100)}%`;
       if (e.pct.textContent !== p) e.pct.textContent = p;
+      const l = f.leader;
+      const ldr = f.commanderId ? w.unitById.get(f.commanderId) : undefined;
+      const lt = !f.alive || !l ? '' : `♛ ${f.setup.commanderName.replace(/"[^"]*" /, '')} · ${DOCTRINES[l.doctrine].label}${ldr?.alive ? '' : f.commanderRespawn > 0 ? ` · back in ${Math.ceil(f.commanderRespawn)}s` : ''}`;
+      if (e.lead.textContent !== lt) e.lead.textContent = lt;
       e.row.classList.toggle('dead', !f.alive);
     }
   }
@@ -1072,6 +1086,58 @@ export class HUD {
   /** the map was revealed for other reasons (debug ?reveal) */
   revealed = false;
 
+  private matchEl!: HTMLElement;
+  private matchT = 0;
+  private matchSig = '';
+
+  /** who is fighting whom right where the camera is looking (headcounts and a strength bar) */
+  private updateMatchup(dt: number) {
+    this.matchT -= dt;
+    if (this.matchT > 0) return;
+    this.matchT = 0.5;
+    const c = this.client;
+    const w = c.world;
+    const cam = c.scene?.camCtl;
+    if (!cam || cam.zoom < 0.95) {
+      this.matchEl.classList.remove('show');
+      return;
+    }
+    const r = 10 * TILE;
+    const pow = new Map<number, { n: number; p: number }>();
+    let fighting = 0;
+    w.unitHash.query(cam.x, cam.y, r, (u) => {
+      if (!u.alive || u.def.special === 'worker' || u.faction === NEUTRAL) return;
+      if (c.playerFaction >= 0 && u.faction !== c.playerFaction && !w.vis.revealAll && !(u.seenBy & (1 << c.playerFaction))) return;
+      const e = pow.get(u.faction) ?? { n: 0, p: 0 };
+      e.n++;
+      e.p += u.def.power * (u.hp / u.maxHp);
+      pow.set(u.faction, e);
+      if (w.time - u.lastHitT < 3) fighting++;
+    });
+    const sides = [...pow.entries()].filter(([, e]) => e.n >= 2).sort((a, b) => b[1].p - a[1].p);
+    if (sides.length < 2 || fighting < 2 || !w.isHostile(sides[0][0] as FactionId, sides[1][0] as FactionId)) {
+      this.matchEl.classList.remove('show');
+      this.matchSig = '';
+      return;
+    }
+    const [a, b] = [sides[0], sides[1]];
+    const fa = w.factions[a[0]];
+    const fb = w.factions[b[0]];
+    const m = w.map;
+    const ri = m.region[Math.floor(cam.y / TILE) * m.w + Math.floor(cam.x / TILE)];
+    const where = ri >= 0 ? w.settlements[ri].name : '';
+    const share = a[1].p / Math.max(0.01, a[1].p + b[1].p);
+    const name = (f: typeof fa) => (f.id === c.playerFaction ? 'You' : f.name);
+    const sig = `${fa.id}:${fb.id}:${a[1].n}:${b[1].n}:${Math.round(share * 40)}:${where}`;
+    if (sig !== this.matchSig) {
+      this.matchSig = sig;
+      this.matchEl.innerHTML = `<div class="mw">BATTLE${where ? ' AT ' + where.toUpperCase() : ''}</div>
+        <div class="mrow"><img src="${crestUrl(fa.setup.crest, fa.color)}"><span style="color:${fa.color.light}">${name(fa)}</span><b>${a[1].n}</b><i>vs</i><b>${b[1].n}</b><span style="color:${fb.color.light}">${name(fb)}</span><img src="${crestUrl(fb.setup.crest, fb.color)}"></div>
+        <div class="mbar"><i style="width:${(share * 100).toFixed(0)}%;background:${fa.color.main}"></i><i style="width:${((1 - share) * 100).toFixed(0)}%;background:${fb.color.main}"></i></div>`;
+    }
+    this.matchEl.classList.add('show');
+  }
+
   caption(text: string) {
     this.captionEl.textContent = text;
     this.captionEl.classList.add('show');
@@ -1126,6 +1192,15 @@ export class HUD {
       el('div', 'lw', t, `${f.setup.commanderName} ${f.setup.commanderTitle}`);
       el('div', 'ld', t, `<b>${d.label}</b> · ${f.alive ? moodLabel(l.mood) : 'fallen'} · since ${formatTime(l.since)}`);
       el('div', 'lx', t, d.desc);
+      const ldr = f.commanderId ? w.unitById.get(f.commanderId) : undefined;
+      if (ldr?.alive && f.alive) {
+        const fb = el('button', 'hud-btn lfollow', card, 'FOLLOW') as HTMLButtonElement;
+        onPress(fb, () => {
+          this.closeSheet();
+          c.scene?.director.follow(ldr.id);
+          this.caption(`Following ${f.setup.commanderName} of ${f.name}`);
+        }, { sound: () => audio.play('ui_click') });
+      } else if (f.alive) el('div', 'lx', t, '<i>Not on the field right now</i>');
     }
     el('h4', '', sh, 'Log');
     const list = el('div', 'jlist', sh);

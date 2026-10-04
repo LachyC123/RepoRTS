@@ -248,6 +248,7 @@ export class GameScene extends Phaser.Scene {
     this.fog.update();
     this.ysort.sort();
     this.drawSelection(alpha);
+    this.drawLeaders(alpha, zoom, strategic);
     this.drawSettlementOverlays(zoom);
     this.drawStrategic(strategic);
     this.drawScreenOverlay();
@@ -275,6 +276,19 @@ export class GameScene extends Phaser.Scene {
     const zoom = this.camCtl.zoom;
     const lw = Math.max(1, 1.2 / zoom);
     const pf = this.client.playerFaction;
+    // a soft team-coloured disc under every soldier, so the sides are easy to tell apart
+    if (zoom >= 1.05 && !this.units.hidden) {
+      const v = this.camCtl.view(10);
+      const cols = world.factions.map((f) => (f ? Phaser.Display.Color.HexStringToColor(f.id === NEUTRAL ? '#b8a890' : f.color.light).color : 0));
+      for (const u of world.units) {
+        if (!u.alive || u.def.special === 'worker' || u.x < v.x0 || u.x > v.x1 || u.y < v.y0 || u.y > v.y1) continue;
+        if (!this.units.visible(u)) continue;
+        const x = u.px + (u.x - u.px) * alpha;
+        const y = u.py + (u.y - u.py) * alpha;
+        g.fillStyle(cols[u.faction], 0.42);
+        g.fillEllipse(x, y + 0.5, u.radius * 2.6, u.radius * 1.2);
+      }
+    }
     for (const id of sel.units) {
       const u = world.unitById.get(id);
       if (!u) continue;
@@ -510,6 +524,51 @@ export class GameScene extends Phaser.Scene {
       const sc = px / 28 / zoom;
       t.setScale(sc).setPosition(s.cx, s.cy - (s.region.coreSize * TILE) / 2 - 4 - px / zoom).setVisible(true);
       t.setText(s.isCapital ? `♛ ${s.name}` : s.name);
+    }
+  }
+
+  private leaderTags: (Phaser.GameObjects.Text | undefined)[] = [];
+
+  /** every realm's leader: a pulsing ring in their colour, a crown and their name over their head */
+  private drawLeaders(alpha: number, zoom: number, strategic: boolean) {
+    const w = this.client.world;
+    const g = this.selGfx;
+    const pf = this.client.playerFaction;
+    const t = this.renderTime;
+    for (const f of w.factions) {
+      if (!f || f.id === NEUTRAL) continue;
+      let tag = this.leaderTags[f.id];
+      const c = f.commanderId ? w.unitById.get(f.commanderId) : undefined;
+      const seen = c && c.alive && (pf < 0 || c.faction === pf || w.vis.revealAll || (c.seenBy & (1 << pf)) !== 0);
+      if (!c || !seen) {
+        tag?.setVisible(false);
+        continue;
+      }
+      const x = c.px + (c.x - c.px) * alpha;
+      const y = c.py + (c.y - c.py) * alpha;
+      const col = Phaser.Display.Color.HexStringToColor(f.color.light).color;
+      if (!strategic) {
+        // aura on the ground
+        const pulse = 0.5 + 0.5 * Math.sin(t * 3 + f.id);
+        g.fillStyle(col, 0.18 + pulse * 0.12);
+        g.fillEllipse(x, y + 1, 26 + pulse * 4, 11 + pulse * 2);
+        g.lineStyle(Math.max(1, 1.4 / zoom), col, 0.9);
+        g.strokeEllipse(x, y + 1, 26 + pulse * 4, 11 + pulse * 2);
+      }
+      if (!tag) {
+        tag = this.make.text({ x: 0, y: 0, text: '', style: { fontFamily: 'Pixelify Sans', fontSize: '28px', color: '#fff4d6', stroke: '#1b1420', strokeThickness: 5, align: 'center', backgroundColor: 'rgba(20,14,24,0.72)', padding: { x: 8, y: 3 } } }, false);
+        tag.setOrigin(0.5, 1);
+        this.overLayer.add(tag);
+        this.leaderTags[f.id] = tag;
+      }
+      const name = f.setup.commanderName.replace(/"[^"]*" /, '');
+      const label = `♛ ${name}`;
+      if (tag.text !== label) tag.setText(label);
+      if (tag.style.color !== f.color.light) tag.setColor(f.color.light);
+      // constant on-screen size; bigger when zoomed out so leaders are easy to find
+      const px = strategic ? 13 : 12.5;
+      const bob = Math.sin(t * 2.4 + f.id) * 1.2;
+      tag.setScale(px / 28 / zoom).setPosition(x, y - (strategic ? 6 : 34) + bob / zoom).setVisible(true);
     }
   }
 

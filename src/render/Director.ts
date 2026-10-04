@@ -83,6 +83,30 @@ export class Director {
     }
   }
 
+  /** keep the camera on one unit (a leader) until they fall or the person moves the camera */
+  followId = 0;
+  follow(id: number) {
+    const u = this.world.unitById.get(id);
+    if (!u) return;
+    this.followId = id;
+    this.cam.flyTo(u.x, u.y - 10, Math.max(this.cam.zoom, this.cam.normalZoom() * 1.4), 0.9);
+  }
+
+  /** "Varnmark vs Eldmoor at Oakhaven" for a fight with no story of its own */
+  private battleCaption(x: number, y: number): string {
+    const w = this.world;
+    const n = new Map<number, number>();
+    w.unitHash.query(x, y, 9 * TILE, (u) => {
+      if (u.alive && u.def.special !== 'worker' && w.time - u.lastHitT < 5) n.set(u.faction, (n.get(u.faction) ?? 0) + 1);
+    });
+    const sides = [...n.entries()].sort((a, b) => b[1] - a[1]);
+    if (sides.length < 2) return '';
+    const nm = (f: number) => (f === 4 ? (w.setup.era === 'modern' ? 'raiders' : 'bandits') : w.factions[f].name);
+    const m = w.map;
+    const ri = m.region[Math.floor(y / TILE) * m.w + Math.floor(x / TILE)];
+    return `${nm(sides[0][0])} vs ${nm(sides[1][0])}${ri >= 0 ? ' at ' + w.settlements[ri].name : ''}`;
+  }
+
   /** forget accumulated heat (after a fast-forward) */
   reset() {
     this.spots.clear();
@@ -106,6 +130,20 @@ export class Director {
       s.heat *= decay;
       s.capHeat *= decay;
       if (s.heat < 0.2) this.spots.delete(k);
+    }
+    // following one person (a leader): stay on them while they live
+    if (this.followId) {
+      const u = w.unitById.get(this.followId);
+      if (!u || !u.alive || performance.now() - this.cam.lastUserT < 300) {
+        this.followId = 0;
+        if (u && !u.alive) this.onCaption('They have fallen.');
+      } else {
+        if (!this.cam.flying) {
+          this.cam.x += (u.x - this.cam.x) * Math.min(1, dt * 3);
+          this.cam.y += (u.y - 10 - this.cam.y) * Math.min(1, dt * 3);
+        }
+        return;
+      }
     }
     if (!this.enabled) return;
     this.holdT -= dt;
@@ -133,6 +171,10 @@ export class Director {
       if (Math.hypot(best.x - this.cam.x, best.y - this.cam.y) > 4 * TILE && !this.cam.flying) this.cam.flyTo(best.x, best.y, undefined, 1.2);
       if (best.caption && best.caption !== this.lastCaption) {
         this.lastCaption = best.caption;
+    if (!best.caption) {
+      const b = this.battleCaption(best.x, best.y);
+      if (b) this.onCaption(b);
+    }
         this.onCaption(best.caption);
       }
       return;
