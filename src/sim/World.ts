@@ -32,6 +32,8 @@ import { Movement } from './units/Movement';
 import { Unit } from './units/Unit';
 import { LivingSystem } from './units/Living';
 import { SupportSystem } from './units/Support';
+import { SocialSystem } from './units/Social';
+import { Happenings } from './events/Happenings';
 import { SuperweaponSystem } from './Superweapon';
 import { LeaderSystem } from './ai/Leaders';
 import type { DoctrineId } from '../data/doctrines';
@@ -90,6 +92,10 @@ export class World {
   readonly leaders: LeaderSystem;
   /** medics, musicians and fires */
   readonly support: SupportSystem;
+  /** friendships, rivalries, grief, parties and campfires */
+  readonly social: SocialSystem;
+  /** geese, stray dogs, lost patrols, letters from home */
+  readonly happenings: Happenings;
   /** missile silos / great bombards and their strikes */
   readonly superweapons: SuperweaponSystem;
   readonly buildingHash: SpatialHash<Building>;
@@ -145,6 +151,8 @@ export class World {
     this.living = setup.living ? new LivingSystem(this) : null;
     this.leaders = new LeaderSystem(this);
     this.support = new SupportSystem(this);
+    this.social = new SocialSystem(this);
+    this.happenings = new Happenings(this);
     this.superweapons = new SuperweaponSystem(this);
     const startRes = setup.startRes ?? START_RES;
     for (const fs of setup.factions) this.factions[fs.id] = new Faction(fs, startRes);
@@ -474,6 +482,8 @@ export class World {
     this.living?.update(dt);
     this.leaders.update(dt);
     this.support.update(dt);
+    this.social.update(dt);
+    this.happenings.update(dt);
     this.superweapons.update(dt);
     for (const u of this.units) {
       u.animT += dt;

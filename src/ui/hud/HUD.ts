@@ -580,7 +580,7 @@ export class HUD {
     }
     this.selEl.classList.add('show');
     let sig = '';
-    if (s.kind === 'units') sig = 'u:' + s.units.map((u) => `${u.id}:${Math.round((u.hp / u.maxHp) * 20)}:${u.auto ? 1 : 0}:${u.persona ? u.persona.state + u.persona.rank + u.persona.kills : ''}${u.routing > 0 ? 'r' : ''}`).join(',');
+    if (s.kind === 'units') sig = 'u:' + s.units.map((u) => `${u.id}:${Math.round((u.hp / u.maxHp) * 20)}:${u.auto ? 1 : 0}:${u.persona ? u.persona.state + u.persona.rank + u.persona.kills + ':' + u.persona.memories.length + u.persona.friends.length + u.persona.rival + u.persona.nemesis + Math.round(u.persona.fatigue / 25) : ''}${u.routing > 0 ? 'r' : ''}`).join(',');
     else if (s.kind === 'building') sig = `b:${s.b.id}:${s.b.faction}:${s.b.level}:${Math.ceil(s.b.levelUpT)}:${Math.round((w.superweapons.charge.get(s.b.id) ?? 0) * 50)}:${Math.round(s.b.hp)}:${Math.round(s.b.progress * 50)}:${s.b.queue.map((q) => q.type + Math.round((q.t / q.total) * 20)).join(',')}:${s.b.research?.id ?? ''}${Math.round((s.b.research?.t ?? 0) / 2)}:${w.settlements[s.b.settlementId].tier}:${Math.round(w.settlements[s.b.settlementId].upgrading?.t ?? 0)}`;
     else sig = `r:${s.s.id}:${s.s.owner}:${s.s.tier}:${Math.round(s.s.capProgress * 20)}:${Math.round(s.s.upgrading?.t ?? 0)}`;
     if (sig === this.selSig) return;
@@ -615,6 +615,31 @@ export class HUD {
         const mind = el('div', 'sel-mind', t);
         mind.innerHTML = `<span class="trait">${tr.label}</span> ${this.stateText(u)}`;
         this.tip(mind, () => ({ title: tr.label, desc: tr.desc, extra: `${per.kills} kill${per.kills === 1 ? '' : 's'}${per.rescues ? ` · saved ${per.rescues}` : ''}${per.wounds ? ` · wounded ${per.wounds}×` : ''}` }));
+        // who they are and what they carry around with them
+        const nm = (id: number) => {
+          const o = w.unitById.get(id);
+          return o?.persona ? `${o.persona.first} ${o.persona.last}` : null;
+        };
+        const bits: string[] = [`From ${per.home}; was ${per.job}.`];
+        const friends = per.friends.map(nm).filter(Boolean);
+        if (friends.length) bits.push(`Friends: ${friends.join(', ')}.`);
+        const rival = per.rival ? nm(per.rival) : null;
+        if (rival) bits.push(`Can't stand ${rival}.`);
+        if (per.nemesis && w.unitById.get(per.nemesis)?.alive) bits.push(`<span class="bad">Out for revenge (for ${per.nemesisFor}).</span>`);
+        if (per.fatigue > 85) bits.push('<span class="bad">Exhausted.</span>');
+        else if (per.fatigue > 60) bits.push('Tired.');
+        const dog = w.happenings.mascots.find((m) => m.ownerId === u.id);
+        if (dog) bits.push(`Followed everywhere by ${dog.name} the dog.`);
+        const bio = el('div', 'sel-bio', p);
+        bio.innerHTML = bits.join(' ');
+        if (per.memories.length) {
+          const mem = el('div', 'sel-mem', p);
+          mem.innerHTML = per.memories
+            .slice(-2)
+            .reverse()
+            .map((m) => `<div>${m}</div>`)
+            .join('');
+        }
       }
       const hp = el('div', 'hpbar', t);
       (el('i', '', hp) as HTMLElement).style.width = `${(u.hp / u.maxHp) * 100}%`;

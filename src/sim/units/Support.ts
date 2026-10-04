@@ -59,7 +59,7 @@ export class SupportSystem {
     // running around on fire
     if (u.routing <= 0 && u.def.look.body !== 'engine' && w.rng.next() < 0.35) {
       w.morale.rout(u);
-      if (u.persona) w.living?.speak(u, 'burn');
+      if (u.persona) w.living?.speak(u, 'burn', {}, false);
     }
   }
 
@@ -109,7 +109,7 @@ export class SupportSystem {
           if (o.alive && o !== b) o.morale = Math.max(0, o.morale - 6);
         });
         if (b.persona) w.living?.speak(b, 'awful');
-      } else if (n > 2 && b.persona) w.living?.speak(b, 'song');
+      } else if (n > 2 && b.persona && w.rng.next() < 0.3) w.living?.speak(b, 'song');
     }
   }
 }

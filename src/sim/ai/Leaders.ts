@@ -1,5 +1,5 @@
 import { NEUTRAL, type FactionId } from '../../data/constants';
-import { DOCTRINE_IDS, DOCTRINES, PERSONALITY_DOCTRINE, TRAIT_DOCTRINE, type DoctrineId } from '../../data/doctrines';
+import { DOCTRINE_IDS, DOCTRINES, PERSONALITY_DOCTRINE, QUIRK_IDS, QUIRKS, TRAIT_DOCTRINE, type DoctrineId, type QuirkId } from '../../data/doctrines';
 import { eraState, resName, word } from '../../data/era';
 import type { Unit } from '../units/Unit';
 import type { World } from '../World';
@@ -25,6 +25,12 @@ export interface Leader {
   museT: number;
   /** territory share samples for the mood */
   trend: number[];
+  /** two personal quirks on top of the doctrine */
+  quirks: QuirkId[];
+  /** a bad omen: no new attacks until then */
+  omenUntil: number;
+  /** seconds spent desperate (long enough and someone stages a coup) */
+  lowT: number;
 }
 
 export interface Thought {
@@ -54,7 +60,10 @@ export type ThoughtKind =
   | 'mood_up'
   | 'mood_down'
   | 'succession'
-  | 'insult';
+  | 'insult'
+  | 'retort'
+  | 'omen'
+  | 'coup';
 
 type Lines = Partial<Record<ThoughtKind, string[]>>;
 
@@ -74,6 +83,9 @@ const GENERIC: Lines = {
   mood_up: ['Things are going rather well, aren’t they?', 'I am, frankly, a genius.', 'Victory smells like {res}.'],
   mood_down: ['This is fine. Everything is fine.', 'Who planned this war? Oh. Me.', 'I would like a nap and a different war.'],
   succession: ['I’m in charge now. First order: nobody touch my chair.', 'Promoted! To... everything?', 'Right. New rules.'],
+  retort: ['How DARE you, {enemy}!', 'I’ll remember that, {enemy}.', 'Says the one with the ugly flag!', 'At least my soldiers can count, {enemy}.', 'Oh yeah? Well— your mum, {enemy}.'],
+  omen: ['Bad omen. Nobody attack anything today.', 'A black cat crossed my path. We wait.', 'The stars are wrong. Hold.'],
+  coup: ['The old boss is gone. I’m in charge now.', 'Pack your bags, old fool. This is MY army.', 'The people demanded change. Mostly me. I demanded it.'],
   insult: ['{enemy}’s leader is a wet sock.', 'I’ve met smarter turnips than {enemy}’s leader.', '{enemy} smells of old cabbage.', 'Tell {enemy} their flag is ugly.'],
 };
 
@@ -154,6 +166,7 @@ const LAST = {
 export class LeaderSystem {
   feed: Thought[] = [];
   private t = 0;
+  private retorts: { f: FactionId; enemy: string; at: number }[] = [];
 
   constructor(private w: World) {}
 
@@ -177,8 +190,50 @@ export class LeaderSystem {
         speakT: 4 + f.id * 2,
         museT: 40 + w.rng.next() * 40,
         trend: [],
+        quirks: this.rollQuirks(),
+        omenUntil: 0,
+        lowT: 0,
       };
     }
+  }
+
+  private rollQuirks(): QuirkId[] {
+    const w = this.w;
+    const a = w.rng.pick(QUIRK_IDS);
+    let b = w.rng.pick(QUIRK_IDS);
+    if (b === a) b = QUIRK_IDS[(QUIRK_IDS.indexOf(a) + 3) % QUIRK_IDS.length];
+    return [a, b];
+  }
+
+  /** does this realm's leader have a quirk? */
+  has(f: FactionId, q: QuirkId) {
+    return !!this.w.factions[f]?.leader?.quirks.includes(q);
+  }
+
+  /** combined quirk multiplier for a unit / building / research */
+  quirkMul(f: FactionId, kind: 'units' | 'builds', id: string): number {
+    const l = this.w.factions[f]?.leader;
+    if (!l) return 1;
+    let m = 1;
+    for (const q of l.quirks) m *= QUIRKS[q][kind]?.[id] ?? 1;
+    return m;
+  }
+
+  quirkVal(f: FactionId, key: 'research' | 'attackRatio' | 'peace'): number {
+    const l = this.w.factions[f]?.leader;
+    if (!l) return 1;
+    let m = 1;
+    for (const q of l.quirks) m *= QUIRKS[q][key] ?? 1;
+    return m;
+  }
+
+  /** an omen: superstitious leaders call off new attacks for a while */
+  omen(f: FactionId) {
+    const l = this.w.factions[f]?.leader;
+    if (!l || !l.quirks.includes('superstitious')) return false;
+    l.omenUntil = this.w.time + 90;
+    this.think(f, 'omen', {}, { force: true });
+    return true;
   }
 
   doctrineOf(f: FactionId) {
@@ -200,7 +255,9 @@ export class LeaderSystem {
     if (!l || !fac.alive) return;
     if (!opts.force && w.time < l.speakT) return;
     l.speakT = w.time + 9 + w.rng.next() * 8;
-    const pool = DOCTRINE_LINES[l.doctrine][kind] && w.rng.next() < 0.7 ? DOCTRINE_LINES[l.doctrine][kind]! : GENERIC[kind] ?? DOCTRINE_LINES[l.doctrine][kind];
+    let pool = DOCTRINE_LINES[l.doctrine][kind] && w.rng.next() < 0.7 ? DOCTRINE_LINES[l.doctrine][kind]! : GENERIC[kind] ?? DOCTRINE_LINES[l.doctrine][kind];
+    // half of a leader's musings are about their own peculiar obsessions
+    if (kind === 'muse' && l.quirks.length && w.rng.next() < 0.5) pool = QUIRKS[w.rng.pick(l.quirks)].muse[eraState.era === 'modern' ? 1 : 0];
     if (!pool?.length) return;
     const modern = eraState.era === 'modern';
     const all: Record<string, string> = {
@@ -225,11 +282,12 @@ export class LeaderSystem {
 
   // ------------------------------------------------------------------ succession
   /** the commander fell: the best soldier left standing is promoted to lead */
-  onCommanderFell(f: FactionId, killer: FactionId | -1) {
+  onCommanderFell(f: FactionId, killer: FactionId | -1, cause: 'fell' | 'coup' = 'fell') {
     const w = this.w;
     const fac = w.factions[f];
     if (!fac || f === NEUTRAL || !fac.alive) return;
     const old = fac.leader;
+    const oldName = this.leaderName(f);
     let best: Unit | null = null;
     let bs = -1;
     for (const u of w.units) {
@@ -278,19 +336,23 @@ export class LeaderSystem {
       speakT: 0,
       museT: w.time + 30 + w.rng.next() * 40,
       trend: old?.trend ?? [],
+      quirks: this.rollQuirks(),
+      omenUntil: 0,
+      lowT: 0,
     };
     const d = DOCTRINES[doctrine];
     const who = `${modern && !name.includes('"') ? title + ' ' : ''}${name}${modern ? '' : ' ' + title}`.trim();
     const changed = old && old.doctrine !== doctrine;
+    const q = fac.leader.quirks.map((k) => QUIRKS[k].label.toLowerCase()).join(', ');
     w.notify({
       kind: 'commander',
-      text: `${who.toUpperCase()} TAKES COMMAND OF ${fac.name.toUpperCase()}`,
-      sub: `${origin === 'promoted' ? `Promoted from the ranks (${trait})` : 'Appointed in a hurry'} · ${d.label}${changed ? ` — ${fac.isPlayer ? 'your' : 'their'} ${word('kingdom')} changes course` : ''}`,
+      text: cause === 'coup' ? `COUP IN ${fac.name.toUpperCase()}! ${who.toUpperCase()} SEIZES POWER` : `${who.toUpperCase()} TAKES COMMAND OF ${fac.name.toUpperCase()}`,
+      sub: `${cause === 'coup' ? `${oldName} flees into exile` : origin === 'promoted' ? `Promoted from the ranks (${trait})` : 'Appointed in a hurry'} · ${d.label}, ${q}${changed ? ` — ${fac.isPlayer ? 'your' : 'their'} ${word('kingdom')} changes course` : ''}`,
       factions: [f, killer as FactionId],
       priority: fac.isPlayer ? 2 : 1,
       world: true,
     });
-    this.think(f, 'succession', {}, { force: true });
+    this.think(f, cause === 'coup' ? 'coup' : 'succession', {}, { force: true });
   }
 
   // ------------------------------------------------------------------ mood & musings
@@ -321,13 +383,37 @@ export class LeaderSystem {
       l.mood += (target - l.mood) * Math.min(1, step * 0.05);
       if (before < 0.5 && l.mood >= 0.5) this.think(f.id, 'mood_up');
       else if (before > -0.5 && l.mood <= -0.5) this.think(f.id, 'mood_down');
-      // idle musings and the odd insult
+      // idle musings, insults (which are remembered) and retorts
       if (w.time > l.museT) {
-        l.museT = w.time + 50 + w.rng.next() * 70;
+        l.museT = w.time + (l.quirks.includes('sleepy') ? 80 : 45) + w.rng.next() * 60;
         const rivals = w.factions.filter((o) => o && o.id !== f.id && o.id !== NEUTRAL && o.alive);
-        const enemy = rivals.length ? w.rng.pick(rivals).name : 'the neighbours';
-        this.think(f.id, w.rng.next() < 0.25 ? 'insult' : 'muse', { enemy });
+        // insults go to whoever they already dislike, mostly
+        rivals.sort((a, b) => f.grudge[b.id] + (w.diplomacy.atWar(f.id, b.id) ? 20 : 0) - (f.grudge[a.id] + (w.diplomacy.atWar(f.id, a.id) ? 20 : 0)));
+        const target = rivals.length ? (w.rng.next() < 0.6 ? rivals[0] : w.rng.pick(rivals)) : null;
+        if (target && w.rng.next() < 0.3) {
+          this.think(f.id, 'insult', { enemy: target.name }, { force: true });
+          target.grudge[f.id] = (target.grudge[f.id] ?? 0) + 6;
+          this.retorts.push({ f: target.id, enemy: f.name, at: w.time + 3 + w.rng.next() * 5 });
+        } else this.think(f.id, 'muse', { enemy: target?.name ?? 'the neighbours' });
       }
+      // a leader desperate for too long gets overthrown
+      l.lowT = l.mood < -0.75 ? l.lowT + step : Math.max(0, l.lowT - step * 2);
+      const humanRun = f.isPlayer && !w.setup.realmAuto;
+      if (!humanRun && l.lowT > 150 && w.time - l.since > 240 && w.rng.next() < 0.01 * step) this.coup(f.id);
     }
+    // the insulted answer back
+    for (const r of this.retorts) if (r.at <= w.time) this.think(r.f, 'retort', { enemy: r.enemy }, { force: true });
+    this.retorts = this.retorts.filter((r) => r.at > w.time);
+  }
+
+  /** someone in the ranks has had enough of losing */
+  private coup(f: FactionId) {
+    const w = this.w;
+    const fac = w.factions[f];
+    const c = fac.commanderId ? w.unitById.get(fac.commanderId) : undefined;
+    if (c && c.alive) w.despawn(c);
+    fac.commanderId = 0;
+    fac.commanderRespawn = 25;
+    this.onCommanderFell(f, -1, 'coup');
   }
 }

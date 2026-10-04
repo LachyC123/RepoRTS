@@ -79,6 +79,8 @@ export class Unit {
   /** on fire: seconds left, and who lit it */
   burnT = 0;
   burnBy: FactionId | -1 = -1;
+  /** who struck the blow that put this soldier down */
+  killerId = 0;
   quirkSpeed = 1;
   /** autonomy: true = acts on its own; false = following the player's direct order */
   auto = true;

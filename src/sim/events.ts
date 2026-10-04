@@ -72,6 +72,8 @@ export interface SimEvents {
   superWarning: { id: number; x: number; y: number; kind: 'missile' | 'fireball' };
   superImpact: { id: number; x: number; y: number; kind: 'missile' | 'fireball'; faction: FactionId; kills: number };
   siloReady: { id: number; x: number; y: number; faction: FactionId };
+  /** a small world happening (goose, treasure, splash...) for the FX layer */
+  happening: { kind: string; x: number; y: number; text: string; faction: FactionId | -1 };
   /** a medic patches people up */
   healPulse: { id: number; x: number; y: number; faction: FactionId };
   /** a bard or piper plays (sometimes badly) */

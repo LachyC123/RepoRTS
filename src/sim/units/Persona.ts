@@ -7,7 +7,7 @@ import type { Random } from '../../core/Random';
  */
 export type Trait = 'brave' | 'coward' | 'hothead' | 'joker' | 'lazy' | 'loyal' | 'wanderer' | 'trigger' | 'lucky' | 'steady';
 
-export type PersonaState = 'normal' | 'berserk' | 'tired' | 'nap' | 'wander' | 'rescue';
+export type PersonaState = 'normal' | 'berserk' | 'tired' | 'nap' | 'wander' | 'rescue' | 'brawl' | 'party' | 'drunk' | 'camp';
 
 export interface Persona {
   first: string;
@@ -31,6 +31,21 @@ export interface Persona {
   wounds: number;
   /** times this soldier has broken and run */
   routs: number;
+  /** how they feel about other soldiers (id -> -100..100) */
+  bonds: Record<number, number>;
+  /** close friends (ids) and the one person they cannot stand */
+  friends: number[];
+  rival: number;
+  /** the enemy who killed a friend, and whose friend it was */
+  nemesis: number;
+  nemesisFor: string;
+  /** 0..100: marching and fighting tire, rest restores */
+  fatigue: number;
+  /** a few things that happened to them, for the soldier panel */
+  memories: string[];
+  /** where they are from and what they did before the war */
+  home: string;
+  job: string;
 }
 
 export const TRAITS: Record<Trait, { label: string; desc: string; weight: number }> = {
@@ -95,8 +110,26 @@ export function newPersona(rng: Random, era: Era, vehicle: boolean): Persona {
     rescues: 0,
     wounds: 0,
     routs: 0,
+    bonds: {},
+    friends: [],
+    rival: 0,
+    nemesis: 0,
+    nemesisFor: '',
+    fatigue: 0,
+    memories: [],
+    home: rng.pick(HOMES[era]),
+    job: rng.pick(JOBS[era]),
   };
 }
+
+const HOMES: Record<Era, string[]> = {
+  medieval: ['a pig farm near Oakhaven', 'the docks at Saltmere', 'a mill on the Brightwater', 'a hut in the Ashwood', 'the market at Crown Hill', 'a goat farm', 'nowhere in particular', 'a monastery (they left)', 'the far side of the hills', 'a very small village'],
+  modern: ['a farm outside Oakhaven', 'a flat above a chip shop', 'the suburbs', 'a fishing town', 'the capital (they never shut up about it)', 'a caravan', 'a dairy farm', 'a tower block', 'a mountain village', 'a town with one traffic light'],
+};
+const JOBS: Record<Era, string[]> = {
+  medieval: ['a turnip farmer', 'a baker', 'a cobbler', 'a juggler', 'a goose-herd', 'a failed bard', 'a blacksmith’s apprentice', 'a monk (briefly)', 'a rat-catcher', 'a fisherman', 'a thatcher', 'a pickpocket (reformed)'],
+  modern: ['a postman', 'a barista', 'a plumber', 'an accountant', 'a PE teacher', 'a lorry driver', 'a dental hygienist', 'a wedding DJ', 'a librarian', 'an influencer (11 followers)', 'a bin man', 'a stand-up comic (bad)'],
+};
 
 export function rankTitle(p: Persona, era: Era) {
   return RANKS[era][Math.min(p.rank, RANKS[era].length - 1)];
@@ -133,7 +166,26 @@ export type LineKind =
   | 'burn'
   | 'song'
   | 'awful'
-  | 'incoming';
+  | 'incoming'
+  | 'friend'
+  | 'grief'
+  | 'revenge'
+  | 'avenged'
+  | 'rivalry'
+  | 'brawl'
+  | 'cheerfight'
+  | 'makeup'
+  | 'party'
+  | 'drunk'
+  | 'story'
+  | 'tired'
+  | 'hungry'
+  | 'mascot'
+  | 'salute'
+  | 'weather'
+  | 'goose'
+  | 'river'
+  | 'lost';
 
 const LINES: Record<Era, Record<LineKind, string[]>> = {
   medieval: {
@@ -162,6 +214,25 @@ const LINES: Record<Era, Record<LineKind, string[]>> = {
     song: ['♪ Hey nonny nonny! ♪', '♪ Our king has a very big crown ♪', '♪ Fa la la, stab stab stab ♪', '♪ Oh the turnips of home ♪'],
     awful: ['♪ ...wait, how does it go? ♪', '♪ *horrible screech* ♪', 'Sorry. Wrong song.', '♪ La la la LAAAA— ♪'],
     incoming: ['INCOMING!', 'What’s that in the sky?!', 'RUN!', 'Is that... a burning rock?!'],
+    friend: ['You’re alright, {buddy}.', 'Stick with me, {buddy}.', '{buddy}! Saved you a turnip.', 'Me and {buddy} against the world.'],
+    grief: ['Not {buddy}... not like this.', '{buddy}! NO!', 'Who’s going to snore next to me now, {buddy}?', 'I’ll tell your mum, {buddy}.'],
+    revenge: ['That’s for {buddy}!', 'THIS ONE’S FOR {buddy}!', 'You killed {buddy}. Now it’s your turn.', 'Remember {buddy}?!'],
+    avenged: ['Rest easy, {buddy}. Got him.', 'It’s done, {buddy}.', 'Avenged. Doesn’t feel better.'],
+    rivalry: ['Oh great. {buddy} again.', 'Keep your elbows to yourself, {buddy}.', 'Nobody asked you, {buddy}.', '{buddy} snores like a bear.'],
+    brawl: ['Say that again!', 'Your mum’s a catapult!', 'Put ’em up!', 'You started it!', 'Not the nose!'],
+    cheerfight: ['Fight! Fight! Fight!', 'Two coppers on the big one!', 'Ooh, right in the helmet!', 'Someone get the sergeant!'],
+    makeup: ['...Want a drink?', 'Fine. You’re alright.', 'Friends?', 'Good punch, actually.'],
+    party: ['WE DID IT!', 'Drinks on the king!', 'Huzzah! Huzzah!', 'Who brought the mead?'],
+    drunk: ['Hic!', 'I love you guys.', 'Who moved the castle?', 'I can see three of you.', 'I’m fine. FINE.', 'Is the ground supposed to wobble?'],
+    story: ['...and then the goat exploded.', 'My uncle fought a bear once. Lost.', 'Back home I was {job}.', 'I miss {home}.', 'Did I tell you about the cheese?', 'When this is over I’m opening a tavern.'],
+    tired: ['My feet...', 'Can we stop? Just for a bit?', 'I’m too old for this.', 'How far IS it?'],
+    hungry: ['Turnips again?', 'I could eat a horse. Sorry, horse.', 'When did we last eat?', 'My belly’s louder than the drums.'],
+    mascot: ['Who’s a good boy?!', 'Look! A dog! Can we keep him?', 'He’s one of us now.'],
+    salute: ['Sir!', 'Your Grace!', 'Look sharp, it’s the boss!'],
+    weather: ['Rain. Lovely.', 'My boots are full of pond.', 'Who ordered this weather?'],
+    goose: ['THE GOOSE!', 'It’s got Wat! RUN!', 'Nobody look it in the eye!', 'Honk... honk...'],
+    river: ['I’m all wet!', 'Who put a river there?!', 'Fish! In my armour!'],
+    lost: ['I think we’re lost.', 'This tree looks familiar.', 'Left at the big rock. Or was it right?'],
   },
   modern: {
     panic: ['Nope. Nope. NOPE.', 'I left the oven on!', "This wasn't in the brochure!", 'Tell my mum I was brave!', 'Tactical retreat!!', "I'm too young for this!", 'NOT TODAY!'],
@@ -189,10 +260,33 @@ const LINES: Record<Era, Record<LineKind, string[]>> = {
     song: ['♪ *heroic droning* ♪', '♪ Scotland the Brave! ♪', '♪ *bagpipe noises* ♪', '♪ Amazing Grace, more or less ♪'],
     awful: ['♪ *dying goose noise* ♪', '♪ ...wait, how does it go? ♪', 'Sorry. Bag’s got a hole.', '♪ *horrible screech* ♪'],
     incoming: ['INCOMING!', 'MISSILE!', 'RUN!', 'Is that... for us?!'],
+    friend: ['You’re alright, {buddy}.', 'Got your back, {buddy}.', '{buddy}! Saved you a ration bar.', 'Me and {buddy}. Best fireteam.'],
+    grief: ['Not {buddy}... not like this.', '{buddy}! NO!', 'Who’s going to steal my socks now, {buddy}?', 'I’ll tell your mum, {buddy}.'],
+    revenge: ['That’s for {buddy}!', 'THIS ONE’S FOR {buddy}!', 'You got {buddy}. Your turn.', 'Remember {buddy}?!'],
+    avenged: ['Rest easy, {buddy}. Got him.', 'It’s done, {buddy}.', 'Avenged. Doesn’t feel better.'],
+    rivalry: ['Oh great. {buddy} again.', 'Stop humming, {buddy}.', 'Nobody asked you, {buddy}.', '{buddy} chews like a cow.'],
+    brawl: ['Say that again!', 'Your mum’s a tank!', 'Put ’em up!', 'You started it!', 'Not the face!'],
+    cheerfight: ['Fight! Fight! Fight!', 'Fiver on the short one!', 'Ooh, right in the helmet!', 'Someone get the sarge!'],
+    makeup: ['...Want a beer?', 'Fine. You’re alright.', 'Friends?', 'Good punch, actually.'],
+    party: ['WE DID IT!', 'Drinks are on the general!', 'Woooo!', 'Put some music on!'],
+    drunk: ['Hic!', 'I love you guys.', 'Who moved the base?', 'I can see three of you.', 'I’m fine. FINE.', 'Is the ground supposed to wobble?'],
+    story: ['...and then the goat exploded.', 'My uncle drove a tank once. Into a lake.', 'Back home I was {job}.', 'I miss {home}.', 'Did I tell you about the cheese?', 'When this is over I’m opening a bar.'],
+    tired: ['My feet...', 'Five minutes. Please.', 'I’m too old for this.', 'How far IS it?'],
+    hungry: ['Not the beans again.', 'I could eat a whole jeep.', 'When did we last eat?', 'My stomach’s louder than the artillery.'],
+    mascot: ['Who’s a good boy?!', 'Look! A dog! Can we keep him?', 'He’s one of us now.'],
+    salute: ['Sir!', 'General on deck!', 'Look busy, it’s the boss!'],
+    weather: ['Rain. Lovely.', 'My boots are full of pond.', 'Who ordered this weather?'],
+    goose: ['THE GOOSE!', 'It’s got Mike! RUN!', 'Nobody look it in the eye!', 'Honk... honk...'],
+    river: ['I’m all wet!', 'Who put a river there?!', 'My radio! My RADIO!'],
+    lost: ['I think we’re lost.', 'The map is upside down. Again.', 'GPS says we’re in the sea.'],
   },
 };
 
-export function line(rng: Random, era: Era, kind: LineKind, vars: { name?: string; buddy?: string } = {}) {
+export function line(rng: Random, era: Era, kind: LineKind, vars: { name?: string; buddy?: string; home?: string; job?: string } = {}) {
   const l = rng.pick(LINES[era][kind]);
-  return l.replace('{name}', vars.name ?? 'mate').replace('{buddy}', vars.buddy ?? 'the lads');
+  return l
+    .replace('{name}', vars.name ?? 'mate')
+    .replace('{buddy}', vars.buddy ?? 'the lads')
+    .replace('{home}', vars.home ?? 'home')
+    .replace('{job}', vars.job ?? 'somebody');
 }

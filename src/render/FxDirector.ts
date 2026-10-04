@@ -135,6 +135,30 @@ export class FxDirector {
       this.floatText(ev.x, ev.y - 26, `LEVEL ${ev.level}`, null, '#f0c84a');
       this.sfx('upgrade_complete', ev.x, ev.y, 0.5);
     });
+    e.on('happening', (ev) => {
+      if (!this.near(ev.x, ev.y, 40)) return;
+      switch (ev.kind) {
+        case 'goose':
+          this.fx.burst(14, { frame: 'fx/dot2', x: ev.x, y: ev.y - 6, z: 4, life: 1.6, g: 30, tint: 0xf8f8f0, drag: 1.5 }, 50, 30);
+          this.floatText(ev.x, ev.y - 24, 'HONK!', null, '#fff8e0');
+          break;
+        case 'river':
+          this.fx.burst(10, { frame: 'fx/drop', x: ev.x, y: ev.y - 4, z: 2, life: 0.7, g: 240, tint: 0xa8d8ff }, 40, 70);
+          this.ring(ev.x, ev.y, 12, 0xa8d8ff, 0.5, 0.7);
+          this.floatText(ev.x, ev.y - 22, ev.text, null, '#a8d8ff');
+          break;
+        case 'treasure':
+          this.fx.burst(12, { frame: 'fx/coin', x: ev.x, y: ev.y - 8, z: 6, life: 1.2, g: 240, ground: 'bounce', spin: 8 }, 50, 90);
+          this.floatText(ev.x, ev.y - 22, ev.text, null, '#ffd860');
+          this.sfx('coins', ev.x, ev.y, 0.6);
+          break;
+        case 'sighting':
+          this.floatText(ev.x, ev.y, '?!', null, '#c8e8ff');
+          break;
+        default:
+          break;
+      }
+    });
     e.on('superLaunch', (ev) => this.onSuperLaunch(ev));
     e.on('superWarning', (ev) => {
       if (this.near(ev.x, ev.y, 200)) this.floatText(ev.x, ev.y - 30, 'INCOMING!', null, '#ff6a5a');
@@ -539,9 +563,61 @@ export class FxDirector {
     if (ev.kills > 0) this.floatText(ev.x, ev.y - 50, `${ev.kills} DOWN`, null, '#ff9a6a');
   }
 
+  private fireImgs = new Map<number, Phaser.GameObjects.Image>();
+  private dogImgs = new Map<number, Phaser.GameObjects.Image & { sy?: number }>();
+
   /** flying strikes, their warning markers, and everything that is on fire */
   private updateStrikes(dt: number) {
     const w = this.world;
+    // campfires: a ring of stones and logs, flames and drifting smoke
+    const fireLive = new Set<number>();
+    for (const c of w.social.campfires) {
+      if (!this.near(c.x, c.y, 20)) continue;
+      fireLive.add(c.id);
+      let img = this.fireImgs.get(c.id);
+      if (!img) {
+        const f = art.tryGet('prop/campfire/0');
+        if (!f) continue;
+        img = this.scene.make.image({ x: c.x, y: c.y, key: f.key, frame: f.frame }, false).setOrigin(f.ox, f.oy);
+        this.groundLayer.add(img);
+        this.fireImgs.set(c.id, img);
+      }
+      if (Math.random() < dt * 9) this.fx.emit({ frame: 'fx/fire0', frames: ['fx/fire0', 'fx/fire1', 'fx/fire2', 'fx/fire3'], fps: 10, x: c.x + (Math.random() - 0.5) * 3, y: c.y - 2, vy: -6, life: 0.5, s0: 0.8, s1: 0.4, add: true });
+      if (Math.random() < dt * 2) this.fx.emit({ frame: 'fx/puff2', x: c.x, y: c.y - 8, vx: 4, life: 1.6, tint: 0x8a8088, alpha: 0.4, s0: 0.5, s1: 1.4, g: -10 });
+    }
+    for (const [id, img] of this.fireImgs) {
+      if (fireLive.has(id)) continue;
+      img.destroy();
+      this.fireImgs.delete(id);
+    }
+    // squad mascots trot at their person's heel
+    const dogLive = new Set<number>();
+    for (const m of w.happenings.mascots) {
+      const o = w.unitById.get(m.ownerId);
+      if (!o || !this.near(o.x, o.y, 20) || this.cam.zoom < 0.95) continue;
+      dogLive.add(m.id);
+      let img = this.dogImgs.get(m.id);
+      const moving = Math.hypot(o.vx, o.vy) > 4;
+      const f = art.tryGet(`amb/dog/${moving ? Math.floor(w.time * 8) % 2 : 2}`);
+      if (!f) continue;
+      if (!img) {
+        img = this.scene.make.image({ x: o.x, y: o.y, key: f.key, frame: f.frame }, false) as Phaser.GameObjects.Image & { sy?: number };
+        this.layer.add(img);
+        this.dogImgs.set(m.id, img);
+      }
+      img.setTexture(f.key, f.frame).setOrigin(f.ox, f.oy);
+      const tx = o.x - o.facing * 9;
+      const ty = o.y + 3;
+      img.x += (tx - img.x) * Math.min(1, dt * 6);
+      img.y += (ty - img.y) * Math.min(1, dt * 6);
+      img.setFlipX(o.facing < 0);
+      img.setDepth(img.y);
+    }
+    for (const [id, img] of this.dogImgs) {
+      if (dogLive.has(id)) continue;
+      img.destroy();
+      this.dogImgs.delete(id);
+    }
     const live = new Set<number>();
     for (const s of w.superweapons.strikes) {
       live.add(s.id);

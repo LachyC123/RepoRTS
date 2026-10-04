@@ -101,7 +101,10 @@ export class AIController {
   /** personality as the current leader runs it */
   get pers(): Personality {
     const l = this.f.leader;
-    return l ? applyDoctrine(this.basePers, DOCTRINES[l.doctrine], l.mood) : this.basePers;
+    if (!l) return this.basePers;
+    const p = applyDoctrine(this.basePers, DOCTRINES[l.doctrine], l.mood);
+    p.attackRatio *= this.w.leaders.quirkVal(this.id, 'attackRatio');
+    return p;
   }
 
   /** the doctrine of whoever leads this realm now */
@@ -162,7 +165,7 @@ export class AIController {
       return;
     }
     if (this.thinkT <= 0) {
-      this.thinkT = this.diff.thinkInterval * (0.85 + this.w.rng.next() * 0.3);
+      this.thinkT = this.diff.thinkInterval * (0.85 + this.w.rng.next() * 0.3) * (this.w.leaders.has(this.id, 'sleepy') ? 1.35 : 1);
       // low efficiency AIs sometimes dither
       if (this.w.rng.next() > this.diff.efficiency + 0.15) return;
       aiEconomy(this);
@@ -245,6 +248,8 @@ export class AIController {
     for (const t of targets) {
       const s = w.settlements[t.id];
       if (this.autopilot && (this.policy === 'defend' || (this.policy === 'expand' && !t.neutral))) continue;
+      // a bad omen: no new wars of conquest today
+      if (!t.neutral && (this.f.leader?.omenUntil ?? 0) > w.time) continue;
       if (this.squads.some((q) => q.target === t.id && q.kind !== 'defend')) continue;
       if (t.neutral) {
         if (offense().filter((q) => q.kind === 'capture').length >= maxCaptures) continue;
@@ -729,7 +734,7 @@ export class AIController {
         const strongest = wars.filter((k) => !mainTargets.has(k as FactionId)).sort((a, b) => this.intel.power[b] - this.intel.power[a])[0];
         if (strongest === undefined) return;
         const other = w.factions[strongest];
-        const peace = this.doctrine?.peace ?? 1;
+        const peace = (this.doctrine?.peace ?? 1) * w.leaders.quirkVal(this.id, 'peace');
         if (this.humanRun(strongest)) {
           if (this.w.rng.next() < 0.3 * peace) w.diplomacy.offerCeasefire(this.id, wars.find((k) => k !== strongest) as FactionId, 180);
         } else {

@@ -207,3 +207,113 @@ export function applyDoctrine(base: Personality, d: Doctrine, mood: number): Per
     mix,
   };
 }
+
+/**
+ * Personal quirks: every leader has two, on top of their doctrine. Some only change what they say;
+ * most nudge a decision or two.
+ */
+export type QuirkId = 'superstitious' | 'horsefear' | 'musiclover' | 'gambler' | 'vain' | 'foodie' | 'insomniac' | 'softie' | 'collector' | 'sleepy';
+
+export interface Quirk {
+  label: string;
+  desc: string;
+  units?: Record<string, number>;
+  builds?: Record<string, number>;
+  research?: number;
+  attackRatio?: number;
+  peace?: number;
+  /** extra idle musings (medieval / modern) */
+  muse: [string[], string[]];
+}
+
+export const QUIRKS: Record<QuirkId, Quirk> = {
+  superstitious: {
+    label: 'Superstitious',
+    desc: 'Reads omens in everything. Calls off attacks after bad signs.',
+    muse: [
+      ['A crow looked at me funny. No attacks today.', 'Never fight on a day with a “y” in it.', 'My lucky socks are missing. Hold the line.', 'The soup bubbled ominously.'],
+      ['My horoscope says “avoid tanks”.', 'Never attack on a Tuesday. Or a Thursday.', 'My lucky pen is gone. Nobody move.', 'The radio crackled in a spooky way.'],
+    ],
+  },
+  horsefear: {
+    label: 'Afraid of horses',
+    desc: 'Will not field cavalry if it can possibly help it.',
+    units: { light_cavalry: 0.15, knight: 0.15, scout: 0.6 },
+    muse: [
+      ['Horses are just big liars.', 'Get that horse away from me.', 'Walk. Walking is honest.'],
+      ['Vehicles? Too loud. Walk.', 'I don’t trust anything with an engine.', 'Last time I rode in a jeep it ate my hat.'],
+    ],
+  },
+  musiclover: {
+    label: 'Music lover',
+    desc: 'Every army needs a soundtrack. Lots of bards.',
+    units: { bard: 3 },
+    muse: [
+      ['Louder, bards!', 'Every army needs a soundtrack.', 'I’ve written a ballad about myself. Nine verses.'],
+      ['Louder, pipers!', 'Every army needs a soundtrack.', 'More bagpipes. That’s an order.'],
+    ],
+  },
+  gambler: {
+    label: 'Gambler',
+    desc: 'Attacks at long odds. Sometimes it works.',
+    attackRatio: 0.82,
+    muse: [
+      ['Double or nothing!', 'I bet our whole army on red.', 'Luck is just skill that hasn’t happened yet.'],
+      ['Double or nothing!', 'I bet the tanks on red.', 'Feeling lucky. Attack something.'],
+    ],
+  },
+  vain: {
+    label: 'Vain',
+    desc: 'Pours money into the capital. Wants to be painted.',
+    builds: { market: 1.2 },
+    muse: [
+      ['Is my good side facing the enemy?', 'Paint me on the barracks. Bigger.', 'Commission a statue. Of me. Riding a bigger statue.'],
+      ['Is the camera getting my good side?', 'Put my face on the money.', 'I want a parade. Today.'],
+    ],
+  },
+  foodie: {
+    label: 'Foodie',
+    desc: 'An army marches on its stomach. Builds farms first.',
+    builds: { farm: 1.6 },
+    muse: [
+      ['Where is my soup?', 'An army marches on its stomach. Mine marches on pie.', 'Bring me the good cheese.'],
+      ['Where is my soup?', 'An army marches on its stomach. Mine marches on cake.', 'Who ate my sandwich?'],
+    ],
+  },
+  insomniac: {
+    label: 'Insomniac',
+    desc: 'Has not slept in days. Sends odd orders at strange hours.',
+    muse: [
+      ['I haven’t slept in three days. I feel GREAT.', 'Is it morning? Doesn’t matter. ATTACK.', 'I counted every sheep in the kingdom. Twice.'],
+      ['Fourth coffee. Feeling unstoppable.', 'Sleep is for the defeated.', 'Why is everyone yawning? Attack!'],
+    ],
+  },
+  softie: {
+    label: 'Secret softie',
+    desc: 'Hates war, quietly. Takes any truce offered.',
+    peace: 1.6,
+    units: { medic: 1.6 },
+    muse: [
+      ['I hate this. Anyway, attack.', 'Did everyone eat? Good.', 'I cried at the bard’s song. Don’t tell anyone.'],
+      ['I hate this. Anyway, attack.', 'Did the medics get their sandwiches?', 'Don’t tell anyone, but I miss my mum.'],
+    ],
+  },
+  collector: {
+    label: 'Collector',
+    desc: 'Wants every upgrade there is.',
+    research: 1.5,
+    muse: [
+      ['I want every upgrade. All of them.', 'The blacksmith says it’s done. It’s never done.', 'Shinier. Make it shinier.'],
+      ['I want every upgrade. All of them.', 'Is there a newer model? Buy it.', 'Our rifles are SO last year.'],
+    ],
+  },
+  sleepy: {
+    label: 'Sleepy',
+    desc: 'Thinks slowly. Very slowly.',
+    muse: [
+      ['Wake me if they get closer.', 'Zzz... what? I was planning.', 'Five more minutes, then war.'],
+      ['Wake me if they get closer.', 'Zzz... what? I was strategising.', 'Let’s circle back on the war after my nap.'],
+    ],
+  },
+};
+export const QUIRK_IDS = Object.keys(QUIRKS) as QuirkId[];

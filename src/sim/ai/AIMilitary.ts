@@ -70,6 +70,7 @@ export function aiMilitary(ai: AIController) {
     if (d.incendiary) wgt *= 1 + (seen.melee / seenTotal) * 1.5 * cp;
     // whoever is in command has favourites
     if (doc) wgt *= doc.units[d.id] ?? 1;
+    wgt *= w.leaders.quirkMul(me, 'units', d.id);
     // a desperate leader conscripts whoever is cheapest
     if (d.id === 'militia' && (ai.f.leader?.mood ?? 0) < -0.7 && attacked) wgt *= 3;
     return wgt;

@@ -1178,3 +1178,20 @@
 .sheet.leaders .jlist {
   max-height: 34vh;
 }
+.sel-bio {
+  font-size: 0.72em;
+  color: #c8bca0;
+  line-height: 1.25;
+  margin-top: 3px;
+}
+.sel-bio .bad {
+  color: #ff9a7a;
+}
+.sel-mem {
+  font-size: 0.68em;
+  color: #9a8c78;
+  line-height: 1.2;
+  margin-top: 2px;
+  max-height: 2.6em;
+  overflow: hidden;
+}

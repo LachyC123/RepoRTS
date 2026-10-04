@@ -21,6 +21,8 @@ export interface Fallen {
   t: number;
 }
 
+type Vars = { name?: string; buddy?: string; home?: string; job?: string };
+
 const BLEED = 30; // seconds a downed soldier lasts without help
 const RESCUE_R = 9 * TILE;
 
@@ -59,8 +61,13 @@ export class LivingSystem {
   }
 
   /** a soldier says a line now (orders acknowledged, squads setting off) */
-  speak(u: Unit, kind: LineKind) {
-    this.say(u, kind, {}, true);
+  speak(u: Unit, kind: LineKind, vars: Vars = {}, force = true) {
+    this.say(u, kind, { home: u.persona?.home, job: u.persona?.job, ...vars }, force);
+  }
+
+  /** write a line in the war journal (and the soldier's own memories) */
+  note(u: Unit, kind: JournalEntry['kind'], text: string) {
+    this.log(u, kind, text);
   }
 
   /** the player gave direct orders: whatever this soldier was up to, they snap out of it */
@@ -77,7 +84,7 @@ export class LivingSystem {
     }
   }
 
-  private say(u: Unit, kind: LineKind, vars: { name?: string; buddy?: string } = {}, force = false) {
+  private say(u: Unit, kind: LineKind, vars: Vars = {}, force = false) {
     const p = u.persona;
     if (!p) return;
     if (!force && p.sayT > 0) return;
@@ -89,6 +96,12 @@ export class LivingSystem {
   private log(u: Unit, kind: JournalEntry['kind'], text: string) {
     const e: JournalEntry = { t: this.w.time, faction: u.faction, text, x: u.x, y: u.y, kind };
     this.journal.push(e);
+    // every soldier keeps a few of their own stories
+    const p = u.persona;
+    if (p) {
+      p.memories.push(`${Math.floor(this.w.time / 60)}:${String(Math.floor(this.w.time % 60)).padStart(2, '0')} ${text}`);
+      if (p.memories.length > 6) p.memories.shift();
+    }
     if (this.journal.length > 300) this.journal.splice(0, this.journal.length - 300);
     this.w.events.emit('journal', e);
   }
@@ -106,6 +119,7 @@ export class LivingSystem {
 
   /** called as a soldier falls: wounded (can be saved) or killed outright */
   onFall(u: Unit, killer: Unit | null, dmg: number) {
+    u.killerId = killer?.id ?? 0;
     const w = this.w;
     if (killer?.persona && this.eligible(killer)) this.creditKill(killer, u);
     if (!w.setup.living || !u.persona) return;
@@ -132,6 +146,7 @@ export class LivingSystem {
   private die(u: Unit, how = 'was killed') {
     const p = u.persona;
     if (!p) return;
+    this.w.social.onDeath(u, this.w.unitById.get(u.killerId) ?? null);
     const list = this.fallen.get(u.faction) ?? [];
     list.push({ name: this.name(u, true), trait: TRAITS[p.trait].label, kills: p.kills, rescues: p.rescues, t: this.w.time });
     this.fallen.set(u.faction, list);
@@ -143,6 +158,7 @@ export class LivingSystem {
 
   private creditKill(killer: Unit, victim: Unit) {
     const p = killer.persona!;
+    this.w.social.onKill(killer, victim);
     p.kills++;
     const w = this.w;
     if (w.rng.next() < 0.3) this.say(killer, 'kill', { buddy: victim.persona ? victim.persona.last : undefined });
@@ -255,6 +271,8 @@ export class LivingSystem {
     const rng = w.rng;
     const p = u.persona!;
     if (p.quirkT > 0) p.quirkT -= step;
+    // parties, brawls, campfires and hangovers are the social system's business
+    if (p.state === 'party' || p.state === 'drunk' || p.state === 'brawl' || p.state === 'camp') return;
     // states run out
     if (p.state !== 'normal' && p.state !== 'rescue') {
       p.stateT -= step;
@@ -503,6 +521,7 @@ export class LivingSystem {
     const f = w.factions[c.faction];
     f.pop += c.def.pop;
     f.stats.unitsLost = Math.max(0, f.stats.unitsLost - 1);
+    if (by) this.w.social.onRescue(by, u);
     if (by?.persona) {
       by.persona.rescues++;
       by.persona.state = 'normal';

@@ -767,6 +767,7 @@ export class SettlementSystem {
   transfer(s: Settlement, to: FactionId) {
     const w = this.w;
     const from = s.owner;
+    if (to !== NEUTRAL && from !== to) w.social.onCapture(to, s.px, s.py);
     s.owner = to;
     s.capProgress = 0;
     s.capFaction = -1;

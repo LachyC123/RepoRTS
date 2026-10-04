@@ -27,6 +27,8 @@ import { CombatSystem } from '../units/Combat';
 import { LivingSystem } from '../units/Living';
 import { LeaderSystem } from '../ai/Leaders';
 import { SupportSystem } from '../units/Support';
+import { SocialSystem } from '../units/Social';
+import { Happenings } from '../events/Happenings';
 import { SuperweaponSystem } from '../Superweapon';
 import { MoraleSystem } from '../units/Morale';
 import { Movement } from '../units/Movement';
@@ -63,6 +65,8 @@ const BASE_CLASSES: Record<string, { prototype: object }> = {
   LivingSystem,
   LeaderSystem,
   SupportSystem,
+  SocialSystem,
+  Happenings,
   SuperweaponSystem,
   MoraleSystem,
   Unit,

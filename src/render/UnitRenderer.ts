@@ -75,7 +75,7 @@ export class UnitRenderer {
     }
     const ps = u.persona?.state;
     // napping on duty: slumped down where they stood
-    if (ps === 'nap') return FR.dieA[1];
+    if (ps === 'nap' || ps === 'camp') return FR.dieA[1];
     const spd = Math.hypot(u.vx, u.vy);
     if (ps === 'berserk' && spd > 3) return FR.run[Math.floor(t * 12 + u.id) & 3];
     if (spd > 6) {
@@ -157,7 +157,9 @@ export class UnitRenderer {
       }
       s.lastFrame = name;
     }
-    s.setPosition(Math.round(x), Math.round(y));
+    // the drunk sway as they walk
+    const sway = u.persona?.state === 'drunk' ? Math.sin(this.world.time * 3 + u.id) * 1.6 : 0;
+    s.setPosition(Math.round(x + sway), Math.round(y));
     s.sy = y;
     s.setFlipX(u.facing < 0);
     if (u.hitFlash > 0.06) s.setTintFill(0xffffff);

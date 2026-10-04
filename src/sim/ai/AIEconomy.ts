@@ -111,7 +111,7 @@ export function aiEconomy(ai: AIController) {
       if (s.tier < def.tier) continue;
       if (s.region.tier === 0 && !s.isCapital && def.category !== 'economy' && type !== 'watchtower') continue;
       if (s.tier === 1 && !s.isCapital && type !== 'watchtower' && def.category !== 'economy') continue;
-      let base = typeScore(type, s.id) * (ai.doctrine?.builds[type] ?? 1);
+      let base = typeScore(type, s.id) * (ai.doctrine?.builds[type] ?? 1) * w.leaders.quirkMul(me, 'builds', type);
       if (base <= 0) continue;
       // military/civic buildings prefer safe interior settlements; economy where the resources are
       if (def.category === 'military' && frontier.has(s.id) && !s.isCapital) base *= 0.6;
@@ -172,7 +172,7 @@ export function aiEconomy(ai: AIController) {
       if (id === 'fletching' && ai.myUnits().filter((u) => u.isRanged).length < 4) sc -= 1.5;
       if (id === 'barding' && ai.myUnits().filter((u) => u.def.tags.includes('cavalry')).length < 4) sc -= 2;
       if (up.at === 'chapel') sc += pers.fortify - 0.5;
-      sc *= ai.doctrine?.research ?? 1;
+      sc *= (ai.doctrine?.research ?? 1) * w.leaders.quirkVal(me, 'research');
       if (sc > 0) cands.push({ kind: 'research', bid: b.id, id, score: sc, cost: up.cost });
     }
   }
