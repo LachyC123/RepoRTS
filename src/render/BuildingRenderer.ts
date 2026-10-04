@@ -123,8 +123,10 @@ export class BuildingRenderer {
     const tier = s.tier;
     const landmark = b.def.id === 'landmark' ? s.region.landmark : null;
     const deposit = b.def.id === 'mine' || landmark === 'mine' ? b.depositKind ?? (s.region.features.includes('gold') ? 'gold' : 'stone') : null;
-    const key = `bld:${b.def.id}:${b.size}:${cid}:${st}:${variant}:${tier}:${landmark ?? ''}:${deposit ?? ''}`;
-    return this.tex(key, () => (isModern() ? drawModernBuilding : drawBuilding)(b.def.id, b.size, team, st, { tier, variant, landmark, deposit }));
+    // a loaded superweapon shows its shot (open hatch / lit fuse)
+    const ready = b.def.id === 'silo' && w.superweapons.ready(b);
+    const key = `bld:${b.def.id}:${b.size}:${cid}:${st}:${variant}:${tier}:${landmark ?? ''}:${deposit ?? ''}:${ready ? 1 : 0}`;
+    return this.tex(key, () => (isModern() ? drawModernBuilding : drawBuilding)(b.def.id, b.size, team, st, { tier, variant, landmark, deposit, ready }));
   }
 
   private flagKey(team: KingdomColor, frame: number) {

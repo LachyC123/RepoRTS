@@ -35,6 +35,13 @@ export class Building {
   destroyed = false;
   destroyedT = 0;
   lastHitT = -99;
+  /** on fire: seconds left, and who lit it */
+  burnT = 0;
+  burnBy: FactionId | -1 = -1;
+  /** efficiency level 1..3 (production, training speed, tower damage) */
+  level = 1;
+  /** upgrading to the next level: seconds left */
+  levelUpT = 0;
   lastAttacker: FactionId | -1 = -1;
   seenBy = 0;
   /** staffing fraction 0..1 set by worker system */

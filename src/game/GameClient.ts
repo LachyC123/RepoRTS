@@ -472,6 +472,15 @@ export class GameClient {
         this.ui.emit('openBuild', { region, plot });
       },
       groundTarget: (mode, x, y) => {
+        if (mode === 'strike' && this.selection.building) {
+          const r = this.world.superweapons.launch(this.pf(), this.selection.building, x, y);
+          if (!r.ok) {
+            this.toast(r.reason ?? 'Cannot fire', true);
+            return true;
+          }
+          scene.addMarker(x, y, 'attack');
+          return true;
+        }
         if (mode === 'rally' && this.selection.building) {
           const b = this.world.buildingById.get(this.selection.building);
           if (b && b.faction === this.playerFaction) {
@@ -500,7 +509,25 @@ export class GameClient {
     };
   }
 
-  setMode(mode: 'default' | 'move' | 'attack' | 'select' | 'rally') {
+  /** improve the selected building to its next level */
+  cmdLevelUp(buildingId: number) {
+    const r = this.world.settlementSys.levelUp(this.pf(), buildingId);
+    if (!r.ok) return this.toast(r.reason ?? 'Cannot improve', true);
+    audio.play('build_place');
+    this.toast('Improving…');
+  }
+
+  /** fire the selected silo at the best target the generals can find */
+  cmdAutoStrike(buildingId: number) {
+    const sw = this.world.superweapons;
+    const t = sw.bestTarget(this.pf());
+    if (!t) return this.toast('No enemy worth it in sight (you must be at war)', true);
+    const r = sw.launch(this.pf(), buildingId, t.x, t.y);
+    if (!r.ok) return this.toast(r.reason ?? 'Cannot fire', true);
+    this.scene?.camCtl.flyTo(t.x, t.y, undefined, 1.2);
+  }
+
+  setMode(mode: 'default' | 'move' | 'attack' | 'select' | 'rally' | 'strike') {
     if (this.scene) this.scene.input2.mode = mode;
     this.ui.emit('mode', { mode });
   }

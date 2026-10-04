@@ -31,6 +31,10 @@ import { computeSlots, type FormationKind } from './units/Formation';
 import { Movement } from './units/Movement';
 import { Unit } from './units/Unit';
 import { LivingSystem } from './units/Living';
+import { SupportSystem } from './units/Support';
+import { SuperweaponSystem } from './Superweapon';
+import { LeaderSystem } from './ai/Leaders';
+import type { DoctrineId } from '../data/doctrines';
 
 export interface MatchSetup {
   seed: number;
@@ -49,6 +53,10 @@ export interface MatchSetup {
   autoArmies?: boolean;
   /** no domination or elimination victory: play as long as you like */
   sandbox?: boolean;
+  /** the player's own realm is run by its leader (build, train, fight, diplomacy) */
+  realmAuto?: boolean;
+  /** the player's founding leader's doctrine */
+  doctrine?: DoctrineId | 'random';
 }
 
 export const START_RES: Resources = { gold: 300, wood: 250, food: 220, stone: 100 };
@@ -78,6 +86,12 @@ export class World {
   readonly victory: VictorySystem;
   /** named soldiers, wounds and rescues, quirks (null when living soldiers are off) */
   readonly living: LivingSystem | null;
+  /** who runs each realm, their moods and their running commentary */
+  readonly leaders: LeaderSystem;
+  /** medics, musicians and fires */
+  readonly support: SupportSystem;
+  /** missile silos / great bombards and their strikes */
+  readonly superweapons: SuperweaponSystem;
   readonly buildingHash: SpatialHash<Building>;
   readonly graph: RegionGraph;
   private buildingHashCount = -1;
@@ -129,6 +143,9 @@ export class World {
     this.diplomacy = new Diplomacy(this);
     this.victory = new VictorySystem(this);
     this.living = setup.living ? new LivingSystem(this) : null;
+    this.leaders = new LeaderSystem(this);
+    this.support = new SupportSystem(this);
+    this.superweapons = new SuperweaponSystem(this);
     const startRes = setup.startRes ?? START_RES;
     for (const fs of setup.factions) this.factions[fs.id] = new Faction(fs, startRes);
     // neutral faction (bandits, rebels, garrisons)
@@ -167,6 +184,7 @@ export class World {
   /** initial placement: starting armies, commanders, neutral garrisons */
   initMatch() {
     this.settlementSys.init();
+    this.leaders.init();
     for (const f of this.factions) {
       if (!f || f.id === NEUTRAL) continue;
       const r = this.capitalRegion(f.id);
@@ -454,6 +472,9 @@ export class World {
     this.events2?.update(dt);
     this.victory.update(dt);
     this.living?.update(dt);
+    this.leaders.update(dt);
+    this.support.update(dt);
+    this.superweapons.update(dt);
     for (const u of this.units) {
       u.animT += dt;
       if (u.hitFlash > 0) u.hitFlash -= dt;

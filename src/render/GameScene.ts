@@ -275,6 +275,36 @@ export class GameScene extends Phaser.Scene {
       g.lineStyle(lw, own ? 0xf8f0a0 : 0xff8070, 0.95);
       g.strokeEllipse(x, y, rx * 2, rx);
     }
+    // building levels: gold pips; an improvement in progress shows a bar
+    if (zoom >= 1) {
+      const v = this.camCtl.view(20);
+      for (const b of world.buildings) {
+        if (b.destroyed || (b.level <= 1 && b.levelUpT <= 0)) continue;
+        if (b.x < v.x0 || b.x > v.x1 || b.y < v.y0 || b.y > v.y1) continue;
+        if (pf >= 0 && b.faction !== pf && !world.vis.isExplored(pf, b.x, b.y)) continue;
+        const bx = (b.tx + b.size) * TILE - 4;
+        const by = (b.ty + b.size) * TILE - 3;
+        const ps = 2.2;
+        for (let k = 0; k < b.level - 1; k++) {
+          const px = bx - k * (ps + 1.2);
+          bars.fillStyle(0x1b1420, 0.9);
+          bars.fillTriangle(px - ps - 0.8, by + 0.8, px + ps + 0.8, by + 0.8, px, by - ps - 1.2);
+          bars.fillStyle(0xf0c84a, 1);
+          bars.fillTriangle(px - ps, by, px + ps, by, px, by - ps);
+        }
+        if (b.levelUpT > 0) {
+          const total = b.level === 1 ? 25 : 40;
+          const f = 1 - b.levelUpT / total;
+          const w = b.size * TILE * 0.6;
+          const x0 = b.x - w / 2;
+          const y0 = (b.ty + b.size) * TILE + 2;
+          bars.fillStyle(0x1b1420, 0.85);
+          bars.fillRect(x0 - lw, y0 - lw, w + lw * 2, 2.4 + lw * 2);
+          bars.fillStyle(0xf0c84a, 1);
+          bars.fillRect(x0, y0, w * f, 2.4);
+        }
+      }
+    }
     // debug: show unit paths
     if (settings.data.debug) {
       g.lineStyle(lw, 0x80e0ff, 0.6);

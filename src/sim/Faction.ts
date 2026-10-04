@@ -1,3 +1,4 @@
+import type { Leader } from './ai/Leaders';
 import { emptyRes, type FactionId, type Resources } from '../data/constants';
 import { KINGDOM_COLORS, NEUTRAL_COLOR, PERSONALITIES, type FactionSetup, type KingdomColor, type Personality } from '../data/factions';
 
@@ -59,6 +60,8 @@ export class Faction {
   regionsOwned = 0;
   territoryShare = 0;
   eliminatedAt = -1;
+  /** whoever is in command right now */
+  leader: Leader | null = null;
 
   constructor(setup: FactionSetup, startRes: Resources) {
     this.id = setup.id;

@@ -6,6 +6,7 @@ import { CROWNSHIRE } from '../../data/map_crownshire';
 import { CAPITAL_TIERS, CAPITAL_UPGRADE, REGION_YIELD, TIERS } from '../../data/settlements';
 import { MERCENARY_UNITS, TRAINABLE_UNITS, UNITS } from '../../data/units';
 import { UPGRADES } from '../../data/upgrades';
+import { DOCTRINES } from '../../data/doctrines';
 import { AIController } from '../ai/AIController';
 import { AIManager } from '../ai/AIManager';
 import { Intel } from '../ai/Intel';
@@ -24,6 +25,9 @@ import { CaptureSystem } from '../territory/Capture';
 import { Settlement } from '../territory/Settlement';
 import { CombatSystem } from '../units/Combat';
 import { LivingSystem } from '../units/Living';
+import { LeaderSystem } from '../ai/Leaders';
+import { SupportSystem } from '../units/Support';
+import { SuperweaponSystem } from '../Superweapon';
 import { MoraleSystem } from '../units/Morale';
 import { Movement } from '../units/Movement';
 import { Unit } from '../units/Unit';
@@ -57,6 +61,9 @@ const BASE_CLASSES: Record<string, { prototype: object }> = {
   WallSystem,
   Movement,
   LivingSystem,
+  LeaderSystem,
+  SupportSystem,
+  SuperweaponSystem,
   MoraleSystem,
   Unit,
   CombatSystem,
@@ -137,6 +144,7 @@ function staticTable(): Map<string, object> {
     AI_HOUSES,
     CRESTS,
     CROWNSHIRE,
+    DOCTRINES,
     TRAINABLE_UNITS,
     MERCENARY_UNITS,
   };

@@ -98,11 +98,12 @@ export class EconomySystem {
     for (const b of w.buildings) {
       if (!b.active || b.faction === NEUTRAL) continue;
       const o = b.faction;
-      if (b.def.popCap) popCap[o] += b.def.popCap;
+      if (b.def.popCap) popCap[o] += b.def.popCap + (b.level - 1) * 2;
       if (b.def.id === 'market') markets[o]++;
       const p = b.def.produces;
       if (!p) continue;
-      const k = b.staffed * b.efficiency;
+      // upgraded buildings produce more: +35% per level
+      const k = b.staffed * b.efficiency * (1 + (b.level - 1) * 0.35);
       if (b.def.id === 'mine') {
         if (b.depositKind === 'stone') inc[o].stone += 20 * k;
         else inc[o].gold += 26 * k;

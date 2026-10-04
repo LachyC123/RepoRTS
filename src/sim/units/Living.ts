@@ -436,7 +436,7 @@ export class LivingSystem {
       if (d < 9) {
         p.stateT += step;
         u.vx = u.vy = 0;
-        if (p.stateT >= 2.5) this.revive(c, u);
+        if (p.stateT >= (u.def.healer ? 0.8 : 2.5)) this.revive(c, u);
       } else if (u.arrived || !u.path) {
         w.setDestination(u, c.x, c.y, 0);
         u.order = { kind: 'move', x: c.x, y: c.y, attackMove: false };
@@ -457,10 +457,10 @@ export class LivingSystem {
         if (o.def.look.body === 'vehicle' || o.def.look.body === 'engine' || o.def.special === 'commander') return;
         // the player's soldiers under direct orders only help when they've finished the order
         if (!o.auto && !o.arrived) return;
-        const brave = p.trait === 'loyal' || p.trait === 'brave';
+        const brave = p.trait === 'loyal' || p.trait === 'brave' || !!o.def.healer;
         if (danger && !brave) return;
         if (o.targetId && !brave) return;
-        const d = Math.hypot(o.x - c.x, o.y - c.y) * (p.trait === 'loyal' ? 0.5 : 1);
+        const d = Math.hypot(o.x - c.x, o.y - c.y) * (o.def.healer ? 0.3 : p.trait === 'loyal' ? 0.5 : 1);
         if (d < bs) {
           bs = d;
           best = o;

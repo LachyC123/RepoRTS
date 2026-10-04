@@ -25,6 +25,9 @@ export interface Projectile {
   armorPen: number;
   splash: number;
   buildingsOnly: boolean;
+  incendiary: boolean;
+  /** salvo shots wait (t < 0) before they leave the barrel */
+  launched: boolean;
 }
 
 export interface FireSpec {
@@ -42,10 +45,16 @@ export interface FireSpec {
   armorPen: number;
   splash: number;
   buildingsOnly?: boolean;
+  /** launch this many seconds late (salvos) */
+  delay?: number;
+  /** scatter the aim point by up to this many px */
+  spread?: number;
+  /** sets what it hits alight */
+  incendiary?: boolean;
 }
 
-const SPEED: Record<ProjectileKind, number> = { arrow: 230, bolt: 330, rock: 130, bigrock: 120, ballista: 300, bullet: 620, rocket: 210, grenade: 150, shell: 150, tankshell: 520 };
-const ARC: Record<ProjectileKind, number> = { arrow: 0.22, bolt: 0.06, rock: 0.4, bigrock: 0.5, ballista: 0.05, bullet: 0.01, rocket: 0.04, grenade: 0.35, shell: 0.55, tankshell: 0.02 };
+const SPEED: Record<ProjectileKind, number> = { arrow: 230, bolt: 330, rock: 130, bigrock: 120, ballista: 300, bullet: 620, rocket: 210, grenade: 150, shell: 150, tankshell: 520, firepot: 140, flame: 260, missile: 200, fireball: 180 };
+const ARC: Record<ProjectileKind, number> = { arrow: 0.22, bolt: 0.06, rock: 0.4, bigrock: 0.5, ballista: 0.05, bullet: 0.01, rocket: 0.04, grenade: 0.35, shell: 0.55, tankshell: 0.02, firepot: 0.4, flame: 0.03, missile: 0.6, fireball: 0.6 };
 
 function isUnit(t: Unit | Building): t is Unit {
   return (t as Unit).def !== undefined && (t as Unit).radius !== undefined;
@@ -333,6 +342,25 @@ export class CombatSystem {
     if (!t) return;
     const def = u.def;
     if (def.projectile) {
+      const n = def.salvo ?? 1;
+      for (let k = 1; k < n; k++)
+        this.fireProjectile({
+          kind: def.projectile,
+          faction: u.faction,
+          shooterId: u.id,
+          x: u.x + u.facing * 4,
+          y: u.y - 10,
+          target: t,
+          attack: (def.attack + u.atkBonus) * u.quirkAtk,
+          attackType: def.attackType,
+          accuracy: (def.accuracy ?? 0.8) * 0.8,
+          bonus: def.bonus,
+          armorPen: def.armorPen ?? 0,
+          splash: def.splash ?? 0,
+          delay: k * 0.11,
+          spread: 26,
+          incendiary: def.incendiary,
+        });
       this.fireProjectile({
         kind: def.projectile,
         faction: u.faction,
@@ -347,6 +375,7 @@ export class CombatSystem {
         armorPen: def.armorPen ?? 0,
         splash: def.splash ?? 0,
         buildingsOnly: def.buildingsOnly,
+        incendiary: def.incendiary,
       });
       return;
     }
@@ -490,6 +519,12 @@ export class CombatSystem {
       if (tu.def.look.engine) acc += 0.15;
     } else acc = 1;
     const willHit = w.rng.next() < acc;
+    if (s.spread) {
+      const a = w.rng.next() * Math.PI * 2;
+      const r = w.rng.next() * s.spread;
+      tx += Math.cos(a) * r;
+      ty += Math.sin(a) * r * 0.7;
+    }
     if (!willHit) {
       const a = w.rng.next() * Math.PI * 2;
       const r = 6 + w.rng.next() * 12;
@@ -506,7 +541,9 @@ export class CombatSystem {
       y0: s.y,
       x1: tx,
       y1: ty,
-      t: 0,
+      t: -(s.delay ?? 0),
+      incendiary: !!s.incendiary,
+      launched: !s.delay,
       dur,
       arc: ARC[s.kind] * dist0,
       targetId: (s.target as { id: number }).id,
@@ -519,7 +556,12 @@ export class CombatSystem {
       buildingsOnly: !!s.buildingsOnly,
     };
     this.projectiles.push(p);
-    w.events.emit('projectileFired', { id: p.id, kind: p.kind, x: p.x0, y: p.y0, tx, ty, faction: p.faction, by: s.shooterId ? w.unitById.get(s.shooterId)?.def.id ?? '' : '' });
+    if (p.launched) this.emitFired(p);
+  }
+
+  private emitFired(p: Projectile) {
+    const w = this.w;
+    w.events.emit('projectileFired', { id: p.id, kind: p.kind, x: p.x0, y: p.y0, tx: p.x1, ty: p.y1, faction: p.faction, by: p.shooterId ? w.unitById.get(p.shooterId)?.def.id ?? '' : '' });
   }
 
   private updateProjectiles(dt: number) {
@@ -527,6 +569,10 @@ export class CombatSystem {
     let k = 0;
     for (const p of this.projectiles) {
       p.t += dt;
+      if (!p.launched && p.t >= 0) {
+        p.launched = true;
+        this.emitFired(p);
+      }
       if (p.t < p.dur) {
         this.projectiles[k++] = p;
         continue;
@@ -553,6 +599,10 @@ export class CombatSystem {
           if (d > r + u.radius) continue;
           const fall = 1 - Math.min(1, d / (r + u.radius)) * 0.6;
           this.damageUnit(u, p.attack * 0.6, p.attackType, p.bonus, p.armorPen, fall, p.faction, p.x1, p.y1, shooter, true);
+          if (p.incendiary && u.alive && u.def.look.body !== 'vehicle') {
+            u.burnT = Math.max(u.burnT, 2.5 + w.rng.next() * 2);
+            u.burnBy = p.faction;
+          }
           hit = true;
         }
       }
@@ -560,6 +610,10 @@ export class CombatSystem {
         if (b.destroyed || !w.isHostile(p.faction, b.faction)) return;
         if (b.edgeDist(p.x1, p.y1) > r * 0.6) return;
         this.damageBuilding(b, p.attack, p.attackType, 1, p.faction);
+        if (p.incendiary && !b.destroyed && w.rng.next() < 0.45) {
+          b.burnT = Math.max(b.burnT, 8 + w.rng.next() * 6);
+          b.burnBy = p.faction;
+        }
         hit = true;
       });
     } else {

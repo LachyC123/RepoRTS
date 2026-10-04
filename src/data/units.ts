@@ -25,7 +25,12 @@ export type ProjectileKind =
   | 'rocket'
   | 'grenade'
   | 'shell'
-  | 'tankshell';
+  | 'tankshell'
+  // added troops and superweapons
+  | 'firepot'
+  | 'flame'
+  | 'missile'
+  | 'fireball';
 
 /** Visual description of a soldier. Consumed by the procedural sprite generator (render/art/unitArt.ts).
  *  Swapping in real art means replacing the generator output; gameplay never reads these. */
@@ -59,12 +64,18 @@ export interface UnitLook {
     | 'pistol'
     | 'grenadier'
     | 'satchel'
-    | 'chainsaw';
+    | 'chainsaw'
+    // support troops (both eras)
+    | 'medkit'
+    | 'firepot'
+    | 'flamethrower'
+    | 'lute'
+    | 'bagpipes';
   shield: 'none' | 'round' | 'kite' | 'tower' | 'buckler' | 'riot';
   mount?: 'horse' | 'warhorse' | 'pony';
-  engine?: 'ram' | 'catapult' | 'ballista' | 'trebuchet' | 'mortar' | 'atgun' | 'howitzer';
+  engine?: 'ram' | 'catapult' | 'ballista' | 'trebuchet' | 'mortar' | 'atgun' | 'howitzer' | 'volleygun';
   /** modern era: body 'vehicle' */
-  vehicle?: 'jeep' | 'tank' | 'technical' | 'command' | 'truck';
+  vehicle?: 'jeep' | 'tank' | 'technical' | 'command' | 'truck' | 'mlrs';
   /** radio / rocket pack on the back (modern) */
   backpack?: boolean;
   cape?: boolean;
@@ -115,6 +126,14 @@ export interface UnitDef {
   deploy?: number;
   /** only attacks buildings */
   buildingsOnly?: boolean;
+  /** shots per attack (volley guns, rocket artillery) */
+  salvo?: number;
+  /** heals nearby friends (hp/s) and patches up the wounded quickly */
+  healer?: number;
+  /** lifts the morale of nearby friends (per second) */
+  inspire?: number;
+  /** sets buildings and soldiers alight */
+  incendiary?: boolean;
   cost: Cost;
   pop: number;
   trainTime: number;
@@ -1024,6 +1043,120 @@ export const UNITS: Record<string, UnitDef> = {
     power: 2.2,
     special: 'neutral',
     look: { body: 'heavy', helmet: 'great', armor: 'plate', weapon: 'spear', shield: 'tower', cloth: '#6a6a7a' },
+  },
+  // ---- support troops and new arms (added in the progression update) ----
+  medic: {
+    id: 'medic',
+    name: 'Friar',
+    plural: 'Friars',
+    desc: 'Patches up the wounded and drags the fallen back to their feet. Fights only with a stern look.',
+    role: 'Healer · Rescues the wounded',
+    tags: ['infantry', 'light'],
+    hp: 55,
+    attack: 3,
+    attackType: 'melee',
+    cooldown: 1.6,
+    windup: 0.3,
+    range: 6,
+    armor: { melee: 0, pierce: 0 },
+    speed: 27,
+    vision: 7,
+    radius: 4,
+    cost: { food: 40, gold: 35 },
+    pop: 1,
+    trainTime: 10,
+    trainedAt: ['chapel'],
+    tier: 2,
+    power: 0.9,
+    healer: 3,
+    look: { body: 'peasant', helmet: 'hood', armor: 'robe', weapon: 'medkit', shield: 'none', cloth: '#8a6a4a' },
+  },
+  bard: {
+    id: 'bard',
+    name: 'Bard',
+    plural: 'Bards',
+    desc: 'Plays rousing songs. Soldiers nearby fight braver and break later. Some of the songs are terrible.',
+    role: 'Morale aura',
+    tags: ['infantry', 'light'],
+    hp: 45,
+    attack: 2,
+    attackType: 'melee',
+    cooldown: 1.6,
+    windup: 0.3,
+    range: 6,
+    armor: { melee: 0, pierce: 0 },
+    speed: 26,
+    vision: 7,
+    radius: 4,
+    cost: { food: 30, gold: 40 },
+    pop: 1,
+    trainTime: 9,
+    trainedAt: ['barracks'],
+    tier: 2,
+    power: 0.8,
+    inspire: 4,
+    look: { body: 'peasant', helmet: 'feather', armor: 'tunic', weapon: 'lute', shield: 'none', cloth: '#a8486a' },
+  },
+  flamer: {
+    id: 'flamer',
+    name: 'Firebrand',
+    plural: 'Firebrands',
+    desc: 'Lobs clay pots of burning pitch. Scatters packed infantry and sets buildings ablaze.',
+    role: 'Anti-infantry · Arson',
+    tags: ['infantry', 'ranged'],
+    hp: 60,
+    attack: 9,
+    attackType: 'siege',
+    cooldown: 2.6,
+    windup: 0.45,
+    range: 4.5 * T,
+    armor: { melee: 1, pierce: 0 },
+    speed: 23,
+    vision: 7,
+    radius: 4,
+    splash: 14,
+    bonus: { infantry: 1.5, building: 1.4 },
+    projectile: 'firepot',
+    accuracy: 0.7,
+    incendiary: true,
+    cost: { food: 35, wood: 30, gold: 45 },
+    pop: 1,
+    trainTime: 12,
+    trainedAt: ['barracks'],
+    tier: 3,
+    power: 2.1,
+    look: { body: 'soldier', helmet: 'cap', armor: 'leather', weapon: 'firepot', shield: 'none' },
+  },
+  volley: {
+    id: 'volley',
+    name: 'Volley Gun',
+    plural: 'Volley Guns',
+    desc: 'A cart of many small barrels that fires them all at once. Terrifying, slow to reload, and not always aimed.',
+    role: 'Area anti-infantry',
+    tags: ['siege'],
+    hp: 140,
+    attack: 9,
+    attackType: 'pierce',
+    cooldown: 7,
+    windup: 0.6,
+    range: 9 * T,
+    minRange: 2 * T,
+    armor: { melee: 0, pierce: 6 },
+    speed: 14,
+    vision: 9,
+    radius: 7,
+    splash: 10,
+    salvo: 6,
+    projectile: 'bolt',
+    accuracy: 0.55,
+    bonus: { infantry: 1.4 },
+    cost: { wood: 140, gold: 140, stone: 30 },
+    pop: 3,
+    trainTime: 22,
+    trainedAt: ['siege_workshop'],
+    tier: 3,
+    power: 3.2,
+    look: { body: 'engine', helmet: 'none', armor: 'tunic', weapon: 'none', shield: 'none', engine: 'volleygun' },
   },
 };
 

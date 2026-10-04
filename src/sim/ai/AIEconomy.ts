@@ -8,7 +8,8 @@ type Cand =
   | { kind: 'build'; sid: number; plot: number; type: string; score: number; cost: Cost }
   | { kind: 'upgrade'; sid: number; score: number; cost: Cost }
   | { kind: 'fortify'; sid: number; score: number; cost: Cost }
-  | { kind: 'research'; bid: number; id: string; score: number; cost: Cost };
+  | { kind: 'research'; bid: number; id: string; score: number; cost: Cost }
+  | { kind: 'level'; bid: number; score: number; cost: Cost };
 
 function costTotal(c: Cost) {
   return (c.gold ?? 0) + (c.wood ?? 0) + (c.food ?? 0) + (c.stone ?? 0);
@@ -81,10 +82,16 @@ export function aiEconomy(ai: AIController) {
         return c === 0 && tmin > 5 ? (atWar ? 8 : 4) + ai.aggression * 2 : 0;
       }
       case 'chapel':
-        return c === 0 && tmin > 6 ? 3 + pers.fortify * 3 : 0;
+        // with living soldiers a hospital saves lives (and trains medics)
+        return c === 0 && tmin > 6 ? 3 + pers.fortify * 3 + (w.living ? 2.5 : 0) : 0;
       case 'market':
         if (c === 0 && s.isCapital && tmin > 2.5) return 7.5 + pers.economy * 2;
         return c < 3 && tmin > 3 ? 3 + pers.economy * 3.5 - c * 1.5 + (c === 0 && (f.res.gold > 500 || f.res.wood > 500 || f.res.food > 500 || f.res.stone > 400) ? 5 : 0) + (inc.gold < 120 ? 1.5 : 0) : 0;
+      case 'silo': {
+        // only some leaders want the big gun, and only once the realm can afford to wait for it
+        const keen = ai.doctrine?.silo ?? 0.8;
+        return c === 0 && tmin > 12 && keen >= 0.6 ? 7 + keen * 2.5 + (f.res.gold > 400 ? 2 : 0) : 0;
+      }
       case 'watchtower':
         return (frontier.has(sid) || s.isCapital) && !mine.some((b) => b.settlementId === sid && b.def.id === 'watchtower') && tmin > 4 ? pers.fortify * 5.5 + (frontier.has(sid) ? 1 : 0) : 0;
       default:
@@ -104,7 +111,7 @@ export function aiEconomy(ai: AIController) {
       if (s.tier < def.tier) continue;
       if (s.region.tier === 0 && !s.isCapital && def.category !== 'economy' && type !== 'watchtower') continue;
       if (s.tier === 1 && !s.isCapital && type !== 'watchtower' && def.category !== 'economy') continue;
-      let base = typeScore(type, s.id);
+      let base = typeScore(type, s.id) * (ai.doctrine?.builds[type] ?? 1);
       if (base <= 0) continue;
       // military/civic buildings prefer safe interior settlements; economy where the resources are
       if (def.category === 'military' && frontier.has(s.id) && !s.isCapital) base *= 0.6;
@@ -165,7 +172,26 @@ export function aiEconomy(ai: AIController) {
       if (id === 'fletching' && ai.myUnits().filter((u) => u.isRanged).length < 4) sc -= 1.5;
       if (id === 'barding' && ai.myUnits().filter((u) => u.def.tags.includes('cavalry')).length < 4) sc -= 2;
       if (up.at === 'chapel') sc += pers.fortify - 0.5;
+      sc *= ai.doctrine?.research ?? 1;
       if (sc > 0) cands.push({ kind: 'research', bid: b.id, id, score: sc, cost: up.cost });
+    }
+  }
+
+  // building efficiency upgrades: busy economy first, then training halls and towers
+  // (spending surplus only, one at a time)
+  if (tmin > 7 && !mine.some((b) => b.levelUpT > 0)) {
+    const tycoon = ai.doctrine?.id === 'tycoon' ? 1.4 : 1;
+    for (const b of mine) {
+      if (!b.active || b.levelUpT > 0 || !sys.levelable(b) || b.level >= 3) continue;
+      const cost = sys.levelCost(b);
+      if (!cost) continue;
+      if (!RES_KEYS.every((k) => (cost[k] ?? 0) * 1.6 <= f.res[k])) continue;
+      if (!sys.canLevelUp(me, b.id).ok) continue;
+      const c = b.def.category;
+      let sc = c === 'economy' ? 2 + pers.economy * 2.5 * b.staffed : c === 'military' ? 1.2 + ai.aggression * 1.2 : b.def.id === 'watchtower' ? pers.fortify * 2.5 : 1.2;
+      if (b.def.id === 'house') sc = f.popCap - f.pop < 8 && f.popCap < 200 ? 3.5 : 0.5;
+      sc *= tycoon * (ai.doctrine?.builds[b.def.id] ?? 1) * (b.level === 2 ? 0.75 : 1);
+      if (sc > 1) cands.push({ kind: 'level', bid: b.id, score: sc, cost });
     }
   }
 
@@ -194,13 +220,15 @@ export function aiEconomy(ai: AIController) {
   let choice = cands[0];
   if (ai.w.rng.next() > ai.diff.efficiency && cands.length > 2) choice = cands[Math.floor(ai.w.rng.next() * 3)];
   const afford = RES_KEYS.every((k) => (choice.cost[k] ?? 0) <= f.res[k]);
-  ai.debug.econ = `${choice.kind}:${'type' in choice ? choice.type : 'id' in choice ? choice.id : w.settlements[(choice as { sid: number }).sid].name} ${choice.score.toFixed(1)}${afford ? '' : ' (saving)'}`;
+  ai.debug.econ = `${choice.kind}:${'type' in choice ? choice.type : 'id' in choice ? choice.id : 'sid' in choice ? w.settlements[choice.sid].name : 'b' + choice.bid} ${choice.score.toFixed(1)}${afford ? '' : ' (saving)'}`;
   if (afford) {
     let ok = false;
     if (choice.kind === 'build') ok = sys.build(me, choice.sid, choice.plot, choice.type).ok;
     else if (choice.kind === 'upgrade') ok = sys.upgrade(me, choice.sid).ok;
     else if (choice.kind === 'fortify') ok = sys.fortifyCmd(me, choice.sid).ok;
+    else if (choice.kind === 'level') ok = sys.levelUp(me, choice.bid).ok;
     else ok = sys.research(me, choice.bid, choice.id).ok;
+    if (ok) narrate(ai, choice);
     if (ok) {
       ai.debug.lastBuild = ai.debug.econ;
       ai.savingFor = null;
@@ -223,7 +251,9 @@ export function aiEconomy(ai: AIController) {
     // save for up to 70s, take a 25s break (so the army isn't starved), then save again
     const cycle = (w.time - ai.saveSince) % 95;
     const patience = cycle < 70;
-    ai.savingFor = choice.score >= 6 && minutes < 2.5 && patience ? JSON.stringify(choice.cost) : null;
+    // the big gun is worth saving up for
+    const bigBuy = choice.kind === 'build' && choice.type === 'silo';
+    ai.savingFor = choice.score >= 6 && minutes < (bigBuy ? 5 : 2.5) && patience ? JSON.stringify(choice.cost) : null;
     ai.savingEcon = !!ai.savingFor && choice.kind === 'build' && (BUILDINGS[choice.type].category === 'economy' || choice.type === 'house');
     if (!ai.savingFor) {
       // buy the best thing we *can* afford instead
@@ -233,9 +263,26 @@ export function aiEconomy(ai: AIController) {
         if (alt.kind === 'build') ok = sys.build(me, alt.sid, alt.plot, alt.type).ok;
         else if (alt.kind === 'upgrade') ok = sys.upgrade(me, alt.sid).ok;
         else if (alt.kind === 'fortify') ok = sys.fortifyCmd(me, alt.sid).ok;
+        else if (alt.kind === 'level') ok = sys.levelUp(me, alt.bid).ok;
         else ok = sys.research(me, alt.bid, alt.id).ok;
+        if (ok) narrate(ai, alt);
         if (ok) ai.debug.lastBuild = `${alt.kind}:${'type' in alt ? alt.type : ''}`;
       }
     }
   }
+}
+
+/** the leader mentions the bigger purchases */
+function narrate(ai: AIController, c: Cand) {
+  const w = ai.w;
+  if (ai.autopilot || w.rng.next() > 0.35) return;
+  if (c.kind === 'build') {
+    const def = BUILDINGS[c.type];
+    if (def.category === 'economy' && w.rng.next() < 0.5 && c.type !== 'market') return;
+    w.leaders.think(ai.id, 'build', { thing: def.name.toLowerCase(), target: w.settlements[c.sid].name });
+  } else if (c.kind === 'research') w.leaders.think(ai.id, 'research', { thing: UPGRADES[c.id].name });
+  else if (c.kind === 'level') {
+    const b = w.buildingById.get(c.bid);
+    if (b) w.leaders.think(ai.id, 'build', { thing: `better ${b.def.name.toLowerCase()}`, target: w.settlements[b.settlementId].name });
+  } else if (c.kind === 'upgrade') w.leaders.think(ai.id, 'build', { thing: 'bigger town', target: w.settlements[c.sid].name });
 }

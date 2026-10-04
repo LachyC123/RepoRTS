@@ -28,6 +28,9 @@ export function coreTypeFor(s: Settlement): string {
  * Settlements, plots and buildings: placement, construction, training, research, settlement upgrades,
  * repairs, tower defence, destruction/rubble and ownership transfer.
  */
+/** building efficiency levels: 1 (as built) to 3 */
+export const MAX_LEVEL = 3;
+
 export class SettlementSystem {
   constructor(private w: World) {}
 
@@ -340,6 +343,59 @@ export class SettlementSystem {
   }
 
   // ------------------------------------------------------------------ settlement upgrades
+  // ------------------------------------------------------------------ building levels
+  /** can this kind of building be improved? */
+  levelable(b: Building) {
+    const c = b.def.category;
+    return (c === 'economy' || c === 'military' || c === 'civic' || b.def.id === 'watchtower' || b.def.id === 'house') && b.def.id !== 'silo' && b.def.id !== 'merc_camp' && !b.def.system;
+  }
+
+  levelCost(b: Building): Cost | null {
+    if (b.level >= MAX_LEVEL || !this.levelable(b)) return null;
+    const base = b.def.cost;
+    const mult = b.level === 1 ? 0.9 : 1.6;
+    const out: Cost = {};
+    for (const k of RES_KEYS) if (base[k]) out[k] = Math.round((base[k]! * mult) / 5) * 5;
+    out.gold = Math.max(out.gold ?? 0, b.level === 1 ? 60 : 140);
+    if (b.level === 2) out.stone = Math.max(out.stone ?? 0, 60);
+    return out;
+  }
+
+  canLevelUp(faction: FactionId, buildingId: number): CheckResult {
+    const b = this.w.buildingById.get(buildingId);
+    if (!b || b.destroyed || b.faction !== faction) return { ok: false, reason: 'Not yours' };
+    if (!this.levelable(b)) return { ok: false, reason: 'This building cannot be improved' };
+    if (b.level >= MAX_LEVEL) return { ok: false, reason: 'Already at the highest level' };
+    if (b.progress < 1) return { ok: false, reason: 'Still under construction' };
+    if (b.levelUpT > 0) return { ok: false, reason: 'Already being improved' };
+    const s = this.w.settlements[b.settlementId];
+    if (b.level === 2 && s.tier < 3 && !s.isCapital) return { ok: false, reason: 'Level 3 needs a town or larger' };
+    const cost = this.levelCost(b)!;
+    if (!this.canAfford(faction, cost)) return { ok: false, reason: 'Not enough resources' };
+    return { ok: true };
+  }
+
+  levelUp(faction: FactionId, buildingId: number): CheckResult {
+    const r = this.canLevelUp(faction, buildingId);
+    if (!r.ok) return r;
+    const b = this.w.buildingById.get(buildingId)!;
+    this.pay(faction, this.levelCost(b)!);
+    b.levelUpT = b.level === 1 ? 25 : 40;
+    this.w.events.emit('buildingLevel', { id: b.id, x: b.x, y: b.y, level: b.level, faction, started: true });
+    return { ok: true };
+  }
+
+  private completeLevel(b: Building) {
+    const w = this.w;
+    b.levelUpT = 0;
+    b.level++;
+    const old = b.maxHp;
+    b.maxHp = Math.round(b.maxHp * 1.2);
+    b.hp += b.maxHp - old;
+    w.events.emit('buildingLevel', { id: b.id, x: b.x, y: b.y, level: b.level, faction: b.faction, started: false });
+    if (b.faction === w.setup.player) w.notify({ kind: 'build', text: `${b.def.name.toUpperCase()} IMPROVED TO LEVEL ${b.level}`, sub: w.settlements[b.settlementId].name, factions: [b.faction], x: b.x, y: b.y, priority: 0, quiet: true });
+  }
+
   upgradeCost(s: Settlement): Cost | null {
     if (!s.canUpgrade) return null;
     if (s.isCapital) return CAPITAL_UPGRADE.cost;
@@ -404,7 +460,8 @@ export class SettlementSystem {
       // training
       if (b.queue.length && b.active) {
         const job = b.queue[0];
-        job.t += dt;
+        // upgraded buildings train faster: +25% per level
+        job.t += dt * (1 + (b.level - 1) * 0.25);
         if (job.t >= job.total) {
           b.queue.shift();
           this.spawnTrained(b, job.type);
@@ -421,6 +478,11 @@ export class SettlementSystem {
           w.events.emit('research', { faction: b.faction, id, x: b.x, y: b.y });
           w.notify({ kind: 'build', text: `${UPGRADES[id].name.toUpperCase()} RESEARCHED`, factions: [b.faction], x: b.x, y: b.y, priority: 1 });
         }
+      }
+      // efficiency upgrade in progress
+      if (b.levelUpT > 0 && b.active) {
+        b.levelUpT -= dt;
+        if (b.levelUpT <= 0) this.completeLevel(b);
       }
       // repairs when left in peace
       if (b.hp < b.maxHp && w.time - b.lastHitT > 12 && b.def.category !== 'landmark') {
@@ -492,7 +554,7 @@ export class SettlementSystem {
         x: b.x + (k - 0.5) * 8,
         y: b.y - b.size * 8,
         target,
-        attack: d.attack,
+        attack: d.attack * (1 + (b.level - 1) * 0.3),
         attackType: 'pierce',
         accuracy: 0.75,
         bonus: undefined,

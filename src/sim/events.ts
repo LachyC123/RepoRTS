@@ -63,6 +63,19 @@ export interface SimEvents {
   journal: { t: number; faction: FactionId; text: string; x: number; y: number; kind: string };
   /** a trigger-happy soldier fires at nothing */
   potshot: { id: number; x: number; y: number; tx: number; ty: number; kind: string };
+  /** a leader thinks out loud (war-room feed) */
+  leaderThought: { t: number; faction: FactionId; who: string; text: string; kind: string; x?: number; y?: number };
+  /** a building starts / finishes an efficiency upgrade */
+  buildingLevel: { id: number; x: number; y: number; level: number; faction: FactionId; started: boolean };
+  /** superweapon */
+  superLaunch: { id: number; faction: FactionId; x: number; y: number; tx: number; ty: number; kind: 'missile' | 'fireball'; flight: number };
+  superWarning: { id: number; x: number; y: number; kind: 'missile' | 'fireball' };
+  superImpact: { id: number; x: number; y: number; kind: 'missile' | 'fireball'; faction: FactionId; kills: number };
+  siloReady: { id: number; x: number; y: number; faction: FactionId };
+  /** a medic patches people up */
+  healPulse: { id: number; x: number; y: number; faction: FactionId };
+  /** a bard or piper plays (sometimes badly) */
+  music: { id: number; x: number; y: number; faction: FactionId; awful: boolean };
   /** a downed soldier is back on their feet */
   unitRevived: { id: number; x: number; y: number; faction: FactionId };
   ceasefireOffer: { from: FactionId; against: FactionId; duration: number; id: number };

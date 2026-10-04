@@ -21,7 +21,11 @@ export function aiMilitary(ai: AIController) {
   // a kingdom under attack, or with an army below its floor, recruits before it saves
   const floor = Math.min(40, 6 + tmin * 1.6);
   const attacked = ai.owned().some((s) => w.time - s.lastAttackedT < 10);
-  const urgent = attacked || (units.length < floor && !ai.savingEcon);
+  // saving for the superweapon: only a threat to the capital itself breaks the piggy bank
+  const bigSave = !!ai.savingFor && ai.saveKey.endsWith('silo');
+  const cap = ai.capital();
+  const capAttacked = !!cap && w.time - cap.lastAttackedT < 10;
+  const urgent = bigSave ? capAttacked || units.length < floor * 0.5 : attacked || (units.length < floor && !ai.savingEcon);
   const affordable = (c: Cost) => RES_KEYS.every((k) => (c[k] ?? 0) + (urgent ? 0 : reserve[k] ?? 0) <= f.res[k]);
   const byClass = { melee: 0, ranged: 0, cavalry: 0, siege: 0 };
   for (const u of units) byClass[unitClass(u.def)]++;
@@ -41,6 +45,9 @@ export function aiMilitary(ai: AIController) {
   const atWar = [0, 1, 2, 3].some((k) => k !== me && w.factions[k]?.alive && w.diplomacy.stance(me, k as never) === 'war');
   const wantSiege = tmin > 6 && atWar && byClass.siege < (ai.aggression > 0.6 ? 4 : 3);
 
+  const doc = ai.doctrine;
+  const healers = units.filter((u) => u.def.healer).length;
+  const singers = units.filter((u) => u.def.inspire).length;
   const weightFor = (d: UnitDef): number => {
     const cls = unitClass(d);
     let wgt = mix[cls] + 0.05;
@@ -55,13 +62,24 @@ export function aiMilitary(ai: AIController) {
     if (cls === 'siege') wgt = wantSiege ? 3 : 0;
     // prefer stronger units when the economy allows
     wgt *= 1 + d.tier * 0.25;
-    if (d.id === 'militia') wgt *= tmin < 3 ? 2.5 : threatened ? 1 : 0.15;
+    if (d.id === 'militia') wgt *= tmin < 3 ? 2.5 : threatened ? 0.45 : 0.12;
     if (d.id === 'scout') wgt = scouts < (ai.aggression > 0.7 ? 2 : 1) && tmin > 0.3 ? 4 : 0;
+    // support troops: a medic per ~8 soldiers (more useful when the wounded can be saved), a musician per ~12
+    if (d.healer) wgt = total > 6 && healers < total / (w.living ? 9 : 14) ? 0.6 : 0.02;
+    if (d.inspire) wgt = total > 10 && singers < total / 16 ? 0.2 : 0.01;
+    if (d.incendiary) wgt *= 1 + (seen.melee / seenTotal) * 1.5 * cp;
+    // whoever is in command has favourites
+    if (doc) wgt *= doc.units[d.id] ?? 1;
+    // a desperate leader conscripts whoever is cheapest
+    if (d.id === 'militia' && (ai.f.leader?.mood ?? 0) < -0.7 && attacked) wgt *= 3;
     return wgt;
   };
 
   const producers = w.buildings.filter((b) => b.faction === me && b.active && (b.def.category === 'military' || b.def.category === 'core'));
+  // once real training halls stand, town halls only raise militia in an emergency
+  const halls = producers.filter((b) => b.def.category === 'military' && b.def.id !== 'silo').length;
   for (const b of producers) {
+    if (b.def.category === 'core' && halls > 0 && tmin > 4 && w.time - w.settlements[b.settlementId].lastAttackedT > 15) continue;
     const maxQ = ai.diff.efficiency > 0.9 ? 2 : 1;
     if (b.queue.length >= maxQ) continue;
     if (f.pop >= f.popCap) break;

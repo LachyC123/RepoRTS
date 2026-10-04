@@ -11,6 +11,11 @@ export class AIManager {
   constructor(private w: World) {
     for (const f of w.factions) {
       if (!f || f.id === NEUTRAL) continue;
+      if (f.isPlayer && w.setup.realmAuto) {
+        // the player's leader runs the whole realm; the player watches (and may still meddle)
+        this.controllers.set(f.id, new AIController(w, f.id as FactionId));
+        continue;
+      }
       if (f.isPlayer) {
         if (w.setup.autoArmies) {
           this.autopilot = new AIController(w, f.id as FactionId, { autopilot: true });

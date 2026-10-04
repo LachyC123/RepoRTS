@@ -387,6 +387,51 @@ export const MODERN_UNITS: Record<string, UP> = {
     range: 36,
     look: { body: 'heavy', helmet: 'combat', armor: 'vest', weapon: 'shotgun', shield: 'none', cloth: '#6a6a7a' },
   },
+  // ---- support troops and new arms ----
+  medic: {
+    name: 'Medic',
+    plural: 'Medics',
+    desc: 'Patches up the wounded and drags the fallen back into cover. Carries a pistol, mostly for show.',
+    ...rifle,
+    attack: 3,
+    cooldown: 1.4,
+    range: 48,
+    accuracy: 0.6,
+    trainedAt: ['chapel'],
+    look: { body: 'soldier', helmet: 'combat', armor: 'fatigues', weapon: 'medkit', shield: 'none', backpack: true },
+  },
+  bard: {
+    name: 'Piper',
+    plural: 'Pipers',
+    desc: 'Plays the bagpipes into battle. Friends fight braver. Enemies question everything.',
+    look: { body: 'soldier', helmet: 'beret', armor: 'fatigues', weapon: 'bagpipes', shield: 'none' },
+  },
+  flamer: {
+    name: 'Flamethrower',
+    plural: 'Flamethrowers',
+    desc: 'A short, roaring jet of fire. Clears trenches, bunkers and anyone standing close together.',
+    projectile: 'flame',
+    range: 3.5 * 16,
+    cooldown: 1.8,
+    windup: 0.2,
+    accuracy: 0.9,
+    trainedAt: ['archery_range'],
+    look: { body: 'soldier', helmet: 'combat', armor: 'fatigues', weapon: 'flamethrower', shield: 'none' },
+  },
+  volley: {
+    name: 'Rocket Artillery',
+    plural: 'Rocket Artillery',
+    desc: 'A truck with a rack of rockets. Fires them all in one screaming salvo, then spends a long time reloading.',
+    projectile: 'rocket',
+    attackType: 'siege',
+    attack: 12,
+    splash: 16,
+    range: 13 * 16,
+    minRange: 3 * 16,
+    salvo: 8,
+    cooldown: 10,
+    look: { body: 'vehicle', helmet: 'none', armor: 'fatigues', weapon: 'none', shield: 'none', vehicle: 'mlrs' },
+  },
 };
 
 type BP = Partial<BuildingDef>;
@@ -411,6 +456,7 @@ export const MODERN_BUILDINGS: Record<string, BP> = {
   wall: { name: 'Barrier', desc: 'Sandbags or concrete barriers.' },
   gatehouse: { name: 'Checkpoint', desc: 'Lets your troops through. Keeps everyone else out.' },
   merc_camp: { name: 'Contractor Camp', desc: 'Guns for hire. Any nation with troops nearby may hire here.' },
+  silo: { name: 'Missile Silo', desc: 'One ballistic missile at a time. Whoever is in command decides where it lands.', hint: 'Launches a ballistic missile anywhere on the map' },
 };
 
 export const MODERN_TIERS: Partial<TierDef>[] = [{ name: 'Landmark' }, { name: 'Outpost' }, { name: 'Village' }, { name: 'Town' }, { name: 'Garrison Town' }];

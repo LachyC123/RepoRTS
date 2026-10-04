@@ -76,6 +76,9 @@ export class Unit {
   rescuer = 0;
   /** quirk/rank multipliers (berserk, tired, promotions) */
   quirkAtk = 1;
+  /** on fire: seconds left, and who lit it */
+  burnT = 0;
+  burnBy: FactionId | -1 = -1;
   quirkSpeed = 1;
   /** autonomy: true = acts on its own; false = following the player's direct order */
   auto = true;

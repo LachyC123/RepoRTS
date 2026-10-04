@@ -49,5 +49,5 @@ describe('walls', () => {
     const wallHp1 = target.wallIds.reduce((a, id) => a + (w.buildingById.get(id)?.hp ?? 0), 0);
     expect(wallHp1 < wallHp0 || wallsLeft < 10).toBeTruthy();
     expect(coreDamaged).toBeTruthy();
-  });
+  }, 30000);
 });

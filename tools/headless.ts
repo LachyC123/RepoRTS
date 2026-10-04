@@ -49,6 +49,10 @@ try {
   /* optional */
 }
 const notices: string[] = [];
+const thoughts: string[] = [];
+let launches = 0;
+w.events.on('leaderThought', (e) => thoughts.push(`[${fmt(w.time)}] ${w.factions[e.faction].name.slice(0, 8)} ${e.who}: ${e.text}`));
+w.events.on('superLaunch', () => launches++);
 const playerNotices: string[] = [];
 w.events.on('notice', (n) => {
   if (process.env.AUTOP && n.factions?.includes(0)) playerNotices.push(`[${fmt(w.time)}] ${n.text}${n.sub ? ' — ' + n.sub : ''}`);
@@ -97,6 +101,12 @@ for (const f of w.factions) {
   console.log(`${f.name}: ${f.alive ? 'alive' : 'dead'} tiers ${JSON.stringify(tiers)} trained ${f.stats.unitsTrained} lost ${f.stats.unitsLost}`);
 }
 console.log('\n' + notices.slice(-60).join('\n'));
+console.log('\nlaunches', launches, 'leaders', w.factions.filter((f) => f?.leader).map((f) => `${f.name}: ${f.setup.commanderName} ${f.setup.commanderTitle} (${f.leader!.doctrine}, mood ${f.leader!.mood.toFixed(2)})`).join(' | '));
+const used: Record<string, number> = {};
+for (const u of w.units) if (u.alive) used[u.def.id] = (used[u.def.id] ?? 0) + 1;
+console.log('units', JSON.stringify(used));
+console.log('levels', w.buildings.filter((b) => b.level > 1).length, 'silos', w.buildings.filter((b) => b.def.id === 'silo' && !b.destroyed).length);
+if (process.env.THOUGHTS) console.log(thoughts.slice(-Number(process.env.THOUGHTS)).join('\n'));
 if (playerNotices.length) console.log('\nPLAYER\n' + playerNotices.slice(-50).join('\n'));
 if (w.living) {
   console.log('\nsays', JSON.stringify(Object.fromEntries(says)));

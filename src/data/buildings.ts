@@ -335,6 +335,20 @@ export const BUILDINGS: Record<string, BuildingDef> = {
     system: true,
     hint: '',
   }),
+  silo: BLD({
+    id: 'silo',
+    name: 'Great Bombard',
+    desc: 'A monstrous cannon that can hurl a burning stone across the whole valley. Takes an age to load.',
+    category: 'military',
+    size: 3,
+    hp: 1600,
+    armor: { melee: 0.4, pierce: 0.15, siege: 1 },
+    cost: { gold: 650, stone: 150, wood: 250 },
+    buildTime: 60,
+    tier: 3,
+    vision: 7,
+    hint: 'Fires a long-range strike anywhere on the map',
+  }),
   merc_camp: BLD({
     id: 'merc_camp',
     name: 'Mercenary Camp',
@@ -365,6 +379,7 @@ export const BUILD_MENU = [
   'siege_workshop',
   'chapel',
   'watchtower',
+  'silo',
 ] as const;
 
 /** Fortification upgrades for a settlement (wall ring with gatehouses on roads). */

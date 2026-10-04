@@ -129,7 +129,11 @@ export type LineKind =
   | 'order'
   | 'cheer'
   | 'brave'
-  | 'desert';
+  | 'desert'
+  | 'burn'
+  | 'song'
+  | 'awful'
+  | 'incoming';
 
 const LINES: Record<Era, Record<LineKind, string[]>> = {
   medieval: {
@@ -154,6 +158,10 @@ const LINES: Record<Era, Record<LineKind, string[]>> = {
     cheer: ['Ours now!', 'Raise the banner!', 'Huzzah!'],
     brave: ['Hold the line!', 'Stand fast!', 'With me!'],
     desert: ['I quit!', "I'm off to be a goatherd.", 'Find another fool!', 'Banditry pays better!'],
+    burn: ['HOT HOT HOT!', 'I’M ON FIRE!', 'Water! WATER!', 'Stop, drop and— AAAH!'],
+    song: ['♪ Hey nonny nonny! ♪', '♪ Our king has a very big crown ♪', '♪ Fa la la, stab stab stab ♪', '♪ Oh the turnips of home ♪'],
+    awful: ['♪ ...wait, how does it go? ♪', '♪ *horrible screech* ♪', 'Sorry. Wrong song.', '♪ La la la LAAAA— ♪'],
+    incoming: ['INCOMING!', 'What’s that in the sky?!', 'RUN!', 'Is that... a burning rock?!'],
   },
   modern: {
     panic: ['Nope. Nope. NOPE.', 'I left the oven on!', "This wasn't in the brochure!", 'Tell my mum I was brave!', 'Tactical retreat!!', "I'm too young for this!", 'NOT TODAY!'],
@@ -177,6 +185,10 @@ const LINES: Record<Era, Record<LineKind, string[]>> = {
     cheer: ['Ours now!', 'Raise the flag!', 'Woo!'],
     brave: ['Hold the line!', 'Stay on me!', 'Keep firing!'],
     desert: ['I quit!', "I'm going home!", 'Not my war!', "Tell the sarge I'm sick."],
+    burn: ['HOT HOT HOT!', 'I’M ON FIRE!', 'Medic! A wet one!', 'Stop, drop and— AAAH!'],
+    song: ['♪ *heroic droning* ♪', '♪ Scotland the Brave! ♪', '♪ *bagpipe noises* ♪', '♪ Amazing Grace, more or less ♪'],
+    awful: ['♪ *dying goose noise* ♪', '♪ ...wait, how does it go? ♪', 'Sorry. Bag’s got a hole.', '♪ *horrible screech* ♪'],
+    incoming: ['INCOMING!', 'MISSILE!', 'RUN!', 'Is that... for us?!'],
   },
 };
 

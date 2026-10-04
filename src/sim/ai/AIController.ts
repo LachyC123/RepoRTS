@@ -7,6 +7,7 @@ import type { Unit } from '../units/Unit';
 import type { World } from '../World';
 import { aiEconomy } from './AIEconomy';
 import { aiMilitary } from './AIMilitary';
+import { applyDoctrine, DOCTRINES, type Doctrine } from '../../data/doctrines';
 import { Intel } from './Intel';
 
 /** what self-running armies may do on their own */
@@ -57,7 +58,8 @@ export interface AIDebug {
  */
 export class AIController {
   readonly f: Faction;
-  readonly pers: Personality;
+  /** the house's own nature; the current leader's doctrine and mood re-weight it (see `pers`) */
+  readonly basePers: Personality;
   readonly diff: DifficultyDef;
   readonly intel: Intel;
   squads: Squad[] = [];
@@ -87,7 +89,7 @@ export class AIController {
     opts: { autopilot?: boolean } = {},
   ) {
     this.f = w.factions[id];
-    this.pers = this.f.personality;
+    this.basePers = this.f.personality;
     this.autopilot = !!opts.autopilot;
     this.diff = DIFFICULTIES[this.autopilot ? 'normal' : w.setup.difficulty];
     this.intel = new Intel(w, id, this.diff.counterPlay);
@@ -96,12 +98,31 @@ export class AIController {
     this.tacticT = 0.2 + id * 0.21;
   }
 
+  /** personality as the current leader runs it */
+  get pers(): Personality {
+    const l = this.f.leader;
+    return l ? applyDoctrine(this.basePers, DOCTRINES[l.doctrine], l.mood) : this.basePers;
+  }
+
+  /** the doctrine of whoever leads this realm now */
+  get doctrine(): Doctrine | null {
+    const l = this.f.leader;
+    return l ? DOCTRINES[l.doctrine] : null;
+  }
+
+  /** is this realm steered by a human (not run by its leader)? */
+  humanRun(k: number) {
+    const f = this.w.factions[k];
+    return !!f?.isPlayer && !this.w.setup.realmAuto;
+  }
+
   get aggression() {
     return Math.min(1.2, this.pers.aggression * this.diff.aggression);
   }
 
   myUnits(): Unit[] {
-    return this.w.units.filter((u) => u.alive && u.faction === this.id && u.def.special !== 'worker' && (!this.autopilot || u.auto));
+    // the player's soldiers under direct orders are left alone, whoever runs the realm
+    return this.w.units.filter((u) => u.alive && u.faction === this.id && u.def.special !== 'worker' && (!this.f.isPlayer || u.auto));
   }
 
   owned(): Settlement[] {
@@ -147,6 +168,7 @@ export class AIController {
       aiEconomy(this);
       aiMilitary(this);
       this.strategy();
+      this.useSuperweapon();
       this.warT -= this.diff.thinkInterval;
       if (this.warT <= 0) {
         this.warT = 18 + this.w.rng.next() * 14;
@@ -419,6 +441,14 @@ export class AIController {
     for (const u of units) u.squad = q.id;
     this.squads.push(q);
     if (this.autopilot) this.announce(q, units);
+    else if (kind !== 'hire') {
+      // the leader explains the plan
+      const s = this.w.settlements[target];
+      const enemy = s.owner !== NEUTRAL ? this.w.factions[s.owner].name : 'nobody';
+      const tk = kind === 'defend' ? 'defend' : kind === 'capture' ? 'capture' : 'attack';
+      const important = s.isCapital || s.tier >= 3;
+      if (kind !== 'raid' && (kind !== 'capture' || units.length >= 3) && (kind !== 'defend' || important || this.w.rng.next() < 0.25)) this.w.leaders.think(this.id, tk, { target: s.name, enemy }, { force: kind === 'attack', x: s.px, y: s.py });
+    }
     return q;
   }
 
@@ -473,6 +503,7 @@ export class AIController {
       }
     }
     if (q.kind !== 'defend') this.failed.set(q.target, w.time + 90 + this.w.rng.next() * 60);
+    if (q.kind === 'attack' && !this.autopilot) w.leaders.think(this.id, 'retreat', {}, { force: true });
     q.state = 'retreat';
     q.lastOrder = w.time;
     if (dest) w.orderMove(units.map((u) => u.id), dest.px, dest.py + 24, { attackMove: false });
@@ -493,7 +524,7 @@ export class AIController {
     const w = this.w;
     for (const q of [...this.squads]) {
       // (autopilot) soldiers the player took command of leave the squad
-      const units = [...q.units].map((id) => w.unitById.get(id)).filter((u): u is Unit => !!u && u.alive && (!this.autopilot || u.auto));
+      const units = [...q.units].map((id) => w.unitById.get(id)).filter((u): u is Unit => !!u && u.alive && (!this.f.isPlayer || u.auto));
       q.units = new Set(units.map((u) => u.id));
       if (!units.length) {
         this.disband(q);
@@ -629,10 +660,18 @@ export class AIController {
       if (cap) w.orderMove([c.id], cap.px, cap.py + 20, { attackMove: false });
       return;
     }
-    // follow the strongest field squad, otherwise wait at muster
+    // follow the strongest field squad, otherwise wait at muster; glory hounds lead every charge,
+    // the careful and the paranoid never leave the capital
+    const d = this.doctrine;
+    if (d && (d.id === 'turtle' || d.id === 'paranoid')) {
+      const cap = this.capital();
+      for (const q of this.squads) q.units.delete(c.id);
+      if (cap && c.arrived && Math.hypot(c.x - cap.px, c.y - cap.py) > 6 * TILE) w.orderMove([c.id], cap.px, cap.py + 22, { attackMove: true });
+      return;
+    }
     if (!this.squads.some((q) => q.units.has(c.id))) {
       const q = this.squads.filter((s) => s.kind === 'attack' || s.kind === 'defend').sort((a, b) => b.units.size - a.units.size)[0];
-      if (q && c.hp > c.maxHp * 0.6) {
+      if (q && c.hp > c.maxHp * (d?.leadsFromFront ? 0.4 : 0.6)) {
         q.units.add(c.id);
         c.squad = q.id;
       } else if (this.musterRegion >= 0 && c.arrived) {
@@ -671,12 +710,14 @@ export class AIController {
       score -= wars.length * 36;
       score += st === 'hostile' ? 10 : 0;
       score *= 0.6 + this.aggression * 0.8;
-      if (other.isPlayer) score *= this.diff.playerBias;
+      if (this.humanRun(k)) score *= this.diff.playerBias;
+      score *= this.doctrine?.war ?? 1;
       // a gentler first match while the player learns
       if (other.isPlayer && w.setup.tutorial && w.time < 600) continue;
       if (wars.length >= 2 && k !== leader) continue;
       if (score > 52) {
         w.diplomacy.declareWar(this.id, k as FactionId, 'ai');
+        w.leaders.think(this.id, 'war', { enemy: other.name, reason: w.leaders.warReason() }, { force: true });
         return;
       }
     }
@@ -688,11 +729,13 @@ export class AIController {
         const strongest = wars.filter((k) => !mainTargets.has(k as FactionId)).sort((a, b) => this.intel.power[b] - this.intel.power[a])[0];
         if (strongest === undefined) return;
         const other = w.factions[strongest];
-        if (other.isPlayer) {
-          if (this.w.rng.next() < 0.3) w.diplomacy.offerCeasefire(this.id, wars.find((k) => k !== strongest) as FactionId, 180);
+        const peace = this.doctrine?.peace ?? 1;
+        if (this.humanRun(strongest)) {
+          if (this.w.rng.next() < 0.3 * peace) w.diplomacy.offerCeasefire(this.id, wars.find((k) => k !== strongest) as FactionId, 180);
         } else {
           const theirWars = [0, 1, 2, 3].filter((k) => k !== strongest && w.factions[k]?.alive && w.diplomacy.stance(strongest as FactionId, k as FactionId) === 'war').length;
-          if (theirWars >= 2 || this.w.rng.next() < 0.3) w.diplomacy.ceasefire(this.id, strongest as FactionId, 150 + this.w.rng.next() * 90);
+          const theirPeace = w.leaders.doctrineOf(strongest as FactionId)?.peace ?? 1;
+          if (theirWars >= 2 || this.w.rng.next() < 0.3 * peace * theirPeace) w.diplomacy.ceasefire(this.id, strongest as FactionId, 150 + this.w.rng.next() * 90);
         }
         return;
       }
@@ -702,14 +745,33 @@ export class AIController {
       for (const k of wars) {
         if (k === leader) continue;
         const other = w.factions[k];
-        if (other.isPlayer) {
+        if (this.humanRun(k)) {
           if (this.w.rng.next() < 0.35 && w.time > 360) w.diplomacy.offerCeasefire(this.id, leader as FactionId, 180);
         } else {
           const theirAI = (w.ai as { controllers?: Map<number, AIController> } | null)?.controllers?.get(k);
-          if (theirAI && this.w.rng.next() < 0.5) w.diplomacy.ceasefire(this.id, k as FactionId, 180);
+          const peace = (this.doctrine?.peace ?? 1) * (w.leaders.doctrineOf(k as FactionId)?.peace ?? 1);
+          if (theirAI && this.w.rng.next() < 0.5 * peace) w.diplomacy.ceasefire(this.id, k as FactionId, 180);
         }
       }
     }
+  }
+
+  // ------------------------------------------------------------------ superweapon
+  /** a loaded silo and a target worth it: the leader decides */
+  private useSuperweapon() {
+    const w = this.w;
+    const sw = w.superweapons;
+    const silo = sw.silos(this.id).find((b) => sw.ready(b));
+    if (!silo) return;
+    const d = this.doctrine;
+    const eccentric = d?.id === 'eccentric';
+    const t = sw.bestTarget(this.id, eccentric);
+    if (!t) return;
+    // keen leaders fire at smaller targets; reluctant ones wait for something big, unless desperate
+    const keen = (d?.silo ?? 1) * (1 + Math.max(0, -(this.f.leader?.mood ?? 0)));
+    const need = 14 / keen;
+    if (t.score < need && !(eccentric && t.name === 'an empty field')) return;
+    if (sw.launch(this.id, silo.id, t.x, t.y).ok) w.leaders.think(this.id, 'missile', { target: t.name }, { force: true, x: t.x, y: t.y });
   }
 
   // ------------------------------------------------------------------ scouting

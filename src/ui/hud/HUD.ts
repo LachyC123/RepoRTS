@@ -15,6 +15,8 @@ import { crestUrl } from '../uiArt';
 import { isModern, resName, word } from '../../data/era';
 import { AUTO_POLICY } from '../../sim/ai/AIController';
 import { TRAITS } from '../../sim/units/Persona';
+import { DOCTRINES } from '../../data/doctrines';
+import { moodLabel } from '../../sim/ai/Leaders';
 import { buildingPreviewUrl, costHtml, icon, installFrames, portraitUrl } from './assets';
 import { clear, el, fmt, onPress, ROMAN } from './dom';
 import { Minimap } from './Minimap';
@@ -111,6 +113,7 @@ export class HUD {
     this.objectiveEl = el('div', 'hud-objective panel', this.root);
     this.timerEl = el('div', 'hud-timer panel', this.root);
     this.buildRealms();
+    this.buildWarRoom();
     this.buildMinimap();
     this.armiesEl = el('div', 'hud-armies', this.root);
     this.selEl = el('div', 'hud-sel panel', this.root);
@@ -270,6 +273,7 @@ export class HUD {
       this.fpsT = 0;
     }
     this.minimap.update(dt);
+    this.updateWarRoom();
     if ((this.t * 6) % 1 < dt * 6) this.refreshTop();
     if ((this.t * 4) % 1 < dt * 4) {
       this.refreshSelection();
@@ -577,7 +581,7 @@ export class HUD {
     this.selEl.classList.add('show');
     let sig = '';
     if (s.kind === 'units') sig = 'u:' + s.units.map((u) => `${u.id}:${Math.round((u.hp / u.maxHp) * 20)}:${u.auto ? 1 : 0}:${u.persona ? u.persona.state + u.persona.rank + u.persona.kills : ''}${u.routing > 0 ? 'r' : ''}`).join(',');
-    else if (s.kind === 'building') sig = `b:${s.b.id}:${s.b.faction}:${Math.round(s.b.hp)}:${Math.round(s.b.progress * 50)}:${s.b.queue.map((q) => q.type + Math.round((q.t / q.total) * 20)).join(',')}:${s.b.research?.id ?? ''}${Math.round((s.b.research?.t ?? 0) / 2)}:${w.settlements[s.b.settlementId].tier}:${Math.round(w.settlements[s.b.settlementId].upgrading?.t ?? 0)}`;
+    else if (s.kind === 'building') sig = `b:${s.b.id}:${s.b.faction}:${s.b.level}:${Math.ceil(s.b.levelUpT)}:${Math.round((w.superweapons.charge.get(s.b.id) ?? 0) * 50)}:${Math.round(s.b.hp)}:${Math.round(s.b.progress * 50)}:${s.b.queue.map((q) => q.type + Math.round((q.t / q.total) * 20)).join(',')}:${s.b.research?.id ?? ''}${Math.round((s.b.research?.t ?? 0) / 2)}:${w.settlements[s.b.settlementId].tier}:${Math.round(w.settlements[s.b.settlementId].upgrading?.t ?? 0)}`;
     else sig = `r:${s.s.id}:${s.s.owner}:${s.s.tier}:${Math.round(s.s.capProgress * 20)}:${Math.round(s.s.upgrading?.t ?? 0)}`;
     if (sig === this.selSig) return;
     this.selSig = sig;
@@ -658,7 +662,7 @@ export class HUD {
     const img = el('img', 'portrait', head) as HTMLImageElement;
     img.src = buildingPreviewUrl(b.def.id, b.faction === NEUTRAL ? null : this.colorOf(b.faction));
     const t = el('div', '', head);
-    el('div', 'sel-title', t, b.def.name);
+    el('div', 'sel-title', t, `${b.def.name}${b.level > 1 ? ` <span class="lvl">${'▲'.repeat(b.level - 1)} Lv ${b.level}</span>` : ''}`);
     const owner = b.faction === NEUTRAL ? 'Free Folk' : w.factions[b.faction].name;
     let status = `${s.name} · ${owner}`;
     if (!b.built) status = `Under construction ${Math.round(b.progress * 100)}% · ${s.name}`;
@@ -668,7 +672,7 @@ export class HUD {
     const st = el('div', 'sel-stats', p);
     const bits: string[] = [`❤ ${Math.ceil(b.hp)}/${Math.round(b.maxHp)}`];
     if (b.def.produces && b.built) {
-      const k = b.staffed * b.efficiency;
+      const k = b.staffed * b.efficiency * (1 + (b.level - 1) * 0.35);
       const [res, v] = b.def.id === 'mine' ? [b.depositKind ?? 'gold', b.depositKind === 'stone' ? 20 : 26] : Object.entries(b.def.produces)[0];
       bits.push(`<img class="icon" style="width:12px;height:12px" src="${icon(res as string)}"> +${Math.round((v as number) * k)}/min`);
       if (b.staffed < 1) bits.push(b.staffed === 0 ? '<span style="color:#ff9a8a">workers sheltering</span>' : 'short-handed');
@@ -676,6 +680,11 @@ export class HUD {
     }
     if (b.def.popCap && b.built) bits.push(`+${b.def.popCap} population`);
     if (b.def.defence && b.built) bits.push(`⚔ ${b.def.defence.attack} arrows`);
+    if (b.levelUpT > 0) bits.push(`Improving to level ${b.level + 1}: ${Math.ceil(b.levelUpT)}s`);
+    if (b.def.id === 'silo' && b.built) {
+      const ch = w.superweapons.charge.get(b.id) ?? 0;
+      bits.push(ch >= 1 ? '<span style="color:#ff9a6a">LOADED · ready to fire</span>' : `Loading ${Math.round(ch * 100)}%`);
+    }
     if (b.research) bits.push(`Researching ${UPGRADES[b.research.id].name} ${Math.round((b.research.t / b.research.total) * 100)}%`);
     st.innerHTML = bits.map((x) => `<span>${x}</span>`).join('');
     if (b.queue.length) this.renderQueue(b, p);
@@ -851,6 +860,27 @@ export class HUD {
           }
         }
         if (b.def.id === 'market') acts.push({ id: 'trade', label: 'TRADE', glyph: '⚖', press: () => this.openTradeSheet(), tip: { title: 'Trade goods', desc: `Buy and sell ${resName('food').toLowerCase()}, ${resName('wood').toLowerCase()} and ${resName('stone').toLowerCase()} for ${resName('gold').toLowerCase()}.` } });
+        // efficiency levels
+        const lc = w.settlementSys.levelCost(b);
+        if (lc || b.levelUpT > 0) {
+          const chk = w.settlementSys.canLevelUp(c.playerFaction as FactionId, b.id);
+          acts.push({
+            id: 'level',
+            label: b.levelUpT > 0 ? 'IMPROVING' : `LEVEL ${b.level + 1}`,
+            glyph: '▲',
+            cost: lc ?? undefined,
+            disabled: !chk.ok,
+            active: b.levelUpT > 0,
+            press: () => c.cmdLevelUp(b.id),
+            tip: { title: `Improve to level ${b.level + 1}`, desc: levelDesc(b.def.category, b.def.id), extra: chk.ok && lc ? costHtml(lc, res) + ` · ${b.level === 1 ? 25 : 40}s` : chk.reason },
+          });
+        }
+        if (b.def.id === 'silo') {
+          const ready = w.superweapons.ready(b);
+          const big = isModern() ? 'missile' : 'great bombard';
+          acts.push({ id: 'strike', label: 'AIM', glyph: '◎', disabled: !ready, active: this.mode === 'strike', press: () => c.setMode(this.mode === 'strike' ? 'default' : 'strike'), tip: { title: `Aim the ${big}`, desc: 'Tap anywhere on the map. Everything within a few squares of the impact is flattened, friend or foe. Firing on a realm declares war.', extra: ready ? 'Loaded' : `Loading ${Math.round((w.superweapons.charge.get(b.id) ?? 0) * 100)}%` } });
+          acts.push({ id: 'autostrike', label: 'BEST SHOT', glyph: '✹', disabled: !ready, press: () => c.cmdAutoStrike(b.id), tip: { title: 'Let the generals pick a target', desc: 'Fires at the biggest enemy army in sight, or an enemy town.' } });
+        }
         if (w.settlementSys.allTrainableAt(b).length) acts.push({ id: 'rally', label: 'RALLY', glyph: '⚑', active: this.mode === 'rally', press: () => c.setMode(this.mode === 'rally' ? 'default' : 'rally'), tip: { title: 'Set rally point', desc: 'New recruits gather there. (Right-click on desktop)' } });
       }
       acts.push({ id: 'demolish', label: 'DEMOLISH', glyph: '⚒', long: () => c.cmdDemolish(b.id), press: () => this.toast('Hold to demolish'), tip: { title: 'Demolish', desc: 'Press and hold to tear down and free the plot.' } });
@@ -981,6 +1011,71 @@ export class HUD {
       if (a.key && !matchMedia('(pointer: coarse)').matches) el('span', 'key', b, a.key);
       onPress(b, () => a.press(), { long: a.long ?? (a.tip ? () => this.showTipFor(b, a.tip!) : undefined), sound: () => audio.play('ui_click') });
       if (a.tip) this.tip(b, () => a.tip!);
+    }
+  }
+
+  // ------------------------------------------------------------------ war room
+  private warEl!: HTMLElement;
+  private warLines: { el: HTMLElement; t: number }[] = [];
+
+  /** a live ticker of what every realm's leader is thinking */
+  private buildWarRoom() {
+    const c = this.client;
+    const w = c.world;
+    this.warEl = el('div', 'hud-war pe', this.root);
+    const head = el('div', 'wh', this.warEl, 'WAR ROOM');
+    void head;
+    onPress(this.warEl, () => this.openLeaders(), { sound: () => audio.play('ui_open') });
+    this.tip(this.warEl, () => ({ title: 'War room', desc: 'What every leader is thinking and deciding. Tap for the leaders and the full log.' }));
+    w.events.on('leaderThought', (th) => {
+      const f = w.factions[th.faction];
+      const line = el('div', 'wl', this.warEl);
+      const mine = th.faction === c.playerFaction;
+      line.innerHTML = `<b style="color:${f.color.light}">${mine ? 'Your ' + (isModern() ? 'general' : 'ruler') : f.name.replace(/^(Kingdom|Republic) of /, '')}:</b> ${th.text}`;
+      if (th.x !== undefined && th.y !== undefined) line.dataset.xy = `${th.x},${th.y}`;
+      this.warLines.push({ el: line, t: performance.now() });
+      while (this.warLines.length > 3) this.warLines.shift()!.el.remove();
+      this.warEl.classList.add('show');
+    });
+  }
+
+  private updateWarRoom() {
+    const now = performance.now();
+    for (const l of this.warLines) l.el.style.opacity = String(Math.max(0.25, 1 - (now - l.t - 14000) / 8000));
+  }
+
+  /** the leaders: who runs each realm, how they think, how they feel, and the full log */
+  openLeaders() {
+    const c = this.client;
+    const w = c.world;
+    const sh = this.sheet(isModern() ? 'Commanders' : 'Rulers');
+    sh.classList.add('leaders');
+    const grid = el('div', 'lgrid', sh);
+    for (const f of w.factions) {
+      if (!f || f.id === NEUTRAL || !f.leader) continue;
+      const l = f.leader;
+      const d = DOCTRINES[l.doctrine];
+      const card = el('div', `lcard ${f.alive ? '' : 'dead'}`, grid);
+      (el('img', '', card) as HTMLImageElement).src = crestUrl(f.setup.crest, f.color);
+      const t = el('div', '', card);
+      el('div', 'ln', t, `<span style="color:${f.color.light}">${f.name}</span>${f.id === c.playerFaction ? ' (you)' : ''}`);
+      el('div', 'lw', t, `${f.setup.commanderName} ${f.setup.commanderTitle}`);
+      el('div', 'ld', t, `<b>${d.label}</b> · ${f.alive ? moodLabel(l.mood) : 'fallen'} · since ${formatTime(l.since)}`);
+      el('div', 'lx', t, d.desc);
+    }
+    el('h4', '', sh, 'Log');
+    const list = el('div', 'jlist', sh);
+    for (const th of [...w.leaders.feed].reverse().slice(0, 50)) {
+      const f = w.factions[th.faction];
+      const row = el('div', 'jrow', list);
+      el('span', 'jt', row, formatTime(th.t));
+      el('span', 'ji', row, '');
+      el('span', 'jx', row, `<b style="color:${f.color.light}">${th.who}:</b> ${th.text}`);
+      if (th.x !== undefined && th.y !== undefined)
+        onPress(row, () => {
+          c.scene?.camCtl.flyTo(th.x!, th.y!);
+          this.closeSheet();
+        }, { sound: () => audio.play('ui_click') });
     }
   }
 
@@ -1387,6 +1482,14 @@ const RES_DESC: Record<string, string> = {
   food: 'Feeds recruits and growing towns. From farms and villages.',
   stone: 'Castles, walls, towers and advanced upgrades. From quarries and mines.',
 };
+
+function levelDesc(cat: string, id: string) {
+  if (id === 'house') return '+2 population per level and sturdier walls.';
+  if (id === 'watchtower') return '+30% tower damage per level and sturdier walls.';
+  if (cat === 'economy') return '+35% production per level and sturdier walls.';
+  if (cat === 'military') return '+25% training speed per level and sturdier walls.';
+  return 'Sturdier and more effective.';
+}
 
 const RES_DESC_MODERN: Record<string, string> = {
   gold: 'Funds pay for soldiers, research, vehicles and growing towns. From taxes, mines and markets.',

@@ -199,7 +199,9 @@ export class VictorySystem {
     });
     const p = w.setup.player;
     const name = `${fac.setup.commanderName} ${fac.setup.commanderTitle}`;
-    if (u.faction === p) w.notify({ kind: 'commander', text: `👑 ${fac.setup.commanderName.toUpperCase()} HAS FALLEN`, sub: `Returns in ${COMMANDER_RESPAWN}s at the capital`, factions: [u.faction], x: u.x, y: u.y, priority: 2, alarm: true });
+    if (u.faction === p) w.notify({ kind: 'commander', text: `👑 ${fac.setup.commanderName.toUpperCase()} HAS FALLEN`, sub: `A successor takes over · back on the field in ${COMMANDER_RESPAWN}s`, factions: [u.faction], x: u.x, y: u.y, priority: 2, alarm: true });
     else w.notify({ kind: 'commander', text: `👑 ${name.toUpperCase()} DEFEATED`, sub: by === p ? 'Slain by your army' : undefined, factions: [u.faction, by as FactionId], x: u.x, y: u.y, priority: by === p ? 2 : 1, world: true });
+    // someone else takes over, and the realm takes on their personality
+    w.leaders.onCommanderFell(u.faction, by);
   }
 }

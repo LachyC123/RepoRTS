@@ -4,7 +4,7 @@ import type { Unit } from '../sim/units/Unit';
 import type { World } from '../sim/World';
 import type { Selection } from './Selection';
 
-export type CommandMode = 'default' | 'move' | 'attack' | 'select' | 'rally';
+export type CommandMode = 'default' | 'move' | 'attack' | 'select' | 'rally' | 'strike';
 
 export interface InputHooks {
   /** world point tapped/right-clicked with a selection → order */
@@ -356,10 +356,11 @@ export class InputController {
     const enemy = this.pickUnit(x, y, false, true);
     const hasSel = this.sel.units.size > 0;
 
-    if (this.mode === 'rally' && (!isMouse || p.button === 0)) {
-      if (this.hooks.groundTarget?.('rally', wx, wy)) {
+    if ((this.mode === 'rally' || this.mode === 'strike') && (!isMouse || p.button === 0)) {
+      const m = this.mode;
+      if (this.hooks.groundTarget?.(m, wx, wy)) {
         this.mode = 'default';
-        this.hooks.modeConsumed?.('rally');
+        this.hooks.modeConsumed?.(m);
       }
       return;
     }

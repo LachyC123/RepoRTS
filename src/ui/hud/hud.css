@@ -1090,3 +1090,91 @@
   font-size: 0.85em;
   padding: 6px;
 }
+.sel-title .lvl {
+  font-size: 0.6em;
+  color: #f0c84a;
+  margin-left: 4px;
+  vertical-align: middle;
+}
+
+/* war room ticker */
+.hud-war {
+  position: absolute;
+  top: calc(max(4px, env(safe-area-inset-top)) + 50px * var(--ui-scale));
+  left: var(--pad);
+  max-width: min(330px, 34vw);
+  display: none;
+  flex-direction: column;
+  gap: 2px;
+  padding: 4px 8px 5px;
+  font-size: 0.72em;
+  line-height: 1.25;
+  background: rgba(27, 20, 32, 0.72);
+  border: 1px solid rgba(200, 168, 96, 0.35);
+  cursor: pointer;
+}
+.hud-war.show {
+  display: flex;
+}
+.hud-war .wh {
+  font-family: var(--font-small);
+  font-size: 0.85em;
+  letter-spacing: 0.14em;
+  color: #c8a860;
+}
+.hud-war .wl {
+  color: #e8dcc0;
+  transition: opacity 0.6s;
+}
+.hud-objective {
+  z-index: 3;
+}
+@media (max-width: 700px) {
+  .hud-war {
+    max-width: 46vw;
+    font-size: 0.64em;
+  }
+  .hud-war .wl:nth-last-child(n + 3) {
+    display: none;
+  }
+}
+.sheet.leaders .lgrid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(240px, 1fr));
+  gap: 6px;
+  margin-bottom: 6px;
+}
+.lcard {
+  display: flex;
+  gap: 8px;
+  padding: 6px;
+  background: rgba(255, 240, 200, 0.05);
+  border: 1px solid rgba(200, 168, 96, 0.25);
+}
+.lcard.dead {
+  opacity: 0.45;
+}
+.lcard img {
+  width: 30px;
+  height: 36px;
+  image-rendering: pixelated;
+}
+.lcard .ln {
+  font-size: 0.9em;
+}
+.lcard .lw {
+  color: #fff0c8;
+  font-size: 0.85em;
+}
+.lcard .ld {
+  color: #c8d0a0;
+  font-size: 0.78em;
+}
+.lcard .lx {
+  color: #a89a80;
+  font-size: 0.72em;
+  line-height: 1.2;
+}
+.sheet.leaders .jlist {
+  max-height: 34vh;
+}

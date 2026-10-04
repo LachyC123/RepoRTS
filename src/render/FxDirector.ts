@@ -1,5 +1,6 @@
 import Phaser from 'phaser';
 import { isModern } from '../data/era';
+import { STRIKE_RADIUS } from '../sim/Superweapon';
 import { audio } from '../audio';
 import type { SfxName } from '../audio';
 import { TILE } from '../data/constants';
@@ -25,7 +26,7 @@ interface Floater {
 }
 
 /** projectiles of the modern era (FX handled by onGunFired) */
-const GUN_KINDS = new Set(['bullet', 'rocket', 'grenade', 'shell', 'tankshell']);
+const GUN_KINDS = new Set(['bullet', 'rocket', 'grenade', 'shell', 'tankshell', 'flame']);
 const DUST = 0xc8b898;
 
 /**
@@ -89,6 +90,19 @@ export class FxDirector {
       const k = ev.kind;
       if (GUN_KINDS.has(k)) return this.onGunFired(ev);
       this.sfx(k === 'arrow' ? 'arrow_shoot' : k === 'bolt' ? 'bolt_shoot' : k === 'ballista' ? 'ballista_shoot' : 'catapult_launch', ev.x, ev.y, k === 'arrow' ? 0.35 : 0.7);
+      if (k === 'firepot') {
+        this.sfx('arrow_shoot', ev.x, ev.y, 0.2);
+        return;
+      }
+      if (k === 'bolt' && UNITS[ev.by]?.look.engine === 'volleygun') {
+        const now = this.world.time;
+        if ((this.salvoAt.get(ev.by + ev.x) ?? -9) < now - 2) {
+          this.salvoAt.set(ev.by + ev.x, now);
+          this.sfx('volley', ev.x, ev.y, 0.7);
+          this.fx.burst(8, { frame: 'fx/puff4', x: ev.x + 8, y: ev.y - 6, life: 1.2, s0: 0.6, s1: 1.8, tint: 0xd8d0c0, alpha: 0.7, drag: 2, g: -8 }, 30, 6);
+        }
+        return;
+      }
       if (k === 'rock' || k === 'bigrock') {
         // the engine bucks: dust kicks out from under it
         this.fx.burst(k === 'bigrock' ? 10 : 6, { frame: 'fx/puff4', x: ev.x, y: ev.y, life: 0.9, s0: 0.5, s1: 1.4, tint: DUST, alpha: 0.7, drag: 2.5 }, 45, 6);
@@ -97,6 +111,35 @@ export class FxDirector {
       } else if (k === 'ballista') this.fx.burst(3, { frame: 'fx/spark', x: ev.x, y: ev.y - 8, life: 0.2, add: true }, 40, 0);
     });
     e.on('projectileLanded', (ev) => this.onLand(ev));
+    // ---- support troops, fire, building levels and the superweapon
+    e.on('healPulse', (ev) => {
+      if (!this.near(ev.x, ev.y, 0) || this.cam.zoom < 1.1) return;
+      this.fx.burst(3, { frame: 'fx/heart', x: ev.x, y: ev.y - 10, z: 2, life: 1.1, g: -26, s0: 0.9, s1: 0.5 }, 10, 12);
+      if (Math.random() < 0.3) this.sfx('heal', ev.x, ev.y, 0.25);
+    });
+    e.on('music', (ev) => {
+      if (!this.near(ev.x, ev.y, 0)) return;
+      for (let k = 0; k < 5; k++)
+        this.fx.emit({ frame: k & 1 ? 'fx/note1' : 'fx/note0', x: ev.x + (Math.random() - 0.5) * 8, y: ev.y - 14, vx: (Math.random() - 0.5) * 16, vz: 0, vy: -14 - Math.random() * 10, life: 1.5 + Math.random() * 0.6, tint: ev.awful ? 0x9ab070 : [0xffe08a, 0xa8e8ff, 0xffb0d8][k % 3], s0: 1, s1: 0.6 });
+      if (this.cam.zoom > 1) this.sfx(isModern() ? 'bagpipe' : 'lute', ev.x, ev.y, ev.awful ? 0.5 : 0.35);
+    });
+    e.on('buildingLevel', (ev) => {
+      if (!this.near(ev.x, ev.y, 40)) return;
+      if (ev.started) {
+        this.fx.burst(6, { frame: 'fx/puff4', x: ev.x, y: ev.y, life: 0.9, s0: 0.5, s1: 1.3, tint: DUST, alpha: 0.6, drag: 2 }, 30, 8);
+        this.sfx('build_place', ev.x, ev.y, 0.5);
+        return;
+      }
+      this.beam(ev.x, ev.y, 0xf0c84a, 1.1);
+      this.fx.burst(10, { frame: 'fx/star', x: ev.x, y: ev.y - 10, z: 4, life: 1.1, g: -30, add: true, tint: 0xffe08a, s0: 0.8, s1: 0.3 }, 20, 40);
+      this.floatText(ev.x, ev.y - 26, `LEVEL ${ev.level}`, null, '#f0c84a');
+      this.sfx('upgrade_complete', ev.x, ev.y, 0.5);
+    });
+    e.on('superLaunch', (ev) => this.onSuperLaunch(ev));
+    e.on('superWarning', (ev) => {
+      if (this.near(ev.x, ev.y, 200)) this.floatText(ev.x, ev.y - 30, 'INCOMING!', null, '#ff6a5a');
+    });
+    e.on('superImpact', (ev) => this.onSuperImpact(ev));
     // a jumpy soldier fires at a bush
     e.on('potshot', (ev) => {
       if (!this.near(ev.x, ev.y, 0)) return;
@@ -390,6 +433,27 @@ export class FxDirector {
     else if (!look) [mx, my] = [0, 0];
     const x = ev.x + mx * right;
     const y = ev.y + my;
+    if (k === 'flame') {
+      // a roaring jet: a stream of fire tongues along the line of fire
+      for (let n = 0; n < 9; n++) {
+        const sp = 110 + Math.random() * 60;
+        const a = dir + (Math.random() - 0.5) * 0.25;
+        this.fx.emit({ frame: 'fx/jet0', frames: ['fx/jet0', 'fx/jet1', 'fx/jet2', 'fx/jet3'], fps: 12, x, y, vx: Math.cos(a) * sp, vy: Math.sin(a) * sp, life: 0.3 + Math.random() * 0.15, rot: a, add: true, s0: 0.8, s1: 1.6, drag: 3 });
+      }
+      this.fx.burst(2, { frame: 'fx/puff4', x: ev.tx, y: ev.ty, life: 1, s0: 0.5, s1: 1.4, tint: 0x5a5050, alpha: 0.5, g: -14 }, 10, 4);
+      this.sfx('flame', ev.x, ev.y, 0.5);
+      return;
+    }
+    if (k === 'rocket' && look?.vehicle === 'mlrs') {
+      // one salvo sound per launcher volley
+      const now = this.world.time;
+      if ((this.salvoAt.get(ev.by + ev.x) ?? -9) < now - 2) {
+        this.salvoAt.set(ev.by + ev.x, now);
+        this.sfx('salvo', ev.x, ev.y, 0.7);
+      }
+      this.fx.burst(3, { frame: 'fx/puff4', x: ev.x - 8 * right, y: y + 2, life: 0.9, s0: 0.6, s1: 1.8, tint: 0xe8e0d0, alpha: 0.7, drag: 2.5 }, 30, 4, 0.8, dir + Math.PI);
+      return;
+    }
     const big = k === 'tankshell' || k === 'shell' || look?.engine === 'atgun';
     const near = this.cam.zoom > 1.1;
     if (near || big) {
@@ -424,6 +488,117 @@ export class FxDirector {
     }
   }
 
+  private salvoAt = new Map<string, number>();
+  private strikeImgs = new Map<number, { img: Phaser.GameObjects.Image; warn: Phaser.GameObjects.Image }>();
+  private burnT = 0;
+
+  /** a lick of flames at a point */
+  fireBurst(x: number, y: number, n: number) {
+    for (let k = 0; k < n; k++)
+      this.fx.emit({ frame: 'fx/fire0', frames: ['fx/fire0', 'fx/fire1', 'fx/fire2', 'fx/fire3'], fps: 10, x: x + (Math.random() - 0.5) * 12, y: y + (Math.random() - 0.5) * 6, life: 0.6 + Math.random() * 0.6, s0: 0.8, s1: 0.4, add: true });
+    if (!this.reduced) this.fx.burst(Math.ceil(n / 2), { frame: 'fx/puff4', x, y: y - 6, life: 1.2, s0: 0.5, s1: 1.4, tint: 0x4a4048, alpha: 0.55, g: -16, drag: 1 }, 8, 6);
+  }
+
+  /** the superweapon fires: a flash, a column of smoke and a long roar */
+  private onSuperLaunch(ev: { id: number; faction: number; x: number; y: number; tx: number; ty: number; kind: 'missile' | 'fireball' }) {
+    const nearLaunch = this.near(ev.x, ev.y, 200);
+    const mine = ev.faction === this.playerFaction;
+    const targetMine = this.playerFaction >= 0 && this.world.map.region[Math.floor(ev.ty / TILE) * this.world.map.w + Math.floor(ev.tx / TILE)] >= 0 && this.world.settlements[this.world.map.region[Math.floor(ev.ty / TILE) * this.world.map.w + Math.floor(ev.tx / TILE)]]?.owner === this.playerFaction;
+    if (ev.kind === 'missile' && (targetMine || this.near(ev.tx, ev.ty, 300))) audio.play('siren', { volume: 0.55 });
+    if (nearLaunch || mine) this.sfx(ev.kind === 'missile' ? 'missile_launch' : 'bombard_fire', nearLaunch ? ev.x : this.cam.x, nearLaunch ? ev.y : this.cam.y, nearLaunch ? 1 : 0.4);
+    if (!nearLaunch) return;
+    for (let k = 0; k < 16; k++)
+      this.fx.emit({ frame: 'fx/smokecol', x: ev.x + (Math.random() - 0.5) * 20, y: ev.y + 4, vx: (Math.random() - 0.5) * 30, vz: 10 + Math.random() * 30, life: 2 + Math.random() * 1.5, s0: 1, s1: 3, alpha: 0.75, drag: 1, tint: 0xd8d0c8 });
+    this.fx.emit({ frame: 'fx/bigblast0', frames: ['fx/bigblast0', 'fx/bigblast1'], fps: 10, x: ev.x, y: ev.y - 10, life: 0.25, s0: 0.8, s1: 1.2, add: true });
+    this.ring(ev.x, ev.y, 50, 0xfff0c8, 0.6, 0.8);
+    this.shake(ev.kind === 'missile' ? 3 : 4, ev.x, ev.y);
+  }
+
+  /** the strike lands: the biggest bang in the valley */
+  private onSuperImpact(ev: { x: number; y: number; kind: 'missile' | 'fireball'; kills: number }) {
+    const near = this.near(ev.x, ev.y, 260);
+    audio.play('big_explosion', { x: ev.x, y: ev.y, volume: near ? 1 : 0.5 });
+    if (!near) return;
+    const frames = ['fx/bigblast0', 'fx/bigblast1', 'fx/bigblast2', 'fx/bigblast3', 'fx/bigblast4', 'fx/bigblast5'];
+    this.fx.emit({ frame: 'fx/bigblast0', frames, fps: 7, x: ev.x, y: ev.y - 30, life: 6 / 7, s0: 2.4, s1: 2.9 });
+    for (let k = 0; k < 6; k++) {
+      const a = (k / 6) * Math.PI * 2;
+      this.fx.emit({ frame: 'fx/bigblast3', frames: ['fx/bigblast3', 'fx/bigblast4', 'fx/bigblast5'], fps: 2.5, x: ev.x + Math.cos(a) * 40, y: ev.y + Math.sin(a) * 20 - 10, vx: Math.cos(a) * 30, vy: Math.sin(a) * 15, vz: 8, life: 1.4, s0: 1, s1: 1.8, alpha: 0.85, drag: 1 });
+    }
+    for (let k = 0; k < 3; k++) this.ring(ev.x, ev.y, 70 + k * 45, k === 0 ? 0xffffff : 0xffd8a0, 0.5 + k * 0.25, 0.9 - k * 0.2);
+    this.fx.burst(40, { frame: 'fx/dirt', x: ev.x, y: ev.y, z: 4, life: 1.6, g: 260, ground: 'stop' }, 200, 220);
+    this.fx.burst(24, { frame: 'fx/stonechip', x: ev.x, y: ev.y, z: 6, life: 1.6, g: 260, ground: 'bounce', spin: 10 }, 180, 200);
+    this.fireBurst(ev.x, ev.y, 18);
+    for (let k = 0; k < 10; k++) this.fx.emit({ frame: 'fx/smokecol', x: ev.x + (Math.random() - 0.5) * 60, y: ev.y, vz: 16 + Math.random() * 20, life: 3 + Math.random() * 2, s0: 1.4, s1: 3.6, alpha: 0.7, drag: 0.6, tint: 0x5a5058 });
+    if (!this.reduced) {
+      this.addDecal('fx/crater', ev.x, ev.y, 2.6, 90);
+      this.addDecal('fx/scorch', ev.x, ev.y + 2, 4, 90);
+    }
+    this.shake(8, ev.x, ev.y, true);
+    this.scene.cameras.main.flash(260, 255, 240, 220, true);
+    if (ev.kills > 0) this.floatText(ev.x, ev.y - 50, `${ev.kills} DOWN`, null, '#ff9a6a');
+  }
+
+  /** flying strikes, their warning markers, and everything that is on fire */
+  private updateStrikes(dt: number) {
+    const w = this.world;
+    const live = new Set<number>();
+    for (const s of w.superweapons.strikes) {
+      live.add(s.id);
+      let r = this.strikeImgs.get(s.id);
+      if (!r) {
+        const f = art.get(s.kind === 'missile' ? 'fx/missile' : 'fx/fireball');
+        const wf = art.get('fx/warn');
+        const img = this.scene.make.image({ x: 0, y: 0, key: f.key, frame: f.frame }, false).setOrigin(f.ox, f.oy).setScale(1.6);
+        const warn = this.scene.make.image({ x: s.x, y: s.y, key: wf.key, frame: wf.frame }, false).setOrigin(wf.ox, wf.oy).setVisible(false);
+        this.groundLayer.add(warn);
+        this.layer.add(img);
+        r = { img, warn };
+        this.strikeImgs.set(s.id, r);
+      }
+      const t = Math.min(1, (w.time - s.launchT) / (s.impactT - s.launchT));
+      const arc = 520;
+      const x = s.fromX + (s.x - s.fromX) * t;
+      const yl = s.fromY + (s.y - s.fromY) * t;
+      const y = yl - arc * 4 * t * (1 - t);
+      const dx = s.x - s.fromX;
+      const dy = s.y - s.fromY - arc * 4 * (1 - 2 * t);
+      r.img.setPosition(x, y).setRotation(Math.atan2(dy, dx));
+      if (Math.random() < 0.8) this.fx.emit({ frame: 'fx/puff4', x, y, life: 1.4, s0: 0.6, s1: 1.8, tint: s.kind === 'missile' ? 0xe8e4e0 : 0x6a5a50, alpha: 0.6, drag: 1 });
+      if (s.kind === 'fireball' && Math.random() < 0.5) this.fx.emit({ frame: 'fx/fire0', frames: ['fx/fire0', 'fx/fire1', 'fx/fire2'], fps: 10, x, y, life: 0.4, add: true });
+      // warning: a pulsing target ring for the last stretch
+      const warnOn = w.time > s.impactT - 6;
+      r.warn.setVisible(warnOn);
+      if (warnOn) {
+        const pulse = 1 + Math.sin(w.time * 12) * 0.12;
+        r.warn.setScale((STRIKE_RADIUS / 12) * pulse, (STRIKE_RADIUS / 12) * pulse).setAlpha(0.55 + 0.35 * Math.sin(w.time * 12));
+      }
+    }
+    for (const [id, r] of this.strikeImgs) {
+      if (live.has(id)) continue;
+      r.img.destroy();
+      r.warn.destroy();
+      this.strikeImgs.delete(id);
+    }
+    // burning soldiers and buildings
+    this.burnT += dt;
+    if (this.burnT < 0.12) return;
+    this.burnT = 0;
+    const v = this.cam.view(20);
+    for (const u of w.units) {
+      if (!u.alive || u.burnT <= 0 || u.x < v.x0 || u.x > v.x1 || u.y < v.y0 || u.y > v.y1) continue;
+      this.fx.emit({ frame: 'fx/fire0', frames: ['fx/fire0', 'fx/fire1', 'fx/fire2', 'fx/fire3'], fps: 12, x: u.x + (Math.random() - 0.5) * 4, y: u.y - 4, vy: -8, life: 0.45, s0: 0.9, s1: 0.4, add: true });
+      if (Math.random() < 0.3) this.fx.emit({ frame: 'fx/puff2', x: u.x, y: u.y - 12, life: 0.8, tint: 0x4a4048, alpha: 0.5, s0: 0.6, s1: 1.2, g: -16 });
+    }
+    for (const b of w.buildings) {
+      if (b.burnT <= 0 || b.destroyed || b.x < v.x0 - 30 || b.x > v.x1 + 30 || b.y < v.y0 || b.y > v.y1 + 40) continue;
+      const half = (b.size * TILE) / 2;
+      for (let k = 0; k < b.size; k++)
+        this.fx.emit({ frame: 'fx/fire0', frames: ['fx/fire0', 'fx/fire1', 'fx/fire2', 'fx/fire3'], fps: 10, x: b.x + (Math.random() - 0.5) * half * 1.6, y: b.y + (Math.random() - 0.2) * half, vy: -10, life: 0.7, s0: 1.3, s1: 0.6, add: true });
+      if (Math.random() < 0.5) this.fx.emit({ frame: 'fx/smokecol', x: b.x + (Math.random() - 0.5) * half, y: b.y - half, vz: 14, life: 2.4, s0: 0.8, s1: 2.2, alpha: 0.55, tint: 0x3a3238, drag: 0.6 });
+    }
+  }
+
   /** a modern explosion: flash, fireball, smoke, dirt and a scorch mark */
   explosion(x: number, y: number, size: number) {
     const frames = ['fx/blast0', 'fx/blast1', 'fx/blast2', 'fx/blast3', 'fx/blast4', 'fx/blast5'];
@@ -442,6 +617,16 @@ export class FxDirector {
 
   private onLand(ev: { kind: string; x: number; y: number; hit: boolean; splash: number }) {
     if (!this.near(ev.x, ev.y, 100)) return;
+    if (ev.kind === 'firepot' || ev.kind === 'flame') {
+      // pitch splashes and catches
+      this.fireBurst(ev.x, ev.y, ev.kind === 'firepot' ? 7 : 3);
+      if (ev.kind === 'firepot') {
+        this.sfx('firepot_smash', ev.x, ev.y, 0.55);
+        this.fx.burst(5, { frame: 'fx/stonechip', x: ev.x, y: ev.y, z: 2, life: 0.6, g: 240, ground: 'stop', tint: 0xa86a4a }, 50, 50);
+        this.ring(ev.x, ev.y, 14, 0xffa040, 0.3, 0.6);
+      }
+      return;
+    }
     if (ev.kind === 'rocket' || ev.kind === 'grenade' || ev.kind === 'shell' || ev.kind === 'tankshell') {
       const size = ev.kind === 'shell' ? (ev.splash > 30 ? 1.6 : 1.2) : ev.kind === 'grenade' ? 0.7 : ev.kind === 'tankshell' ? 1.1 : 0.9;
       this.explosion(ev.x, ev.y, size);
@@ -547,6 +732,7 @@ export class FxDirector {
   private dustT = 0;
 
   update(dt: number, alpha: number) {
+    this.updateStrikes(dt);
     // hooves kick up dust
     this.dustT += dt;
     if (this.dustT > 0.12 && this.cam.zoom > 1.1) {
@@ -589,6 +775,8 @@ export class FxDirector {
     const live = new Set<number>();
     const trails = this.cam.zoom > 1.3 && !this.reduced;
     for (const p of this.world.combat.projectiles) {
+      // salvo rounds still waiting in the tubes; flame jets are drawn as particles
+      if (p.t < 0 || p.kind === 'flame') continue;
       const t = Math.min(1, (p.t + dt * alpha * 0) / p.dur);
       const x = p.x0 + (p.x1 - p.x0) * t;
       const yGround = p.y0 + (p.y1 - p.y0) * t;
