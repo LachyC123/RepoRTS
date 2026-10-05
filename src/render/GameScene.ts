@@ -20,6 +20,7 @@ import { Director } from './Director';
 import { NightLight } from './Night';
 import { UnitRenderer } from './UnitRenderer';
 import { Weather } from './Weather';
+import { WaterFx } from './WaterFx';
 import { WorldObjects } from './WorldObjects';
 import { YSortLayer } from './YSortLayer';
 
@@ -47,6 +48,8 @@ export class GameScene extends Phaser.Scene {
   nightLayer!: Phaser.GameObjects.Layer;
   ambient!: Ambient;
   weather!: Weather;
+  water!: WaterFx;
+  waterLayer!: Phaser.GameObjects.Layer;
   ysort!: YSortLayer;
   groundLayer!: Phaser.GameObjects.Layer;
   decalLayer!: Phaser.GameObjects.Layer;
@@ -90,6 +93,9 @@ export class GameScene extends Phaser.Scene {
 
     this.groundLayer = this.add.layer().setDepth(0);
     this.decalLayer = this.add.layer().setDepth(1);
+    // above the painted terrain chunks (which keep arriving from the workers), below marks and people
+    this.waterLayer = this.add.layer().setDepth(0.5);
+    this.water = new WaterFx(this, world, this.waterLayer);
     this.selGfx = this.make.graphics({}, false);
     this.ysort = new YSortLayer(this.add.layer().setDepth(2));
     this.fxLayer = this.add.layer().setDepth(3);
@@ -176,7 +182,7 @@ export class GameScene extends Phaser.Scene {
 
     // screen-space camera for overlays (selection box etc.)
     this.uiCam = this.cameras.add(0, 0, cam.width, cam.height, false, 'ui');
-    this.uiCam.ignore([this.groundLayer, this.decalLayer, this.ysort.layer, this.fxLayer, this.fogLayer, this.nightLayer, this.overLayer]);
+    this.uiCam.ignore([this.groundLayer, this.waterLayer, this.decalLayer, this.ysort.layer, this.fxLayer, this.fogLayer, this.nightLayer, this.overLayer]);
     cam.ignore(this.screenGfx);
     this.scale.on('resize', (size: Phaser.Structs.Size) => {
       this.camCtl.updateLimits();
@@ -239,6 +245,8 @@ export class GameScene extends Phaser.Scene {
     this.terrain.update();
     const zoom = this.camCtl.zoom;
     const view = this.camCtl.view(24);
+    this.water.enabled = !settings.data.reducedEffects;
+    this.water.update(client.paused ? 0 : dt, this.renderTime, view, zoom, this.weather.wind, world.sky.darkness);
     const strategic = zoom < 0.95;
     this.objects.update(view, this.renderTime, dt);
     this.units.hidden = strategic;
