@@ -486,11 +486,34 @@ export class HUD {
     }
   }
 
+  private bannerQ: { text: string; sub?: string }[] = [];
+  private bannerBusy = false;
+  /** one headline at a time: two at once used to print on top of each other */
   banner(text: string, sub?: string) {
+    if (this.bannerQ.some((q) => q.text === text)) return;
+    // a burst of captures: keep the newest few rather than a minute of headlines
+    if (this.bannerQ.length >= 2) this.bannerQ.shift();
+    this.bannerQ.push({ text, sub });
+    if (!this.bannerBusy) this.nextBanner();
+  }
+
+  private nextBanner() {
+    const q = this.bannerQ.shift();
+    if (!q) {
+      this.bannerBusy = false;
+      return;
+    }
+    this.bannerBusy = true;
     const b = el('div', 'big-banner', this.root);
-    el('div', 'bt', b, text);
-    if (sub) el('div', 'bs', b, sub);
-    setTimeout(() => b.remove(), 3300);
+    el('div', 'bt', b, q.text);
+    if (q.sub) el('div', 'bs', b, q.sub);
+    // shorter when more are waiting
+    const life = this.bannerQ.length ? 2300 : 3300;
+    if (this.bannerQ.length) b.style.animationDuration = '2.2s';
+    setTimeout(() => {
+      b.remove();
+      this.nextBanner();
+    }, life);
   }
 
   toast(text: string, error = false) {

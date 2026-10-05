@@ -201,6 +201,40 @@ export class Ambient {
     this.updateFlies(dt, view, detail);
     this.updateGlints(dt, view, detail);
     this.updateFish(dt, view, detail);
+    this.updateLeaves(dt, view, detail);
+  }
+
+  private leafT = 0;
+  /** leaves shaken loose from the woods drift across on the wind (more when it's blowing) */
+  private updateLeaves(dt: number, view: { x0: number; y0: number; x1: number; y1: number }, detail: boolean) {
+    if (!detail || !this.fx) return;
+    this.leafT += dt * (0.6 + (this.wind - 1) * 3) * this.quality;
+    const m = this.world.map;
+    let tries = 0;
+    while (this.leafT > 0.35 && tries++ < 8) {
+      const x = view.x0 + Math.random() * (view.x1 - view.x0);
+      const y = view.y0 + Math.random() * (view.y1 - view.y0);
+      const i = Math.floor(y / TILE) * m.w + Math.floor(x / TILE);
+      if (i < 0 || i >= m.tree.length || !m.tree[i]) continue;
+      this.leafT -= 0.35;
+      const autumn = Math.random() < 0.35;
+      this.fx.emit({
+        frame: 'fx/leaf',
+        x: x + (Math.random() - 0.5) * 10,
+        y,
+        z: 16 + Math.random() * 10,
+        vx: 14 * this.wind + Math.random() * 10,
+        vy: 2 + Math.random() * 4,
+        vz: 2,
+        g: 9,
+        life: 3 + Math.random() * 2,
+        spin: 2 + Math.random() * 3,
+        ground: 'stop',
+        alpha: 0.95,
+        tint: autumn ? (Math.random() < 0.5 ? 0xe0a040 : 0xc86a30) : undefined,
+      });
+    }
+    if (tries >= 8) this.leafT = Math.min(this.leafT, 0.35);
   }
 
   private tickAgent(a: Agent, dt: number, time: number) {
@@ -466,7 +500,8 @@ export class Ambient {
   private updateBirds(dt: number, view: { x0: number; y0: number; x1: number; y1: number }, detail: boolean) {
     const w = this.world;
     this.flockT -= dt;
-    if (this.flockT <= 0 && this.birds.length < 30 * this.quality) {
+    // birds roost after dark
+    if (this.flockT <= 0 && this.birds.length < 30 * this.quality && !w.sky.night) {
       this.flockT = 6 + Math.random() * 10;
       // a flock crossing the view
       const fromLeft = Math.random() < 0.5;

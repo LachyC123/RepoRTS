@@ -147,6 +147,11 @@ export class GameScene extends Phaser.Scene {
     this.nightLayer = this.add.layer().setDepth(4.5);
     this.night = new NightLight(this, world, this.camCtl, this.nightLayer);
     if (pf >= 0) this.night.visible = (x, y) => world.vis.isExplored(pf, x, y);
+    this.night.lightning = () => this.weather.lightning;
+    this.weather.dawn = () => {
+      const p = world.sky.phase;
+      return p < 0.16 ? Math.min(1, (0.16 - p) / 0.08) : p > 0.95 ? (p - 0.95) / 0.05 : 0;
+    };
     this.weather.onChange = () => {
       this.objects.wind = this.weather.wind;
       this.ambient.wind = this.weather.wind;
@@ -155,6 +160,10 @@ export class GameScene extends Phaser.Scene {
     if (pf >= 0) {
       const bit = 1 << pf;
       this.units.visible = (u) => u.faction === pf || (u.seenBy & bit) !== 0;
+      this.night.unitVisible = (id) => {
+        const u = world.unitById.get(id);
+        return !!u && this.units.visible(u);
+      };
       this.buildingsR.exploredTest = (x, y) => world.vis.isExplored(pf, x, y);
     }
     this.director = new Director(world, this.camCtl);
@@ -243,7 +252,7 @@ export class GameScene extends Phaser.Scene {
     if (!client.paused) this.director.update(dt);
     this.weather.enabled = !settings.data.reducedEffects;
     this.weather.update(simDt);
-    this.night.update(this.renderTime);
+    this.night.update(this.renderTime, simDt);
     this.territory.update(dt, zoom);
     this.fog.update();
     this.ysort.sort();

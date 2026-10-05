@@ -37,6 +37,14 @@ body {
   position: absolute;
   inset: 0;
 }
+/* a soft lens vignette pulls the eye to the middle of the field */
+#game::after {
+  content: '';
+  position: absolute;
+  inset: 0;
+  pointer-events: none;
+  background: radial-gradient(ellipse 75% 70% at 50% 50%, rgba(0, 0, 0, 0) 58%, rgba(12, 6, 18, 0.2) 82%, rgba(12, 6, 18, 0.42) 100%);
+}
 #game canvas {
   display: block;
   image-rendering: pixelated;

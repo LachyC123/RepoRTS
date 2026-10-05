@@ -25,6 +25,8 @@ export const SFX_NAMES = [
   // support troops and superweapons
   'flame', 'firepot_smash', 'siren', 'missile_launch', 'bombard_fire', 'big_explosion',
   'lute', 'bagpipe', 'heal', 'volley', 'salvo',
+  // weather
+  'thunder',
 ] as const;
 
 export type SfxName = (typeof SFX_NAMES)[number];
@@ -410,6 +412,16 @@ const R: Record<SfxName, Recipe> = {
     }
     return t + 1.75;
   },
+  thunder: (k, o, t, r) => {
+    // a sharp crack, then a long rolling rumble that wanders off
+    noise(k, o, t, { filter: 'highpass', ffreq: 1800 * r, decay: 0.09, peak: 0.22 });
+    noise(k, o, t + 0.03, { color: 'brown', filter: 'lowpass', ffreq: 900 * r, ffreqEnd: 90, attack: 0.02, decay: 0.7, peak: 0.55 });
+    for (let i = 0; i < 6; i++) {
+      const at = t + 0.25 + i * rand(0.25, 0.55);
+      noise(k, o, at, { color: 'brown', filter: 'lowpass', ffreq: rand(140, 320) * r, ffreqEnd: 50, attack: rand(0.08, 0.25), decay: rand(0.6, 1.4), peak: 0.5 / (1 + i * 0.45) });
+    }
+    return t + 4.2;
+  },
   fire: (k, o, t, r) => {
     noise(k, o, t, { color: 'brown', filter: 'lowpass', ffreq: 700 * r, attack: 0.15, decay: 0.6, peak: 0.25 });
     for (let i = 0; i < 10; i++) {
@@ -754,6 +766,7 @@ const META: Partial<Record<SfxName, Omit<SfxDef, 'fn'>>> = {
   heal: { max: 2, vary: 0.05, gain: 0.7, send: 0.3 },
   volley: { max: 2, vary: 0.06, gain: 0.6, send: 0.2 },
   salvo: { max: 1, vary: 0.05, gain: 0.7, send: 0.25 },
+  thunder: { max: 1, vary: 0.12, gain: 0.8, send: 0.5, ui: true },
 };
 
 export const SFX: Record<SfxName, SfxDef> = Object.fromEntries(

@@ -229,18 +229,22 @@
 .big-banner {
   position: absolute;
   left: 50%;
-  top: 22%;
+  top: 31%;
   transform: translateX(-50%);
   text-align: center;
   pointer-events: none;
+  width: max-content;
+  max-width: 92vw;
   animation: banner 3.2s ease forwards;
 }
 .big-banner .bt {
   font-family: var(--font-title);
-  font-size: calc(46px * var(--ui-scale));
+  font-size: min(calc(46px * var(--ui-scale)), 5.4vw);
+  line-height: 1.1;
   color: #f8e8b0;
   text-shadow: 0 3px 0 #1b1420, 0 0 18px rgba(0, 0, 0, 0.6);
-  white-space: nowrap;
+  max-width: 92vw;
+  text-wrap: balance;
 }
 .big-banner .bs {
   font-family: var(--font-small);
