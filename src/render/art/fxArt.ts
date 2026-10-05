@@ -239,6 +239,7 @@ export function buildFxArt() {
   }
   buildModernFx(add);
   buildSupportFx(add);
+  buildAftermathFx(add);
   // ---- resource icons (also used by the HUD via data URLs)
   for (const [name, pc] of Object.entries(resourceIcons())) add(`icon/${name}`, pc);
   // ---- rally flag / capture banner
@@ -838,4 +839,170 @@ function superIcons(): Record<string, PixelCanvas> {
   }
   level.outline(OUTLINE, 0.7);
   return { missile, bombard, level };
+}
+
+// ---------------------------------------------------------------------------------------------
+// battlefield aftermath: dropped gear, trampled earth, wrecks, rubble, tracks (ground decals)
+
+/** paint a character map: each char looks up a colour, '.' / ' ' stay clear */
+function paint(pc: PixelCanvas, rows: string[], pal: Record<string, string>, ox = 1, oy = 1) {
+  rows.forEach((r, y) => [...r].forEach((ch, x) => pal[ch] && pc.px(ox + x, oy + y, pal[ch])));
+}
+
+function buildAftermathFx(add: AddFn) {
+  const M = RAMP.metal;
+  const W = RAMP.wood;
+  // ---- medieval gear (lying flat, drawn horizontal; rotated a little at runtime)
+  {
+    const pc = new PixelCanvas(12, 5);
+    paint(pc, ['..m.......', 'gwmbbbbbbt', '..mddddd..'], { g: RAMP.goldm[2], w: W[2], m: M[3], b: M[5], d: M[3], t: M[4] });
+    pc.outline(OUTLINE, 0.8);
+    add('fx/drop_sword', pc);
+  }
+  {
+    // round wooden shield: pale face so it takes the owner's colour as a tint
+    const pc = new PixelCanvas(9, 7);
+    paint(pc, ['.rrrrr.', 'rffffhr', 'rffbffr', 'rfffffr', '.rrrrr.'], { r: W[3], f: '#d8d0c4', h: '#f0ece4', b: M[5] });
+    pc.outline(OUTLINE, 0.8);
+    add('fx/drop_shield', pc);
+    // kite / tower shield lying on its back, point to the right
+    const k = new PixelCanvas(10, 7);
+    paint(k, ['rrrrr...', 'rffhffr.', 'rffbfffr', 'rffffr..', 'rrrrr...'], { r: M[3], f: '#d8d0c4', h: '#f0ece4', b: M[5] });
+    k.outline(OUTLINE, 0.8);
+    add('fx/drop_shield_kite', k);
+  }
+  {
+    const pc = new PixelCanvas(14, 5);
+    paint(pc, ['..........m.', 'dwwwwwwwwwmh', '..........m.'], { d: W[1], w: W[4], m: M[3], h: M[5] });
+    pc.outline(OUTLINE, 0.8);
+    add('fx/drop_spear', pc);
+  }
+  {
+    // an unstrung-looking bow on its side: a thin arc, its string, a soft shadow (no heavy outline)
+    const pc = new PixelCanvas(12, 7);
+    paint(pc, ['...hhhh...', '.ww....ww.', 'w........w', 'd........d'], { h: W[5], w: W[4], d: W[2] }, 1, 0);
+    pc.line(2, 4, 9, 4, '#d8d0b8');
+    for (let y = 5; y >= 0; y--)
+      for (let x = 0; x < 12; x++) if ((pc.get(x, y) >>> 24) !== 0 && (pc.get(x, y + 1) >>> 24) === 0) pc.blend(x, y + 1, OUTLINE, 0.35);
+    add('fx/drop_bow', pc);
+  }
+  // ---- modern gear
+  {
+    const pc = new PixelCanvas(13, 5);
+    paint(pc, ['wwwrrrrbbbb', '.wwrrmr....', '.....m.....'], { w: W[3], r: MIL.steel[3], b: MIL.grey[2], m: MIL.steel[2] });
+    pc.px(3, 1, MIL.grey[4]);
+    pc.outline(OUTLINE, 0.8);
+    add('fx/drop_rifle', pc);
+  }
+  {
+    const O = MIL.olive;
+    const pc = new PixelCanvas(8, 6);
+    paint(pc, ['.hoo..', 'hooooo', 'dddddd', '.r..r.'], { h: O[5], o: O[4], d: O[2], r: O[1] });
+    pc.outline(OUTLINE, 0.8);
+    add('fx/drop_helmet', pc);
+  }
+  {
+    const D = MIL.drab;
+    const pc = new PixelCanvas(8, 7);
+    paint(pc, ['.ffff.', 'fhhhhf', 'dsddsd', 'dsddsd', '.cccc.'], { f: D[4], h: D[5], d: D[3], s: D[1], c: D[2] });
+    pc.outline(OUTLINE, 0.8);
+    add('fx/drop_pack', pc);
+  }
+  // ---- trampled earth: churned dark dirt, semi-transparent, ragged edge
+  {
+    const pc = new PixelCanvas(14, 7);
+    const D = RAMP.dirt;
+    for (let y = 0; y < 7; y++)
+      for (let x = 0; x < 14; x++) {
+        const dx = (x + 0.5 - 7) / 7;
+        const dy = (y + 0.5 - 3.5) / 3.5;
+        const d = Math.sqrt(dx * dx + dy * dy) + (hashf(x, y, 71) - 0.5) * 0.5;
+        if (d > 1) continue;
+        const n = hashf(x, y, 72);
+        if (d > 0.7 && n < 0.45) continue;
+        if (n > 0.86) pc.blend(x, y, D[4], 0.4);
+        else pc.blend(x, y, n < 0.3 ? D[0] : D[1], d < 0.5 ? 0.62 : 0.42);
+      }
+    add('fx/trample', pc);
+  }
+  // ---- a small, cartoony splat
+  {
+    const pc = new PixelCanvas(6, 4);
+    paint(pc, ['.ab...', 'aabb.a', '.aaa..', '..a...'], { a: '#6a1618', b: '#8a2224' }, 0, 0);
+    pc.px(1, 1, '#4a0e12');
+    add('fx/bloodspot', pc);
+  }
+  // ---- rubble pile: stones, charred timbers and a few roof tiles on a smear of ash
+  {
+    const pc = new PixelCanvas(20, 10);
+    pc.ellipseBlend(10, 6, 9.5, 3.8, '#2a2226', 0.45);
+    const S = RAMP.stone;
+    const CH = MIL.char;
+    for (let k = 0; k < 9; k++) {
+      const x = 3 + hashf(k, 1, 81) * 14;
+      const y = 4 + hashf(k, 2, 81) * 4;
+      const r = 1.2 + hashf(k, 3, 81) * 1.6;
+      blob(pc, x, y, r, r * 0.75, S.slice(1, 6), k);
+    }
+    pc.line(2, 7, 9, 4, CH[3]);
+    pc.line(2, 8, 9, 5, W[1]);
+    pc.line(12, 3, 17, 6, CH[2]);
+    pc.line(13, 3, 18, 6, CH[3]);
+    pc.line(6, 2, 10, 2, W[2]);
+    pc.px(10, 2, CH[1]);
+    for (const [x, y] of [[8, 6], [14, 7], [5, 5]]) {
+      pc.px(x, y, RAMP.tile[3]);
+      pc.px(x + 1, y, RAMP.tile[4]);
+    }
+    pc.outline(OUTLINE, 0.6);
+    add('fx/rubble', pc, 10, 6);
+  }
+  // ---- burnt-out vehicle hulk (side-on like the vehicle sprites): blackened steel, rust, a
+  //      drooping gun and stripped running gear
+  {
+    const G = MIL.grey;
+    const R = RAMP.rust;
+    const K = MIL.rubber;
+    const C = MIL.char;
+    const pc = new PixelCanvas(28, 14);
+    pc.rect(2, 9, 23, 2, K[0]);
+    for (let x = 3; x <= 23; x += 3) pc.px(x, 10, K[2]);
+    pc.hline(3, 23, 11, K[1]);
+    pc.rect(1, 5, 25, 4, C[3]);
+    pc.hline(2, 24, 5, G[2]);
+    pc.vline(1, 6, 8, G[1]);
+    pc.vline(25, 6, 7, G[1]);
+    pc.rect(8, 2, 9, 3, G[1]);
+    pc.hline(9, 12, 2, G[3]);
+    pc.hline(14, 15, 2, G[3]);
+    pc.px(10, 1, G[2]);
+    pc.px(11, 1, G[3]);
+    pc.line(17, 3, 23, 3, G[2]);
+    pc.px(24, 4, G[1]);
+    pc.px(25, 4, G[1]);
+    for (let y = 2; y < 9; y++)
+      for (let x = 1; x < 26; x++) if ((pc.get(x, y) >>> 24) !== 0 && hashf(x, y, 91) < 0.22) pc.blend(x, y, C[0], 0.55);
+    for (const [x, y, i] of [[5, 6, 3], [6, 6, 2], [5, 7, 2], [17, 7, 3], [18, 6, 4], [12, 8, 2], [11, 3, 3], [21, 6, 2]]) pc.px(x, y, R[i]);
+    pc.outline(OUTLINE, 0.7);
+    pc.shadow(13, 12, 12.5, 1.6, 0.3);
+    add('fx/wreck', pc, 13, 11);
+  }
+  // ---- tracks: a faint segment of tyre/tread marks (drawn along +x) and hoofprints
+  {
+    const pc = new PixelCanvas(12, 7);
+    for (let x = 0; x < 12; x++)
+      for (const y of [0, 5]) {
+        pc.blend(x, y, '#2e2418', x % 2 === 0 ? 0.32 : 0.18);
+        pc.blend(x, y + 1, '#2e2418', x % 2 === 0 ? 0.2 : 0.12);
+      }
+    add('fx/tread', pc);
+    const h = new PixelCanvas(7, 5);
+    // two pairs of crescent prints, staggered like a horse's gait
+    for (const [x, y] of [[0, 0], [4, 1], [1, 3], [5, 3]]) {
+      h.blend(x, y, '#2e2418', 0.45);
+      h.blend(x + 1, y, '#2e2418', 0.45);
+      h.blend(x, y + 1, '#2e2418', 0.25);
+    }
+    add('fx/hoof', h);
+  }
 }

@@ -505,7 +505,17 @@ export class HUD {
     }
     this.bannerBusy = true;
     const b = el('div', 'big-banner', this.root);
-    el('div', 'bt', b, q.text);
+    // blackletter capitals are unreadable: "FENWICK TAKEN FROM BRANNOC" -> "Fenwick Taken from Brannoc"
+    const small = new Set(['of', 'from', 'with', 'to', 'the', 'at', 'on', 'and', 'a', 'by', 'in']);
+    const text =
+      q.text === q.text.toUpperCase()
+        ? q.text
+            .toLowerCase()
+            .split(' ')
+            .map((wd, i) => (i > 0 && small.has(wd) ? wd : wd.charAt(0).toUpperCase() + wd.slice(1)))
+            .join(' ')
+        : q.text;
+    el('div', 'bt', b, text);
     if (q.sub) el('div', 'bs', b, q.sub);
     // shorter when more are waiting
     const life = this.bannerQ.length ? 2300 : 3300;
